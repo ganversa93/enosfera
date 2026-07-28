@@ -651,6 +651,25 @@
     }
     .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
+    /* ── INSTALL PWA BANNER ── */
+    .install-banner {
+      display: none; align-items: center; gap: 12px;
+      position: fixed; left: 0.75rem; right: 0.75rem; bottom: max(0.75rem, env(safe-area-inset-bottom));
+      max-width: 460px; margin: 0 auto;
+      background: var(--surf); border: 0.5px solid var(--border); border-radius: 16px;
+      padding: 12px 14px; box-shadow: 0 -4px 24px rgba(0,0,0,.16); z-index: 210;
+    }
+    .install-banner-icon { font-size: 24px; color: var(--wine); flex-shrink: 0; }
+    .install-banner-text { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .install-banner-text b { font-size: 13px; color: var(--ink); }
+    .install-banner-text span { font-size: 11.5px; color: var(--muted); line-height: 1.4; }
+    .install-banner-text span i { font-size: 12px; vertical-align: -1px; color: var(--wine); }
+    .install-banner-dismiss {
+      font-size: 11px; color: var(--muted); text-decoration: underline; margin-top: 2px;
+    }
+    .install-banner-dismiss:hover { color: var(--ink); }
+    @media (min-width: 480px) { .install-banner { left: auto; right: 1.25rem; width: 380px; } }
+
     /* ── RESPONSIVE ── */
     @media (max-width: 520px) {
       .app-shell { padding: 1rem .75rem; }
@@ -986,6 +1005,17 @@
           <li>Le <b>foto etichetta richiedono connessione</b> (vengono caricate su uno spazio di archiviazione esterno): se sei offline, aggiungi la foto appena torni online.</li>
           <li>Il <b>primo login</b> (inserire email e password per la prima volta su un dispositivo) richiede sempre una connessione — non è evitabile, serve verificare le credenziali con il server.</li>
           <li>Una barra gialla in alto compare quando sei offline, per ricordartelo.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="fsec collapsible collapsed" id="guide-10">
+      <div class="stitle fsec-header" onclick="toggleSection('guide-10')"><i class="ti ti-device-mobile"></i>Installare l'app sulla home<i class="ti ti-chevron-down fsec-chevron"></i></div>
+      <div class="fsec-body">
+        <ul class="guide-list">
+          <li>Al login compare un avviso per aggiungere Enoscrigno alla schermata Home del telefono: una volta installata si apre come un'app vera, a schermo intero, anche offline.</li>
+          <li>Su Android/Chrome basta toccare <b>Installa</b> nell'avviso. Su iPhone (Safari o Chrome) non c'è un pulsante automatico: si tocca l'icona <b>Condividi</b> del browser e poi <b>"Aggiungi a Home"</b>.</li>
+          <li>Se hai chiuso l'avviso toccando <b>"Non mi interessa"</b> e vuoi rivederlo, vai su <b>Profilo → App sulla home del telefono</b> e tocca "Mostra di nuovo l'avviso di installazione".</li>
         </ul>
       </div>
     </div>
@@ -1855,6 +1885,13 @@
       </div>
     </div>
 
+    <!-- App sulla home del telefono -->
+    <div class="fsec">
+      <div class="stitle"><i class="ti ti-device-mobile"></i>App sulla home del telefono</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Se hai chiuso l'avviso di installazione toccando "Non mi interessa" e vuoi rivederlo, tocca qui sotto.</p>
+      <button class="btn sm" onclick="resetInstallBanner()"><i class="ti ti-download"></i>Mostra di nuovo l'avviso di installazione</button>
+    </div>
+
     <!-- Richieste di follow in attesa -->
     <div class="fsec" id="follow-requests-section" style="display:none">
       <div class="stitle"><i class="ti ti-user-plus"></i>Richieste di follow</div>
@@ -1979,6 +2016,17 @@
 
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
+
+<!-- INSTALL PWA BANNER -->
+<div class="install-banner" id="install-banner" style="display:none">
+  <i class="ti ti-download install-banner-icon"></i>
+  <div class="install-banner-text">
+    <b>Installa Enoscrigno</b>
+    <span id="install-banner-msg"></span>
+    <a href="#" class="install-banner-dismiss" onclick="dismissInstallBanner(); return false;">Non mi interessa</a>
+  </div>
+  <button class="btn sm primary" id="install-banner-cta" onclick="triggerInstallPrompt()" style="display:none">Installa</button>
+</div>
 
 <script type="module">
 /* ══════════════════════════════════════════════
@@ -2294,6 +2342,78 @@ function setOfflineBanner(show) {
 window.addEventListener('online', () => { setOfflineBanner(false); syncPendingWines(); });
 window.addEventListener('offline', () => setOfflineBanner(true));
 
+/* ── INSTALL PWA (Aggiungi a Home) ──
+   Chrome/Android emette 'beforeinstallprompt': lo intercettiamo subito
+   (prima ancora del login) e lo teniamo pronto per quando vogliamo
+   mostrare il nostro banner al posto del mini-prompt di sistema.
+   iOS Safari non emette questo evento: lì l'unica via è mostrare
+   istruzioni manuali (Condividi → Aggiungi a Home). */
+let deferredInstallPrompt = null;
+const INSTALL_DISMISS_KEY = 'enoscrigno_install_dismissed';
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+});
+window.addEventListener('appinstalled', () => {
+  localStorage.setItem(INSTALL_DISMISS_KEY, '1');
+  hideInstallBanner();
+});
+
+function isStandaloneApp() {
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+function isIosDevice() {
+  return /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+}
+
+function maybeShowInstallBanner() {
+  if (isStandaloneApp() || localStorage.getItem(INSTALL_DISMISS_KEY) === '1') return;
+  if (isIosDevice()) showInstallBanner('ios');
+  else if (deferredInstallPrompt) showInstallBanner('android');
+}
+
+function showInstallBanner(kind) {
+  if (isStandaloneApp() || localStorage.getItem(INSTALL_DISMISS_KEY) === '1') return;
+  const el  = document.getElementById('install-banner');
+  const msg = document.getElementById('install-banner-msg');
+  const cta = document.getElementById('install-banner-cta');
+  if (kind === 'ios') {
+    msg.innerHTML = 'Tocca <i class="ti ti-share-2"></i> Condividi, poi "Aggiungi a Home"';
+    cta.style.display = 'none';
+  } else {
+    msg.textContent = 'Aggiungila alla schermata Home per aprirla come un\'app, anche offline.';
+    cta.style.display = '';
+  }
+  el.style.display = 'flex';
+}
+
+function hideInstallBanner() {
+  const el = document.getElementById('install-banner');
+  if (el) el.style.display = 'none';
+}
+
+function dismissInstallBanner() {
+  localStorage.setItem(INSTALL_DISMISS_KEY, '1');
+  hideInstallBanner();
+}
+
+async function triggerInstallPrompt() {
+  if (!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  await deferredInstallPrompt.userChoice;
+  deferredInstallPrompt = null;
+  dismissInstallBanner();
+}
+
+function resetInstallBanner() {
+  if (isStandaloneApp()) { toast('La app è già installata su questo dispositivo'); return; }
+  localStorage.removeItem(INSTALL_DISMISS_KEY);
+  if (isIosDevice()) { showInstallBanner('ios'); toast('Ecco come installarla'); }
+  else if (deferredInstallPrompt) { showInstallBanner('android'); }
+  else { toast('Il tuo browser non supporta l\'installazione automatica'); }
+}
+
 async function dbSaveWine(wine) {
   const row = {
     user_id:      currentCellarOwnerId,
@@ -2379,6 +2499,7 @@ async function initApp() {
   showLoadingOverlay(false);
   syncPendingWines();
   showScreen('screen-home');
+  maybeShowInstallBanner();
 
   // Ritorno da Stripe dopo il pagamento
   const premiumResult = new URLSearchParams(window.location.search).get('premium');
@@ -4082,7 +4203,7 @@ Object.assign(window, {
   showNetworkScreen, showNetworkWinePreview, showProfileScreen, showScreen, startPremiumCheckout, stepQty, switchDeg, switchLTab, toast,
   showGuideScreen,
   toggleAdvFilters, toggleChipIn, toggleFisarMethodField, toggleNavMenu, togglePairing, toggleSection, updateDelegazioniList, updateGrapePct, updateTonalitaColore,
-  updateRegionOptions, updateProvinceOptions
+  updateRegionOptions, updateProvinceOptions, dismissInstallBanner, triggerInstallPrompt, resetInstallBanner
 });
 </script>
 </body>
