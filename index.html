@@ -1309,6 +1309,14 @@
 
       <!-- AIS -->
       <div class="deg-schema active" id="deg-ais">
+
+        <!-- SCHEDA A PUNTI — sotto-gruppo chiudibile della "Scheda di
+             degustazione" AIS (l'AIS compila sia questa sia la scheda
+             analitico-descrittiva qui sotto: due sotto-tab indipendenti,
+             non alternativi). -->
+        <div class="fsec collapsible" id="fsec-ais-punti">
+          <div class="stitle fsec-header" onclick="toggleSection('fsec-ais-punti')"><i class="ti ti-award" aria-hidden="true"></i>Scheda a punti<i class="ti ti-chevron-down fsec-chevron"></i></div>
+          <div class="fsec-body">
         <div style="text-align:center;margin-bottom:1rem">
           <div class="score-circle"><span class="score-n" id="ais-tot">0</span><span class="score-max">/100</span></div>
           <div style="font-size:11px;color:var(--muted)">Punteggio AIS calcolato automaticamente</div>
@@ -1345,20 +1353,18 @@
         </div>
         <div class="fg"><label>Note olfattive descrittive</label><textarea id="ap-olfnote" placeholder="Famiglia aromatica, descrittori primari/secondari/terziari…"></textarea></div>
         <div class="fg" style="margin-top:8px"><label>Note gustative descrittive</label><textarea id="ap-gustnote" placeholder="Tannini, acidità, corpo, calore, finale…"></textarea></div>
-
-        <!-- SCHEDA ANALITICO-DESCRITTIVA AIS — l'associazione AIS compila sia la
-             scheda a punti (sopra) sia quella analitico-descrittiva: le due
-             schede convivono qui, in gruppi separati, all'interno dello stesso
-             tab "Metodo AIS". Riservata a chi ha associazione AIS: il tab
-             "ais" è condiviso anche da ONAV/FIS (metodo simile ma non questa
-             scheda ufficiale), quindi il blocco resta nascosto per loro —
-             vedi toggleAisDescVisibility(). -->
-        <div id="ais-desc-wrap">
-        <div style="text-align:center;margin:1.6rem 0 1rem">
-          <div style="display:inline-flex;align-items:center;gap:6px;background:var(--ais-pale);color:var(--ais);font-size:12px;font-weight:500;padding:6px 14px;border-radius:20px">
-            <i class="ti ti-clipboard-list" style="font-size:14px"></i>Scheda Analitico-Descrittiva AIS
           </div>
         </div>
+
+        <!-- SCHEDA ANALITICO-DESCRITTIVA AIS — secondo sotto-gruppo chiudibile,
+             indipendente dal precedente. Riservata a chi ha associazione AIS:
+             il tab "ais" è condiviso anche da ONAV/FIS (metodo simile ma non
+             questa scheda ufficiale), quindi il blocco resta nascosto per
+             loro — vedi toggleAisDescVisibility(). -->
+        <div id="ais-desc-wrap" style="margin-top:.9rem">
+        <div class="fsec collapsible collapsed" id="fsec-ais-desc">
+          <div class="stitle fsec-header" onclick="toggleSection('fsec-ais-desc')"><i class="ti ti-clipboard-list" aria-hidden="true"></i>Scheda Analitico-Descrittiva<i class="ti ti-chevron-down fsec-chevron"></i></div>
+          <div class="fsec-body">
 
         <!-- ESAME VISIVO -->
         <div class="param-group">
@@ -1575,6 +1581,8 @@
               <option value="">— Seleziona —</option>
               <option>Accettabile</option><option>Buono</option><option>Distinto</option><option>Ottimo</option><option>Eccellente</option>
             </select>
+          </div>
+        </div>
           </div>
         </div>
         </div>
