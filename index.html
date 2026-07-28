@@ -649,6 +649,9 @@
     .fisar-sel:focus { outline: none; border-color: var(--fisar); }
     .fisar-sel.filled { border-color: var(--fisar); background: var(--fisar-pale); color: var(--fisar); font-weight: 500; }
     @media (max-width: 520px) { .fisar-row { grid-template-columns: 1fr; } }
+    /* Selects della scheda analitico-descrittiva AIS: stesso layout, colore brand AIS */
+    .fisar-sel.ais-sel:focus { border-color: var(--ais); }
+    .fisar-sel.ais-sel.filled { border-color: var(--ais); background: var(--ais-pale); color: var(--ais); font-weight: 500; }
 
 
     .toast {
@@ -1236,7 +1239,7 @@
       </div>
       <div class="frow">
         <div class="fg"><label>Tipologia</label>
-          <select id="f-type" onchange="updateTonalitaColore()">
+          <select id="f-type" onchange="updateTonalitaColore();updateAisColore()">
             <option value="">Seleziona…</option>
             <option>Rosso</option><option>Bianco</option><option>Rosato</option>
             <option>Spumante</option><option>Dolce</option><option>Passito</option><option>Altro</option>
@@ -1342,6 +1345,239 @@
         </div>
         <div class="fg"><label>Note olfattive descrittive</label><textarea id="ap-olfnote" placeholder="Famiglia aromatica, descrittori primari/secondari/terziari…"></textarea></div>
         <div class="fg" style="margin-top:8px"><label>Note gustative descrittive</label><textarea id="ap-gustnote" placeholder="Tannini, acidità, corpo, calore, finale…"></textarea></div>
+
+        <!-- SCHEDA ANALITICO-DESCRITTIVA AIS — l'associazione AIS compila sia la
+             scheda a punti (sopra) sia quella analitico-descrittiva: le due
+             schede convivono qui, in gruppi separati, all'interno dello stesso
+             tab "Metodo AIS". Riservata a chi ha associazione AIS: il tab
+             "ais" è condiviso anche da ONAV/FIS (metodo simile ma non questa
+             scheda ufficiale), quindi il blocco resta nascosto per loro —
+             vedi toggleAisDescVisibility(). -->
+        <div id="ais-desc-wrap">
+        <div style="text-align:center;margin:1.6rem 0 1rem">
+          <div style="display:inline-flex;align-items:center;gap:6px;background:var(--ais-pale);color:var(--ais);font-size:12px;font-weight:500;padding:6px 14px;border-radius:20px">
+            <i class="ti ti-clipboard-list" style="font-size:14px"></i>Scheda Analitico-Descrittiva AIS
+          </div>
+        </div>
+
+        <!-- ESAME VISIVO -->
+        <div class="param-group">
+          <div class="pg-title" style="color:var(--ais)"><i class="ti ti-eye" style="font-size:12px;vertical-align:-1px;margin-right:4px"></i>Esame visivo</div>
+          <div class="fisar-row">
+            <div class="fisar-field">
+              <label class="fisar-label">Limpidezza</label>
+              <select class="fisar-sel ais-sel" id="ad-limpidezza">
+                <option value="">— Seleziona —</option>
+                <option>Velato</option><option>Abbastanza limpido</option><option>Limpido</option><option>Cristallino</option><option>Brillante</option>
+              </select>
+            </div>
+            <div class="fisar-field">
+              <label class="fisar-label">Colore</label>
+              <select class="fisar-sel ais-sel" id="ad-colore">
+                <option value="">— Seleziona una tipologia in Identità —</option>
+              </select>
+            </div>
+            <div class="fisar-field">
+              <label class="fisar-label">Consistenza <small style="color:var(--muted)">(solo vini fermi)</small></label>
+              <select class="fisar-sel ais-sel" id="ad-consistenza">
+                <option value="">N/A</option>
+                <option>Scorrevole</option><option>Consistente</option><option>Viscoso</option>
+              </select>
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin:8px 0 6px">Effervescenza <small>(solo spumanti e frizzanti)</small></div>
+          <div class="fisar-row">
+            <div class="fisar-field">
+              <label class="fisar-label">Numero catenelle</label>
+              <select class="fisar-sel ais-sel" id="ad-catenelle">
+                <option value="">N/A — non spumante</option>
+                <option>Scarse</option><option>Mediamente numerose</option><option>Numerose</option>
+              </select>
+            </div>
+            <div class="fisar-field">
+              <label class="fisar-label">Velocità di ascesa</label>
+              <select class="fisar-sel ais-sel" id="ad-velocita">
+                <option value="">N/A — non spumante</option>
+                <option>Rapida</option><option>Media</option><option>Lenta</option>
+              </select>
+            </div>
+            <div class="fisar-field">
+              <label class="fisar-label">Grana bollicine</label>
+              <select class="fisar-sel ais-sel" id="ad-grana">
+                <option value="">N/A — non spumante</option>
+                <option>Grossolane</option><option>Mediamente fini</option><option>Fini</option>
+              </select>
+            </div>
+            <div class="fisar-field">
+              <label class="fisar-label">Persistenza bollicine</label>
+              <select class="fisar-sel ais-sel" id="ad-persistenza-bollicine">
+                <option value="">N/A — non spumante</option>
+                <option>Evanescenti</option><option>Mediamente persistenti</option><option>Persistenti</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- ESAME OLFATTIVO -->
+        <div class="param-group">
+          <div class="pg-title" style="color:var(--ais)"><i class="ti ti-wind" style="font-size:12px;vertical-align:-1px;margin-right:4px"></i>Esame olfattivo</div>
+          <div class="fisar-row">
+            <div class="fisar-field">
+              <label class="fisar-label">Intensità</label>
+              <select class="fisar-sel ais-sel" id="ad-intensita-olf">
+                <option value="">— Seleziona —</option>
+                <option>Moderatamente intenso</option><option>Intenso</option><option>Molto intenso</option>
+              </select>
+            </div>
+            <div class="fisar-field">
+              <label class="fisar-label">Complessità</label>
+              <select class="fisar-sel ais-sel" id="ad-complessita">
+                <option value="">— Seleziona —</option>
+                <option>Moderatamente complesso</option><option>Complesso</option><option>Ampio</option>
+              </select>
+            </div>
+            <div class="fisar-field">
+              <label class="fisar-label">Qualità olfattiva</label>
+              <select class="fisar-sel ais-sel" id="ad-qualita-olf">
+                <option value="">— Seleziona —</option>
+                <option>Accettabile</option><option>Buono</option><option>Distinto</option><option>Ottimo</option><option>Eccellente</option>
+              </select>
+            </div>
+          </div>
+          <div class="fg" style="margin-top:8px">
+            <label>Descrittori</label>
+            <input type="text" id="ad-descrittori" placeholder="es. Aromatico/Varietale/Fruttato, Floreale/Vegetale/Fragrante, Speziato/Pasticceria/Empireumatico…">
+          </div>
+        </div>
+
+        <!-- ESAME GUSTO-OLFATTIVO -->
+        <div class="param-group">
+          <div class="pg-title" style="color:var(--ais)"><i class="ti ti-droplet" style="font-size:12px;vertical-align:-1px;margin-right:4px"></i>Esame gusto-olfattivo</div>
+          <div class="fisar-row">
+            <div class="fisar-field">
+              <label class="fisar-label">Dolcezza</label>
+              <select class="fisar-sel ais-sel" id="ad-dolcezza">
+                <option value="">— Seleziona —</option>
+                <option>Secco</option><option>Poco dolce</option><option>Moderatamente dolce</option><option>Dolce</option><option>Molto dolce</option>
+              </select>
+            </div>
+            <div class="fisar-field">
+              <label class="fisar-label">Acidità</label>
+              <select class="fisar-sel ais-sel" id="ad-acidita">
+                <option value="">— Seleziona —</option>
+                <option>Poco fresco</option><option>Moderatamente fresco</option><option>Fresco</option><option>Vibrante</option><option>Acidulo</option>
+              </select>
+            </div>
+          </div>
+          <div class="fisar-row" style="margin-top:8px">
+            <div class="fisar-field">
+              <label class="fisar-label">Alcolicità</label>
+              <select class="fisar-sel ais-sel" id="ad-alcolicita">
+                <option value="">— Seleziona —</option>
+                <option>Poco caldo</option><option>Moderatamente caldo</option><option>Caldo</option><option>Molto caldo</option><option>Alcolico</option>
+              </select>
+            </div>
+            <div class="fisar-field">
+              <label class="fisar-label">Tannicità <small style="color:var(--muted)">(vini rossi)</small></label>
+              <select class="fisar-sel ais-sel" id="ad-tannicita">
+                <option value="">N/A</option>
+                <option>Poco tannico</option><option>Moderatamente tannico</option><option>Tannico</option><option>Tenace</option><option>Astringente</option>
+              </select>
+            </div>
+          </div>
+          <div class="fisar-row" style="margin-top:8px">
+            <div class="fisar-field">
+              <label class="fisar-label">Rotondità</label>
+              <select class="fisar-sel ais-sel" id="ad-rotondita">
+                <option value="">— Seleziona —</option>
+                <option>Poco morbido</option><option>Moderatamente morbido</option><option>Morbido</option><option>Vellutato</option><option>Pastoso</option>
+              </select>
+            </div>
+            <div class="fisar-field">
+              <label class="fisar-label">Sapidità</label>
+              <select class="fisar-sel ais-sel" id="ad-sapidita">
+                <option value="">— Seleziona —</option>
+                <option>Poco sapido</option><option>Moderatamente sapido</option><option>Sapido</option><option>Saporito</option><option>Salato</option>
+              </select>
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin:8px 0 6px">Effervescenza <small>(solo spumanti e frizzanti)</small></div>
+          <div class="fisar-row">
+            <div class="fisar-field">
+              <label class="fisar-label">Effervescenza</label>
+              <select class="fisar-sel ais-sel" id="ad-effervescenza-gusto">
+                <option value="">N/A — non spumante</option>
+                <option>Delicata</option><option>Moderata</option><option>Vivace</option><option>Esuberante</option><option>Incisiva</option>
+              </select>
+            </div>
+          </div>
+          <div class="fisar-row" style="margin-top:8px">
+            <div class="fisar-field">
+              <label class="fisar-label">Intensità</label>
+              <select class="fisar-sel ais-sel" id="ad-intensita-gusto">
+                <option value="">— Seleziona —</option>
+                <option>Moderatamente intenso</option><option>Intenso</option><option>Molto intenso</option>
+              </select>
+            </div>
+            <div class="fisar-field">
+              <label class="fisar-label">Struttura</label>
+              <select class="fisar-sel ais-sel" id="ad-struttura">
+                <option value="">— Seleziona —</option>
+                <option>Di medio corpo</option><option>Di corpo pieno</option><option>Robusto</option>
+              </select>
+            </div>
+            <div class="fisar-field">
+              <label class="fisar-label">Equilibrio</label>
+              <select class="fisar-sel ais-sel" id="ad-equilibrio">
+                <option value="">— Seleziona —</option>
+                <option>Poco equilibrato</option><option>Mediamente equilibrato</option><option>Equilibrato</option>
+              </select>
+            </div>
+            <div class="fisar-field">
+              <label class="fisar-label">Persistenza</label>
+              <select class="fisar-sel ais-sel" id="ad-persistenza">
+                <option value="">— Seleziona —</option>
+                <option>Moderatamente persistente</option><option>Persistente</option><option>Molto persistente</option>
+              </select>
+            </div>
+          </div>
+          <div class="fg" style="margin-top:8px">
+            <label>Qualità gusto-olfattiva</label>
+            <select class="fisar-sel ais-sel" id="ad-qualita-gusto">
+              <option value="">— Seleziona —</option>
+              <option>Accettabile</option><option>Buono</option><option>Distinto</option><option>Ottimo</option><option>Eccellente</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- CONSIDERAZIONI FINALI -->
+        <div class="param-group">
+          <div class="pg-title" style="color:var(--ais)"><i class="ti ti-clipboard-check" style="font-size:12px;vertical-align:-1px;margin-right:4px"></i>Considerazioni finali</div>
+          <div class="fisar-row">
+            <div class="fisar-field">
+              <label class="fisar-label">Stato evolutivo</label>
+              <select class="fisar-sel ais-sel" id="ad-stato-evolutivo">
+                <option value="">— Seleziona —</option>
+                <option>Pronto</option><option>Maturo</option>
+              </select>
+            </div>
+            <div class="fisar-field">
+              <label class="fisar-label">Armonia</label>
+              <select class="fisar-sel ais-sel" id="ad-armonia">
+                <option value="">— Seleziona —</option>
+                <option>Poco armonico</option><option>Mediamente armonico</option><option>Armonico</option>
+              </select>
+            </div>
+          </div>
+          <div class="fg" style="margin-top:8px">
+            <label>Qualità complessiva</label>
+            <select class="fisar-sel ais-sel" id="ad-qualita-complessiva">
+              <option value="">— Seleziona —</option>
+              <option>Accettabile</option><option>Buono</option><option>Distinto</option><option>Ottimo</option><option>Eccellente</option>
+            </select>
+          </div>
+        </div>
+        </div>
       </div>
 
       <!-- FISAR — descrittori qualitativi ufficiali -->
@@ -2313,6 +2549,7 @@ async function loadWines() {
       aisParams:   row.ais_params,
       fisarParams: row.fisar_params,
       fisarDescParams: row.fisar_desc_params,
+      aisDescParams: row.ais_desc_params,
       aisScore:    row.ais_score,
       fisarScore:  row.fisar_score,
       olfNote:     row.olf_note,
@@ -2489,6 +2726,7 @@ async function dbSaveWine(wine) {
     deg_schema:   wine.degSchema    || 'free',
     ais_params:   wine.aisParams    || null,
     ais_score:    wine.aisScore     || null,
+    ais_desc_params: wine.aisDescParams || null,
     olf_note:     wine.olfNote      || null,
     gust_note:    wine.gustNote     || null,
     fisar_params: wine.fisarParams  || null,
@@ -2840,9 +3078,15 @@ function showAdd() {
     'fd-limpidezza','fd-trasparenza','fd-tonalita','fd-intensita-colore','fd-fluidita','fd-perlage-grana','fd-perlage-persistenza',
     'fd-intensita-olf','fd-franchezza','fd-finezza','fd-complessita',
     'fd-corpo','fd-alcolicita','fd-morbidezza','fd-zuccheri','fd-acidita','fd-sapidita','fd-tannicita','fd-effervescenza-gusto','fd-equilibrio',
-    'fd-aroma-intensita','fd-aroma-qualita','fd-natura-aromi','fd-pai','fd-stato','fd-considerazioni']);
+    'fd-aroma-intensita','fd-aroma-qualita','fd-natura-aromi','fd-pai','fd-stato','fd-considerazioni',
+    'ad-limpidezza','ad-colore','ad-consistenza','ad-catenelle','ad-velocita','ad-grana','ad-persistenza-bollicine',
+    'ad-intensita-olf','ad-descrittori','ad-complessita','ad-qualita-olf',
+    'ad-dolcezza','ad-acidita','ad-alcolicita','ad-tannicita','ad-rotondita','ad-sapidita','ad-effervescenza-gusto',
+    'ad-intensita-gusto','ad-struttura','ad-equilibrio','ad-persistenza','ad-qualita-gusto',
+    'ad-stato-evolutivo','ad-armonia','ad-qualita-complessiva']);
   setActiveChips('natura-profumi-chips', '');
   updateTonalitaColore();
+  updateAisColore();
   const visToggle = document.getElementById('f-visibility'); if (visToggle) visToggle.checked = true;
   selectedGrapes = []; renderGrapeTags();
   const grapesInput = document.getElementById('f-grapes-input'); if (grapesInput) grapesInput.value = '';
@@ -2914,6 +3158,17 @@ function switchDeg(t) {
     if (pnl) pnl.className = 'deg-schema' + (tab === t ? ' active' : '');
   });
   if (t === 'fisar_desc') updateTonalitaColore();
+  if (t === 'ais') { updateAisColore(); toggleAisDescVisibility(); }
+}
+
+// La scheda analitico-descrittiva è un documento ufficiale AIS: il tab
+// "Metodo AIS" è condiviso anche da ONAV/FIS (schema di punteggio simile),
+// ma per loro questa scheda non è pertinente e resta nascosta.
+function toggleAisDescVisibility() {
+  const wrap = document.getElementById('ais-desc-wrap');
+  if (!wrap) return;
+  const assoc = (currentUser?.assoc || '').toUpperCase();
+  wrap.style.display = assoc === 'AIS' ? '' : 'none';
 }
 
 /* ── SCORING ── */
@@ -3083,6 +3338,23 @@ function updateTonalitaColore() {
   const type = document.getElementById('f-type')?.value;
   const prev = sel.value;
   const list = TONALITA_COLORE[type] || [...TONALITA_COLORE.Bianco, ...TONALITA_COLORE.Rosato, ...TONALITA_COLORE.Rosso];
+  sel.innerHTML = '<option value="">— Seleziona —</option>' + list.map(t => `<option>${t}</option>`).join('');
+  if (list.includes(prev)) sel.value = prev;
+}
+
+// Colore — le opzioni cambiano in base alla Tipologia scelta in Identità del
+// vino (Bianco/Rosato/Rosso), secondo la scheda Analitico-Descrittiva AIS
+const AIS_COLORE = {
+  Bianco:   ['Verdolino', 'Paglierino', 'Dorato', 'Ambrato', 'Mogano'],
+  Rosato:   ['Fiore di pesco', 'Ramato', 'Salmone', 'Corallo', 'Peonia'],
+  Rosso:    ['Amaranto', 'Rubino', 'Carminio', 'Granato', 'Aranciato']
+};
+function updateAisColore() {
+  const sel = document.getElementById('ad-colore');
+  if (!sel) return;
+  const type = document.getElementById('f-type')?.value;
+  const prev = sel.value;
+  const list = AIS_COLORE[type] || [...AIS_COLORE.Bianco, ...AIS_COLORE.Rosato, ...AIS_COLORE.Rosso];
   sel.innerHTML = '<option value="">— Seleziona —</option>' + list.map(t => `<option>${t}</option>`).join('');
   if (list.includes(prev)) sel.value = prev;
 }
@@ -3266,6 +3538,15 @@ async function saveWine() {
     };
   };
   const g = id => document.getElementById(id)?.value || '';
+  const getADParams = () => ({
+    limpidezza: g('ad-limpidezza'), colore: g('ad-colore'), consistenza: g('ad-consistenza'),
+    catenelle: g('ad-catenelle'), velocita: g('ad-velocita'), grana: g('ad-grana'), persistenzaBollicine: g('ad-persistenza-bollicine'),
+    intensitaOlf: g('ad-intensita-olf'), descrittori: g('ad-descrittori'), complessita: g('ad-complessita'), qualitaOlf: g('ad-qualita-olf'),
+    dolcezza: g('ad-dolcezza'), acidita: g('ad-acidita'), alcolicita: g('ad-alcolicita'), tannicita: g('ad-tannicita'),
+    rotondita: g('ad-rotondita'), sapidita: g('ad-sapidita'), effervescenzaGusto: g('ad-effervescenza-gusto'),
+    intensitaGusto: g('ad-intensita-gusto'), struttura: g('ad-struttura'), equilibrio: g('ad-equilibrio'), persistenza: g('ad-persistenza'),
+    qualitaGusto: g('ad-qualita-gusto'), statoEvolutivo: g('ad-stato-evolutivo'), armonia: g('ad-armonia'), qualitaComplessiva: g('ad-qualita-complessiva')
+  });
   const editId = document.getElementById('f-edit-id')?.value || null;
   const wine = {
     id: editId || null,
@@ -3281,6 +3562,7 @@ async function saveWine() {
     degSchema: activeDeg,
     aisParams:   activeDeg === 'ais'   ? getAP() : null,
     aisScore:    activeDeg === 'ais'   ? aisScore : null,
+    aisDescParams: activeDeg === 'ais' ? getADParams() : null,
     olfNote:  activeDeg === 'ais'   ? g('ap-olfnote') : '',
     gustNote: activeDeg === 'ais'   ? g('ap-gustnote') : '',
     fisarParams: activeDeg === 'fisar' ? getFP() : null,
@@ -3335,6 +3617,31 @@ function showDetail(id) {
       ${w.olfNote ? `<div class="deg-note">Olfattivo: ${w.olfNote}</div>` : ''}
       ${w.gustNote ? `<div class="deg-note">Gustativo: ${w.gustNote}</div>` : ''}
     </div>`;
+    // L'AIS compila sia la scheda a punti sia quella analitico-descrittiva:
+    // se presente, la mostriamo come card separata subito sotto.
+    if (w.aisDescParams) {
+      const dp = w.aisDescParams;
+      const rows = [
+        ['Limpidezza', dp.limpidezza], ['Colore', dp.colore], ['Consistenza', dp.consistenza],
+        ['Numero catenelle', dp.catenelle], ['Velocità ascesa', dp.velocita], ['Grana bollicine', dp.grana], ['Persistenza bollicine', dp.persistenzaBollicine],
+        ['Intensità olfattiva', dp.intensitaOlf], ['Complessità', dp.complessita], ['Qualità olfattiva', dp.qualitaOlf],
+        ['Dolcezza', dp.dolcezza], ['Acidità', dp.acidita], ['Alcolicità', dp.alcolicita], ['Tannicità', dp.tannicita],
+        ['Rotondità', dp.rotondita], ['Sapidità', dp.sapidita], ['Effervescenza', dp.effervescenzaGusto],
+        ['Intensità gusto-olfattiva', dp.intensitaGusto], ['Struttura', dp.struttura], ['Equilibrio', dp.equilibrio], ['Persistenza', dp.persistenza],
+        ['Qualità gusto-olfattiva', dp.qualitaGusto], ['Stato evolutivo', dp.statoEvolutivo], ['Armonia', dp.armonia], ['Qualità complessiva', dp.qualitaComplessiva]
+      ].filter(([,v]) => v);
+      if (rows.length) {
+        degHTML += `<div class="deg-result-card ais" style="margin-top:10px">
+          <div class="deg-result-header">
+            <span class="deg-result-label ais"><i class="ti ti-clipboard-list"></i>Scheda AIS — analitico-descrittiva</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:.75rem">
+            ${rows.map(([l,v]) => `<div style="font-size:12px;color:var(--muted)"><b style="color:var(--ink)">${l}:</b> ${v}</div>`).join('')}
+          </div>
+          ${dp.descrittori ? `<div class="deg-note">Descrittori: ${dp.descrittori}</div>` : ''}
+        </div>`;
+      }
+    }
   } else if (w.degSchema === 'fisar' && w.fisarParams) {
     const p = w.fisarParams;
     const asp = Math.max(0,p.limp)+Math.max(0,p.col)+Math.max(0,p.flu)+(p.eff>=0?p.eff:0);
@@ -3498,6 +3805,20 @@ function editWine() {
     vals.forEach((v,i) => { if (r[i] && v) r[i].value = v; });
     set('ap-stato', p.stato); set('ap-olfnote', w.olfNote); set('ap-gustnote', w.gustNote);
     calcAIS();
+    updateAisColore();
+    if (w.aisDescParams) {
+      const dp = w.aisDescParams;
+      const admap = {
+        'ad-limpidezza':dp.limpidezza, 'ad-colore':dp.colore, 'ad-consistenza':dp.consistenza,
+        'ad-catenelle':dp.catenelle, 'ad-velocita':dp.velocita, 'ad-grana':dp.grana, 'ad-persistenza-bollicine':dp.persistenzaBollicine,
+        'ad-intensita-olf':dp.intensitaOlf, 'ad-descrittori':dp.descrittori, 'ad-complessita':dp.complessita, 'ad-qualita-olf':dp.qualitaOlf,
+        'ad-dolcezza':dp.dolcezza, 'ad-acidita':dp.acidita, 'ad-alcolicita':dp.alcolicita, 'ad-tannicita':dp.tannicita,
+        'ad-rotondita':dp.rotondita, 'ad-sapidita':dp.sapidita, 'ad-effervescenza-gusto':dp.effervescenzaGusto,
+        'ad-intensita-gusto':dp.intensitaGusto, 'ad-struttura':dp.struttura, 'ad-equilibrio':dp.equilibrio, 'ad-persistenza':dp.persistenza,
+        'ad-qualita-gusto':dp.qualitaGusto, 'ad-stato-evolutivo':dp.statoEvolutivo, 'ad-armonia':dp.armonia, 'ad-qualita-complessiva':dp.qualitaComplessiva
+      };
+      Object.entries(admap).forEach(([id, v]) => { const el = document.getElementById(id); if (el && v != null) el.value = v; });
+    }
   } else if (deg === 'fisar' && w.fisarParams) {
     const p = w.fisarParams;
     const fmap = { 'fp-limp':p.limp,'fp-col':p.col,'fp-flu':p.flu,'fp-eff':p.eff,'fp-fr':p.fr,'fp-pint':p.pint,'fp-pers':p.pers,'fp-qual':p.qual,'fp-arm':p.arm,'fp-tip':p.tip,'fp-gfr':p.gfr,'fp-gst':p.gst,'fp-morb':p.morb,'fp-dur':p.dur,'fp-pai':p.pai,'fp-garm':p.garm,'fp-gtip':p.gtip,'fp-gqual':p.gqual,'fp-evol':p.evol,'fp-ecc':p.ecc };
@@ -4314,6 +4635,22 @@ function exportTasting() {
       });
       if (p.stato) html += `<p>Stato evolutivo: <strong>${p.stato}</strong></p>`;
     }
+    if (x.aisDescParams) {
+      const dp = x.aisDescParams;
+      const rows = [
+        ['Limpidezza', dp.limpidezza], ['Colore', dp.colore], ['Consistenza', dp.consistenza],
+        ['Intensità olfattiva', dp.intensitaOlf], ['Complessità', dp.complessita], ['Qualità olfattiva', dp.qualitaOlf],
+        ['Dolcezza', dp.dolcezza], ['Acidità', dp.acidita], ['Alcolicità', dp.alcolicita], ['Tannicità', dp.tannicita],
+        ['Rotondità', dp.rotondita], ['Sapidità', dp.sapidita],
+        ['Struttura', dp.struttura], ['Equilibrio', dp.equilibrio], ['Persistenza', dp.persistenza], ['Qualità gusto-olfattiva', dp.qualitaGusto],
+        ['Stato evolutivo', dp.statoEvolutivo], ['Armonia', dp.armonia], ['Qualità complessiva', dp.qualitaComplessiva]
+      ].filter(([,v]) => v);
+      if (rows.length) {
+        html += `<h2>Scheda analitico-descrittiva AIS</h2>`;
+        rows.forEach(([l,v]) => { html += `<p style="margin:2px 0">${l}: <strong>${v}</strong></p>`; });
+        if (dp.descrittori) html += `<p>Descrittori: <strong>${dp.descrittori}</strong></p>`;
+      }
+    }
     if (x.olfNote)  html += `<h2>Note olfattive</h2><p>${x.olfNote}</p>`;
     if (x.gustNote) html += `<h2>Note gustative</h2><p>${x.gustNote}</p>`;
     if (x.fpNote)   html += `<h2>Note di degustazione</h2><p>${x.fpNote}</p>`;
@@ -4392,7 +4729,7 @@ Object.assign(window, {
   scanBothLabels, searchNetworkUsers, sendFollowRequest, setFilter, setQtyFilter, showAdd, showComingSoon, showDetail,
   showNetworkScreen, showNetworkWinePreview, showProfileScreen, showScreen, startPremiumCheckout, stepQty, switchDeg, switchLTab, toast,
   showGuideScreen,
-  toggleAdvFilters, toggleChipIn, toggleFisarMethodField, toggleNavMenu, togglePairing, toggleSection, updateDelegazioniList, updateGrapePct, updateTonalitaColore,
+  toggleAdvFilters, toggleChipIn, toggleFisarMethodField, toggleNavMenu, togglePairing, toggleSection, updateDelegazioniList, updateGrapePct, updateTonalitaColore, updateAisColore,
   updateRegionOptions, updateProvinceOptions, dismissInstallBanner, triggerInstallPrompt, resetInstallBanner,
   setNetworkFilter, toggleNetworkAdvFilters, onNetworkCountryChange, resetNetworkFilters, renderNetworkFeed
 });

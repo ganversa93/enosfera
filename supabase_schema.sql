@@ -636,3 +636,10 @@ create policy "profiles: visibili a chi condivide una cantina con me"
          or (cs.member_id = auth.uid() and cs.owner_id = profiles.id)
     )
   );
+
+-- ════════════════════════════════════════════
+-- AIS — scheda analitico-descrittiva (in aggiunta a quella a punteggio,
+-- che l'AIS compila sempre entrambe: niente toggle, i due schemi
+-- convivono nello stesso record sotto deg_schema = 'ais')
+-- ════════════════════════════════════════════
+alter table public.wines add column if not exists ais_desc_params jsonb;
