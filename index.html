@@ -3199,16 +3199,43 @@ async function scanBothLabels() {
   }
   document.getElementById('ai-spin').classList.remove('show');
 }
+// Confronta la denominazione letta dall'AI con l'elenco delle DOC/DOCG/AOC/DO
+// autorizzate per il paese/regione selezionati (le stesse tabelle usate per
+// l'autocomplete del campo), e restituisce il nome ufficiale solo se trova
+// una corrispondenza — altrimenti il dato non validato non viene scritto.
+function normalizeDocName(s) {
+  return (s || '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/\b(docg|doc|igt|igp|aoc|do)\b/g, '')
+    .replace(/[().]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+function matchAuthorizedDoc(rawDoc, list) {
+  if (!rawDoc || !Array.isArray(list) || !list.length) return null;
+  const target = normalizeDocName(rawDoc);
+  if (!target) return null;
+  for (const entry of list) {
+    const variants = entry.split('/').map(normalizeDocName);
+    if (variants.some(v => v && (v === target || target.includes(v) || v.includes(target)))) return entry;
+  }
+  return null;
+}
 function fillForm(d) {
   const set = (id, v) => { const el = document.getElementById(id); if (el && v) el.value = v; };
   set('f-name', d.name); set('f-producer', d.producer); set('f-vintage', d.vintage);
-  set('f-doc', d.doc); if (d.grapes) applyGrapesToForm(d.grapes);
+  if (d.grapes) applyGrapesToForm(d.grapes);
   set('f-country', d.country || 'Italia'); updateRegionOptions();
-  set('f-region', d.region); updateProvinceOptions();
+  set('f-region', d.region); updateProvinceOptions(); // aggiorna anche docSuggestions per il paese/regione correnti
   set('f-province', d.province);
+  const matchedDoc = matchAuthorizedDoc(d.doc, docSuggestions);
+  if (matchedDoc) set('f-doc', matchedDoc);
   set('f-abv', d.abv); set('f-drink', d.drink);
   if (d.type) { const el = document.getElementById('f-type'); if (el) el.value = d.type; }
-  if (d.notes) { const el = document.getElementById('f-notes'); if (el) el.value = d.notes; }
+  // Le note di degustazione (sezione "Dati Degustazione") restano sempre a
+  // inserimento manuale: l'AI non le compila mai, anche se l'etichetta ne
+  // riportasse alcune, per non sostituirsi al giudizio personale del degustatore.
   toast('Etichetta letta! Controlla e completa i dati.');
 }
 
