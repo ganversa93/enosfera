@@ -393,6 +393,17 @@
     .home-card i { font-size: 34px; color: var(--wine); margin-bottom: 10px; display: block; }
     .home-card-title { font-family: 'Cormorant Garamond', serif; font-size: 18px; color: var(--ink); margin-bottom: 3px; }
     .home-card-sub { font-size: 11px; color: var(--muted); }
+    .home-feedback-row { display: flex; gap: 12px; margin-top: 14px; }
+    .home-feedback-btn {
+      flex: 1; display: flex; align-items: center; gap: 10px;
+      background: var(--bg); border: 0.5px solid var(--border); border-radius: 14px;
+      padding: 14px 16px; text-decoration: none; cursor: pointer;
+      transition: transform .15s, border-color .15s;
+    }
+    .home-feedback-btn:hover { border-color: var(--wine); transform: translateY(-2px); }
+    .home-feedback-btn i { font-size: 22px; color: var(--wine); flex-shrink: 0; }
+    .home-feedback-btn span { font-family: 'Inter', sans-serif; font-size: 12.5px; font-weight: 500; color: var(--ink); }
+    @media (max-width: 380px) { .home-feedback-row { flex-direction: column; } }
 
     /* ── MENU SEZIONI (dropdown richiamabile da ogni schermata) ── */
     .nav-menu-overlay {
@@ -859,6 +870,14 @@
         <div class="home-card-title">Guida</div>
         <div class="home-card-sub">Come funziona Enoscrigno</div>
       </div>
+    </div>
+    <div class="home-feedback-row">
+      <a class="home-feedback-btn" href="mailto:enoscrigno@gmail.com?subject=Enoscrigno%20%E2%80%93%20Segnalazione%20bug" title="Segnala un problema tecnico">
+        <i class="ti ti-bug"></i><span>Segnala un bug</span>
+      </a>
+      <a class="home-feedback-btn" href="mailto:enoscrigno@gmail.com?subject=Enoscrigno%20%E2%80%93%20Richiesta%20o%20suggerimento" title="Proponi un'idea o una funzione">
+        <i class="ti ti-bulb"></i><span>Richiesta o idea</span>
+      </a>
     </div>
   </div>
 
