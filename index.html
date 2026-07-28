@@ -173,6 +173,15 @@
     .wscore { font-weight: 500; color: var(--gold); }
     .stars { color: var(--gold); font-size: 10px; letter-spacing: -1px; }
 
+    .wowner-row { display: flex; align-items: center; gap: 6px; margin-top: 8px; padding-top: 8px; border-top: 0.5px solid var(--border); }
+    .wowner-avatar { width: 18px; height: 18px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+    .wowner-avatar-ph { background: var(--wine-pale); color: var(--wine); display: flex; align-items: center; justify-content: center; font-size: 10px; }
+    .wowner-name { font-size: 11px; color: var(--muted); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .wnote-snip {
+      font-size: 11px; color: var(--muted); font-style: italic; margin-top: 6px; line-height: 1.4;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+
     .empty { text-align: center; padding: 3.5rem 1rem; color: var(--muted); }
     .empty i { font-size: 44px; opacity: .25; display: block; margin-bottom: 12px; }
     .empty p { font-size: 14px; line-height: 1.6; }
@@ -880,6 +889,44 @@
     </div>
 
     <div class="stitle" style="margin:0 0 .75rem .1rem"><i class="ti ti-bottle-filled"></i>Ultimi vini da chi segui</div>
+    <div class="filter-bar">
+      <input type="text" id="network-feed-search" placeholder="Cerca nome, produttore, regione, abbinamento…" oninput="renderNetworkFeed()">
+      <div class="chip active" data-nf="all" onclick="setNetworkFilter('all',this)">Tutti</div>
+      <div class="chip" data-nf="Rosso"     onclick="setNetworkFilter('Rosso',this)">Rosso</div>
+      <div class="chip" data-nf="Bianco"    onclick="setNetworkFilter('Bianco',this)">Bianco</div>
+      <div class="chip" data-nf="Rosato"    onclick="setNetworkFilter('Rosato',this)">Rosato</div>
+      <div class="chip" data-nf="Spumante"  onclick="setNetworkFilter('Spumante',this)">Spumante</div>
+    </div>
+    <div id="nf-adv-filter-toggle" class="btn adv-filter-toggle-btn" onclick="toggleNetworkAdvFilters()"><i class="ti ti-filter"></i>Filtri<span id="nf-adv-filter-badge" style="display:none"></span></div>
+    <div class="adv-filter-panel" id="nf-adv-filter-panel">
+      <div class="adv-filter-row">
+        <div class="adv-filter-field">
+          <label>Paese</label>
+          <select id="nf-country" onchange="onNetworkCountryChange()">
+            <option value="">Tutti</option>
+          </select>
+        </div>
+        <div class="adv-filter-field">
+          <label>Regione</label>
+          <select id="nf-region" onchange="renderNetworkFeed()">
+            <option value="">Tutte</option>
+          </select>
+        </div>
+        <div class="adv-filter-field">
+          <label>Abbinamento</label>
+          <select id="nf-pairing" onchange="renderNetworkFeed()">
+            <option value="">Tutti</option>
+          </select>
+        </div>
+        <div class="adv-filter-field">
+          <label>Vitigno</label>
+          <select id="nf-grape" onchange="renderNetworkFeed()">
+            <option value="">Tutti</option>
+          </select>
+        </div>
+        <button class="btn sm" onclick="resetNetworkFilters()"><i class="ti ti-x"></i>Azzera</button>
+      </div>
+    </div>
     <div id="network-feed"><div class="empty"><i class="ti ti-users"></i><p>Segui qualche appassionato o sommelier per vedere qui i loro vini.</p></div></div>
   </div>
 
@@ -2718,6 +2765,23 @@ function updateAdvFilterBadge() {
   if (n > 0) { badge.textContent = n; badge.style.display = 'inline-flex'; toggle.classList.add('active'); }
   else { badge.style.display = 'none'; toggle.classList.remove('active'); }
 }
+/* ── Helper condivisi per le card vino (Cantina + Network) ── */
+function wineTypeBadgeClass(t) { return t === 'Bianco' ? 'bb' : t === 'Rosato' ? 'bro' : t === 'Spumante' ? 'bs' : 'br'; }
+function starString(s) { const n = Math.round((s || 80) / 20); return '★'.repeat(n) + '☆'.repeat(5 - n); }
+function degSchemaTag(w) {
+  return (w.degSchema === 'ais')
+    ? `<span style="font-size:10px;padding:2px 6px;border-radius:10px;background:var(--ais-pale);color:var(--ais)">AIS</span>`
+    : (w.degSchema === 'fisar' || w.degSchema === 'fisar_desc')
+    ? `<span style="font-size:10px;padding:2px 6px;border-radius:10px;background:var(--fisar-pale);color:var(--fisar)">FISAR</span>`
+    : '';
+}
+function wineQtyBadge(w) {
+  const qty = w.qty ?? 1;
+  return qty > 0
+    ? `<span class="wqty-badge"><i class="ti ti-bottle" style="font-size:11px"></i>${qty}</span>`
+    : `<span class="wqty-badge tasted-only"><i class="ti ti-glass-full" style="font-size:11px"></i>Degustato</span>`;
+}
+
 function renderGrid() {
   const q    = (document.getElementById('search-input')?.value || '').toLowerCase();
   const afCountry = document.getElementById('af-country')?.value || '';
@@ -2753,23 +2817,14 @@ function renderGrid() {
   const e = document.getElementById('empty-state');
   if (!list.length) { g.innerHTML = ''; e.style.display = 'block'; return; }
   e.style.display = 'none';
-  const bc = t => t === 'Bianco' ? 'bb' : t === 'Rosato' ? 'bro' : t === 'Spumante' ? 'bs' : 'br';
-  const st = s => { const n = Math.round((s || 80) / 20); return '★'.repeat(n) + '☆'.repeat(5 - n); };
-  const sTag = w => w.degSchema === 'ais' ? `<span style="font-size:10px;padding:2px 6px;border-radius:10px;background:var(--ais-pale);color:var(--ais)">AIS</span>` : w.degSchema === 'fisar' ? `<span style="font-size:10px;padding:2px 6px;border-radius:10px;background:var(--fisar-pale);color:var(--fisar)">FISAR</span>` : w.degSchema === 'fisar_desc' ? `<span style="font-size:10px;padding:2px 6px;border-radius:10px;background:var(--fisar-pale);color:var(--fisar)">FISAR</span>` : '';
-  const qtyBadge = w => {
-    const qty = w.qty ?? 1;
-    return qty > 0
-      ? `<span class="wqty-badge"><i class="ti ti-bottle" style="font-size:11px"></i>${qty}</span>`
-      : `<span class="wqty-badge tasted-only"><i class="ti ti-glass-full" style="font-size:11px"></i>Degustato</span>`;
-  };
   g.innerHTML = list.map(w => `
     <div class="wcard" onclick="showDetail('${w.id}')">
-      <div class="wimg">${w.frontImg ? `<img src="${w.frontImg}" alt="${w.name}" loading="lazy">` : '<div class="ph"><i class="ti ti-bottle" aria-hidden="true"></i></div>'}${qtyBadge(w)}${w.type ? `<span class="wbadge ${bc(w.type)}">${w.type}</span>` : ''}</div>
+      <div class="wimg">${w.frontImg ? `<img src="${w.frontImg}" alt="${w.name}" loading="lazy">` : '<div class="ph"><i class="ti ti-bottle" aria-hidden="true"></i></div>'}${wineQtyBadge(w)}${w.type ? `<span class="wbadge ${wineTypeBadgeClass(w.type)}">${w.type}</span>` : ''}</div>
       <div class="winfo">
         ${w._pending ? `<div style="font-size:10px;color:var(--gold);font-weight:600;margin-bottom:3px"><i class="ti ti-cloud-off" style="font-size:11px;vertical-align:-1px"></i> Da sincronizzare</div>` : ''}
         <div class="wname">${w.name}</div>
         <div class="wprod">${[w.producer, w.vintage].filter(Boolean).join(' · ') || '—'}</div>
-        <div class="wmeta"><span style="display:flex;align-items:center;gap:4px">${sTag(w)}<span class="stars">${st(w.score)}</span></span><span class="wscore">${w.score || '—'}/100</span></div>
+        <div class="wmeta"><span style="display:flex;align-items:center;gap:4px">${degSchemaTag(w)}<span class="stars">${starString(w.score)}</span></span><span class="wscore">${w.score || '—'}/100</span></div>
       </div>
     </div>`).join('');
 }
@@ -3965,11 +4020,14 @@ async function sendFollowRequest(userId, btnEl) {
   if (btnEl) btnEl.outerHTML = `<span style="font-size:11px;color:var(--muted)">Richiesta inviata</span>`;
 }
 
+let currentNetworkFilter = 'all';
+
 async function loadNetworkFeed() {
   const feedBox = document.getElementById('network-feed');
   const { data: myFollows } = await sb.from('follows').select('followee_id').eq('follower_id', currentUser.id).eq('status', 'accepted');
   const followeeIds = (myFollows || []).map(f => f.followee_id);
   if (!followeeIds.length) {
+    networkWinesCache = [];
     feedBox.innerHTML = `<div class="empty"><i class="ti ti-users"></i><p>Segui qualche appassionato o sommelier per vedere qui i loro vini.</p></div>`;
     return;
   }
@@ -3979,34 +4037,137 @@ async function loadNetworkFeed() {
     .order('created_at', { ascending: false })
     .limit(40);
   if (error) { feedBox.innerHTML = `<div class="empty"><p>Errore caricamento feed.</p></div>`; return; }
-  if (!wines?.length) { feedBox.innerHTML = `<div class="empty"><i class="ti ti-bottle"></i><p>Le persone che segui non hanno ancora vini visibili.</p></div>`; return; }
+  if (!wines?.length) { networkWinesCache = []; feedBox.innerHTML = `<div class="empty"><i class="ti ti-bottle"></i><p>Le persone che segui non hanno ancora vini visibili.</p></div>`; return; }
 
-  const { data: profilesData } = await sb.from('profiles').select('id, full_name, avatar_base64').in('id', followeeIds);
+  const { data: profilesData } = await sb.from('profiles').select('id, full_name, avatar_base64, assoc').in('id', followeeIds);
   const profMap = Object.fromEntries((profilesData || []).map(p => [p.id, p]));
 
   networkWinesCache = wines.map(row => ({
     ...row, aisParams: row.ais_params, fisarParams: row.fisar_params, aisScore: row.ais_score, fisarScore: row.fisar_score,
     olfNote: row.olf_note, gustNote: row.gust_note, fpNote: row.fp_note, degSchema: row.deg_schema,
     frontImg: row.front_img, backImg: row.back_img, ownerName: profMap[row.user_id]?.full_name || 'Utente',
-    ownerAvatar: profMap[row.user_id]?.avatar_base64 || ''
+    ownerAvatar: profMap[row.user_id]?.avatar_base64 || '', ownerAssoc: profMap[row.user_id]?.assoc || ''
   }));
 
-  const st = s => { const n = Math.round((s || 80) / 20); return '★'.repeat(n) + '☆'.repeat(5 - n); };
-  feedBox.innerHTML = `<div class="wine-grid">` + networkWinesCache.map(w => `
+  populateNetworkFilterOptions();
+  renderNetworkFeed();
+}
+
+function setNetworkFilter(f, el) {
+  currentNetworkFilter = f;
+  document.querySelectorAll('.chip[data-nf]').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  renderNetworkFeed();
+}
+
+function toggleNetworkAdvFilters() {
+  document.getElementById('nf-adv-filter-panel').classList.toggle('open');
+}
+
+/* Opzioni ricavate dai vini realmente presenti nel feed, come per i filtri della Cantina */
+function populateNetworkFilterOptions() {
+  const wines = networkWinesCache;
+  const countrySel = document.getElementById('nf-country');
+  const pairingSel = document.getElementById('nf-pairing');
+  const grapeSel   = document.getElementById('nf-grape');
+  const prevCountry = countrySel.value, prevPairing = pairingSel.value, prevGrape = grapeSel.value;
+
+  const countries = [...new Set(wines.map(w => w.country).filter(Boolean))].sort();
+  countrySel.innerHTML = '<option value="">Tutti</option>' + countries.map(c => `<option value="${c}">${c}</option>`).join('');
+  countrySel.value = countries.includes(prevCountry) ? prevCountry : '';
+
+  const allPairings = wines.flatMap(w => (w.pairing || '').split(',').map(p => p.trim()).filter(Boolean));
+  const pairings = [...new Set(allPairings)].sort();
+  pairingSel.innerHTML = '<option value="">Tutti</option>' + pairings.map(p => `<option value="${p}">${p}</option>`).join('');
+  pairingSel.value = pairings.includes(prevPairing) ? prevPairing : '';
+
+  const allGrapes = wines.flatMap(w => (w.grapes || '').split(',').map(g => g.trim().replace(/\s+\d{1,3}\s*%$/, '')).filter(Boolean));
+  const grapes = [...new Set(allGrapes)].sort();
+  grapeSel.innerHTML = '<option value="">Tutti</option>' + grapes.map(g => `<option value="${g}">${g}</option>`).join('');
+  grapeSel.value = grapes.includes(prevGrape) ? prevGrape : '';
+
+  populateNetworkRegionOptions();
+}
+
+function onNetworkCountryChange() {
+  populateNetworkRegionOptions();
+  renderNetworkFeed();
+}
+
+function populateNetworkRegionOptions() {
+  const wines = networkWinesCache;
+  const country = document.getElementById('nf-country').value;
+  const regionSel = document.getElementById('nf-region');
+  const prevRegion = regionSel.value;
+  const pool = country ? wines.filter(w => w.country === country) : wines;
+  const regions = [...new Set(pool.map(w => w.region).filter(Boolean))].sort();
+  regionSel.innerHTML = '<option value="">Tutte</option>' + regions.map(r => `<option value="${r}">${r}</option>`).join('');
+  regionSel.value = regions.includes(prevRegion) ? prevRegion : '';
+}
+
+function resetNetworkFilters() {
+  document.getElementById('nf-country').value = '';
+  document.getElementById('nf-region').value = '';
+  document.getElementById('nf-pairing').value = '';
+  document.getElementById('nf-grape').value = '';
+  populateNetworkRegionOptions();
+  renderNetworkFeed();
+}
+
+function updateNetworkAdvFilterBadge() {
+  const n = ['nf-country','nf-region','nf-pairing','nf-grape'].filter(id => document.getElementById(id)?.value).length;
+  const badge  = document.getElementById('nf-adv-filter-badge');
+  const toggle = document.getElementById('nf-adv-filter-toggle');
+  if (n > 0) { badge.textContent = n; badge.style.display = 'inline-flex'; toggle.classList.add('active'); }
+  else { badge.style.display = 'none'; toggle.classList.remove('active'); }
+}
+
+function renderNetworkFeed() {
+  const feedBox = document.getElementById('network-feed');
+  if (!networkWinesCache.length) return;
+  const q = (document.getElementById('network-feed-search')?.value || '').toLowerCase();
+  const nfCountry = document.getElementById('nf-country')?.value || '';
+  const nfRegion  = document.getElementById('nf-region')?.value  || '';
+  const nfPairing = document.getElementById('nf-pairing')?.value || '';
+  const nfGrape   = document.getElementById('nf-grape')?.value   || '';
+  updateNetworkAdvFilterBadge();
+
+  const list = networkWinesCache.filter(w => {
+    if (currentNetworkFilter !== 'all' && w.type !== currentNetworkFilter) return false;
+    if (nfCountry && w.country !== nfCountry) return false;
+    if (nfRegion  && w.region  !== nfRegion)  return false;
+    if (nfPairing) {
+      const tags = (w.pairing || '').split(',').map(p => p.trim());
+      if (!tags.includes(nfPairing)) return false;
+    }
+    if (nfGrape) {
+      const grapeNames = (w.grapes || '').split(',').map(g => g.trim().replace(/\s+\d{1,3}\s*%$/, ''));
+      if (!grapeNames.includes(nfGrape)) return false;
+    }
+    if (q && ![(w.name||''),(w.producer||''),(w.region||''),(w.pairing||''),(w.ownerName||'')].join(' ').toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  if (!list.length) { feedBox.innerHTML = `<div class="empty"><i class="ti ti-filter"></i><p>Nessun vino corrisponde ai filtri scelti.</p></div>`; return; }
+
+  feedBox.innerHTML = `<div class="wine-grid">` + list.map(w => {
+    const notesText = [w.notes, w.olfNote, w.gustNote, w.fpNote].filter(Boolean).join(' — ');
+    return `
     <div class="wcard" onclick="showNetworkWinePreview('${w.id}')">
-      <div class="wimg">${w.frontImg ? `<img src="${w.frontImg}" alt="${w.name}" loading="lazy">` : '<div class="ph"><i class="ti ti-bottle"></i></div>'}</div>
+      <div class="wimg">${w.frontImg ? `<img src="${w.frontImg}" alt="${w.name}" loading="lazy">` : '<div class="ph"><i class="ti ti-bottle"></i></div>'}${w.type ? `<span class="wbadge ${wineTypeBadgeClass(w.type)}">${w.type}</span>` : ''}</div>
       <div class="winfo">
         <div class="wname">${w.name}</div>
         <div class="wprod">${[w.producer, w.vintage].filter(Boolean).join(' · ') || '—'}</div>
-        <div class="wmeta">
-          <span style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted)">
-            ${w.ownerAvatar ? `<img src="${w.ownerAvatar}" style="width:16px;height:16px;border-radius:50%;object-fit:cover">` : ''}
-            ${w.ownerName}
-          </span>
-          <span class="wscore">${w.score || '—'}/100</span>
+        <div class="wmeta"><span style="display:flex;align-items:center;gap:4px">${degSchemaTag(w)}<span class="stars">${starString(w.score)}</span></span><span class="wscore">${w.score || '—'}/100</span></div>
+        <div class="wowner-row">
+          ${w.ownerAvatar ? `<img src="${w.ownerAvatar}" class="wowner-avatar">` : `<div class="wowner-avatar wowner-avatar-ph"><i class="ti ti-user"></i></div>`}
+          <span class="wowner-name">${w.ownerName}</span>
+          ${w.ownerAssoc ? `<span class="assoc-badge badge-${w.ownerAssoc.toLowerCase()}" style="font-size:9px">${w.ownerAssoc}</span>` : ''}
         </div>
+        ${notesText ? `<div class="wnote-snip"><i class="ti ti-note" style="font-size:10px;vertical-align:-1px;margin-right:2px"></i>${notesText}</div>` : ''}
       </div>
-    </div>`).join('') + `</div>`;
+    </div>`;
+  }).join('') + `</div>`;
 }
 
 function showNetworkWinePreview(id) {
@@ -4025,6 +4186,7 @@ function showNetworkWinePreview(id) {
         <div style="display:flex;align-items:center;gap:6px;margin:6px 0 8px;font-size:12px;color:var(--muted)">
           ${w.ownerAvatar ? `<img src="${w.ownerAvatar}" style="width:20px;height:20px;border-radius:50%;object-fit:cover">` : ''}
           Degustato da ${w.ownerName}
+          ${w.ownerAssoc ? `<span class="assoc-badge badge-${w.ownerAssoc.toLowerCase()}" style="font-size:9px">${w.ownerAssoc}</span>` : ''}
         </div>
         <div class="dchips">${chips.map(c => `<span class="dchip">${c}</span>`).join('')}</div>
       </div>
@@ -4204,7 +4366,8 @@ Object.assign(window, {
   showNetworkScreen, showNetworkWinePreview, showProfileScreen, showScreen, startPremiumCheckout, stepQty, switchDeg, switchLTab, toast,
   showGuideScreen,
   toggleAdvFilters, toggleChipIn, toggleFisarMethodField, toggleNavMenu, togglePairing, toggleSection, updateDelegazioniList, updateGrapePct, updateTonalitaColore,
-  updateRegionOptions, updateProvinceOptions, dismissInstallBanner, triggerInstallPrompt, resetInstallBanner
+  updateRegionOptions, updateProvinceOptions, dismissInstallBanner, triggerInstallPrompt, resetInstallBanner,
+  setNetworkFilter, toggleNetworkAdvFilters, onNetworkCountryChange, resetNetworkFilters, renderNetworkFeed
 });
 </script>
 </body>
