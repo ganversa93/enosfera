@@ -1237,7 +1237,7 @@
           <label>Paese</label>
           <select id="f-country" onchange="updateRegionOptions()">
             <option value="">Seleziona…</option>
-            <option>Italia</option><option>Francia</option><option>Germania</option><option>Spagna</option><option>Stati Uniti</option><option>Cile</option><option>Argentina</option><option>Nuova Zelanda</option><option>Sud Africa</option><option>Altro</option>
+            <option>Italia</option><option>Francia</option><option>Germania</option><option>Spagna</option><option>Stati Uniti</option><option>Cile</option><option>Argentina</option><option>Nuova Zelanda</option><option>Sud Africa</option><option>Australia</option><option>Altro</option>
           </select>
         </div>
         <div class="fg" style="position:relative">
@@ -3895,7 +3895,8 @@ const GEO_REGIONS = {
   Cile: ['Valle de Elqui','Valle de Limarí','Valle de Aconcagua','Valle de Casablanca','Valle de San Antonio','Valle del Maipo','Valle de Cachapoal','Valle de Colchagua','Valle de Curicó','Valle del Maule','Valle del Itata','Valle del Bío Bío'],
   Argentina: ['Mendoza','Salta','San Juan','La Rioja','Catamarca','Río Negro','Neuquén'],
   'Nuova Zelanda': ['Marlborough','Hawke\'s Bay','Central Otago','Wairarapa (Martinborough)','Nelson','Canterbury (Waipara)','Gisborne','Auckland (Waiheke Island)'],
-  'Sud Africa': ['Stellenbosch','Paarl','Franschhoek','Constantia','Swartland','Walker Bay','Robertson','Elgin']
+  'Sud Africa': ['Stellenbosch','Paarl','Franschhoek','Constantia','Swartland','Walker Bay','Robertson','Elgin'],
+  Australia: ['Barossa Valley','McLaren Vale','Hunter Valley','Margaret River','Yarra Valley','Coonawarra','Clare Valley','Adelaide Hills','Eden Valley','Mornington Peninsula']
 };
 
 const GEO_PROVINCES_ITALIA = {
@@ -4025,6 +4026,19 @@ const SOUTHAFRICA_WO = {
   Elgin: ['Elgin WO']
 };
 
+const AUSTRALIA_GI = {
+  'Barossa Valley': ['Barossa Valley GI'],
+  'McLaren Vale': ['McLaren Vale GI'],
+  'Hunter Valley': ['Hunter Valley GI'],
+  'Margaret River': ['Margaret River GI'],
+  'Yarra Valley': ['Yarra Valley GI'],
+  Coonawarra: ['Coonawarra GI'],
+  'Clare Valley': ['Clare Valley GI'],
+  'Adelaide Hills': ['Adelaide Hills GI'],
+  'Eden Valley': ['Eden Valley GI'],
+  'Mornington Peninsula': ['Mornington Peninsula GI']
+};
+
 /* ══ VITIGNI — elenco curato (non esaustivo) per uniformare il campo ══
    Internazionali + principali autoctoni italiani, francesi, tedeschi,
    spagnoli. Il campo resta comunque libero per varietà non elencate. */
@@ -4144,6 +4158,7 @@ function updateDocOptions() {
   else if (country === 'Argentina')     list = ARGENTINA_IG[region] || [];
   else if (country === 'Nuova Zelanda') list = NZ_GI[region] || [];
   else if (country === 'Sud Africa')    list = SOUTHAFRICA_WO[region] || [];
+  else if (country === 'Australia')     list = AUSTRALIA_GI[region] || [];
   docSuggestions = list;
 }
 
