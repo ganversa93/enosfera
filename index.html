@@ -1237,7 +1237,7 @@
           <label>Paese</label>
           <select id="f-country" onchange="updateRegionOptions()">
             <option value="">Seleziona…</option>
-            <option>Italia</option><option>Francia</option><option>Germania</option><option>Spagna</option><option>Altro</option>
+            <option>Italia</option><option>Francia</option><option>Germania</option><option>Spagna</option><option>Stati Uniti</option><option>Cile</option><option>Argentina</option><option>Nuova Zelanda</option><option>Sud Africa</option><option>Altro</option>
           </select>
         </div>
         <div class="fg" style="position:relative">
@@ -3890,7 +3890,12 @@ const GEO_REGIONS = {
   Italia: ['Piemonte','Valle d\'Aosta','Lombardia','Trentino-Alto Adige','Veneto','Friuli-Venezia Giulia','Liguria','Emilia-Romagna','Toscana','Umbria','Marche','Lazio','Abruzzo','Molise','Campania','Puglia','Basilicata','Calabria','Sicilia','Sardegna'],
   Francia: ['Alsazia','Beaujolais','Bordeaux','Borgogna','Champagne','Corsica','Jura','Languedoc-Roussillon','Valle della Loira','Provenza','Valle del Rodano','Savoia','Sud-Ovest'],
   Germania: ['Ahr','Baden','Franconia','Hessische Bergstraße','Mittelrhein','Mosella','Nahe','Palatinato','Rheingau','Rheinhessen','Saale-Unstrut','Sassonia','Württemberg'],
-  Spagna: ['Rioja','Ribera del Duero','Priorat','Penedès','Rías Baixas','Jerez','Navarra','Rueda','Toro','Bierzo','La Mancha','Jumilla','Somontano','Catalogna','Galizia','Andalusia','Castiglia e León','Aragona','Paesi Baschi','Canarie']
+  Spagna: ['Rioja','Ribera del Duero','Priorat','Penedès','Rías Baixas','Jerez','Navarra','Rueda','Toro','Bierzo','La Mancha','Jumilla','Somontano','Catalogna','Galizia','Andalusia','Castiglia e León','Aragona','Paesi Baschi','Canarie'],
+  'Stati Uniti': ['Napa Valley','Sonoma County','Central Coast','Paso Robles','Santa Barbara County','Willamette Valley (Oregon)','Columbia Valley (Washington)','Finger Lakes (New York)'],
+  Cile: ['Valle de Elqui','Valle de Limarí','Valle de Aconcagua','Valle de Casablanca','Valle de San Antonio','Valle del Maipo','Valle de Cachapoal','Valle de Colchagua','Valle de Curicó','Valle del Maule','Valle del Itata','Valle del Bío Bío'],
+  Argentina: ['Mendoza','Salta','San Juan','La Rioja','Catamarca','Río Negro','Neuquén'],
+  'Nuova Zelanda': ['Marlborough','Hawke\'s Bay','Central Otago','Wairarapa (Martinborough)','Nelson','Canterbury (Waipara)','Gisborne','Auckland (Waiheke Island)'],
+  'Sud Africa': ['Stellenbosch','Paarl','Franschhoek','Constantia','Swartland','Walker Bay','Robertson','Elgin']
 };
 
 const GEO_PROVINCES_ITALIA = {
@@ -3961,6 +3966,64 @@ const FRANCE_AOC = {
 };
 
 const GERMANY_DESIGNATIONS = ['Qualitätswein','Kabinett','Spätlese','Auslese','Beerenauslese (BA)','Trockenbeerenauslese (TBA)','Eiswein','Prädikatswein','Erste Lage','Grosses Gewächs (GG)','Classic','Selection'];
+
+const USA_AVA = {
+  'Napa Valley': ['Napa Valley AVA','Stags Leap District AVA','Oakville AVA','Rutherford AVA','Howell Mountain AVA'],
+  'Sonoma County': ['Sonoma Valley AVA','Russian River Valley AVA','Alexander Valley AVA','Dry Creek Valley AVA'],
+  'Central Coast': ['Central Coast AVA','Edna Valley AVA','Santa Maria Valley AVA'],
+  'Paso Robles': ['Paso Robles AVA'],
+  'Santa Barbara County': ['Santa Ynez Valley AVA','Sta. Rita Hills AVA'],
+  'Willamette Valley (Oregon)': ['Willamette Valley AVA','Dundee Hills AVA','Eola-Amity Hills AVA'],
+  'Columbia Valley (Washington)': ['Columbia Valley AVA','Walla Walla Valley AVA','Yakima Valley AVA'],
+  'Finger Lakes (New York)': ['Finger Lakes AVA','Seneca Lake AVA']
+};
+
+const CHILE_DO = {
+  'Valle de Elqui': ['Elqui DO'],
+  'Valle de Limarí': ['Limarí DO'],
+  'Valle de Aconcagua': ['Aconcagua DO'],
+  'Valle de Casablanca': ['Casablanca DO'],
+  'Valle de San Antonio': ['San Antonio DO','Leyda DO'],
+  'Valle del Maipo': ['Maipo Valley DO'],
+  'Valle de Cachapoal': ['Cachapoal Valley DO','Rapel Valley DO'],
+  'Valle de Colchagua': ['Colchagua Valley DO','Rapel Valley DO'],
+  'Valle de Curicó': ['Curicó Valley DO'],
+  'Valle del Maule': ['Maule Valley DO'],
+  'Valle del Itata': ['Itata Valley DO'],
+  'Valle del Bío Bío': ['Bío Bío Valley DO']
+};
+
+const ARGENTINA_IG = {
+  Mendoza: ['Luján de Cuyo IG','Valle de Uco IG','Maipú IG','San Rafael IG','Mendoza IG'],
+  Salta: ['Valles Calchaquíes IG','Cafayate IG'],
+  'San Juan': ['Pedernal Valley IG','Tulum Valley IG'],
+  'La Rioja': ['Famatina Valley IG'],
+  Catamarca: ['Fiambalá IG'],
+  'Río Negro': ['Río Negro IG'],
+  Neuquén: ['Neuquén IG']
+};
+
+const NZ_GI = {
+  Marlborough: ['Marlborough GI'],
+  'Hawke\'s Bay': ['Hawke\'s Bay GI','Gimblett Gravels GI'],
+  'Central Otago': ['Central Otago GI'],
+  'Wairarapa (Martinborough)': ['Martinborough GI'],
+  Nelson: ['Nelson GI'],
+  'Canterbury (Waipara)': ['Waipara Valley GI'],
+  Gisborne: ['Gisborne GI'],
+  'Auckland (Waiheke Island)': ['Waiheke Island GI']
+};
+
+const SOUTHAFRICA_WO = {
+  Stellenbosch: ['Stellenbosch WO'],
+  Paarl: ['Paarl WO'],
+  Franschhoek: ['Franschhoek Valley WO'],
+  Constantia: ['Constantia WO'],
+  Swartland: ['Swartland WO'],
+  'Walker Bay': ['Walker Bay WO','Hemel-en-Aarde Valley WO'],
+  Robertson: ['Robertson WO'],
+  Elgin: ['Elgin WO']
+};
 
 /* ══ VITIGNI — elenco curato (non esaustivo) per uniformare il campo ══
    Internazionali + principali autoctoni italiani, francesi, tedeschi,
@@ -4076,6 +4139,11 @@ function updateDocOptions() {
   else if (country === 'Francia') list = FRANCE_AOC[region] || [];
   else if (country === 'Germania') list = GERMANY_DESIGNATIONS;
   else if (country === 'Spagna')  list = SPAIN_DO[region] || [];
+  else if (country === 'Stati Uniti')   list = USA_AVA[region] || [];
+  else if (country === 'Cile')          list = CHILE_DO[region] || [];
+  else if (country === 'Argentina')     list = ARGENTINA_IG[region] || [];
+  else if (country === 'Nuova Zelanda') list = NZ_GI[region] || [];
+  else if (country === 'Sud Africa')    list = SOUTHAFRICA_WO[region] || [];
   docSuggestions = list;
 }
 
