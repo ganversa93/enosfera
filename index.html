@@ -1976,13 +1976,6 @@
                 <option>Molto fine</option><option>Fine</option><option>Mediamente fine</option><option>Comune</option>
               </select>
             </div>
-            <div class="fisar-field">
-              <label class="fisar-label">Complessità</label>
-              <select class="fisar-sel" id="fd-complessita">
-                <option value="">— Seleziona —</option>
-                <option>Sontuoso</option><option>Complesso</option><option>Mediamente complesso</option><option>Semplice</option>
-              </select>
-            </div>
           </div>
           <div class="fg" style="margin-top:8px">
             <label>Natura dei profumi <small style="color:var(--muted)">(una o più)</small></label>
@@ -2001,6 +1994,13 @@
               <div class="p-chip" data-v="Etereo" onclick="toggleChipIn('natura-profumi-chips',this)">Etereo</div>
               <div class="p-chip" data-v="Vari" onclick="toggleChipIn('natura-profumi-chips',this)">Vari</div>
             </div>
+          </div>
+          <div class="fg" style="margin-top:8px">
+            <label>Complessità</label>
+            <select class="fisar-sel" id="fd-complessita">
+              <option value="">— Seleziona —</option>
+              <option>Sontuoso</option><option>Complesso</option><option>Mediamente complesso</option><option>Semplice</option>
+            </select>
           </div>
         </div>
 
@@ -2096,15 +2096,15 @@
                 <option>Molto fine</option><option>Fine</option><option>Mediamente fine</option><option>Comune</option>
               </select>
             </div>
-            <div class="fisar-field">
-              <label class="fisar-label">Fin di bocca <small style="color:var(--muted)">(P.A.I.)</small></label>
-              <select class="fisar-sel" id="fd-pai">
-                <option value="">— Seleziona —</option>
-                <option>Molto persistente</option><option>Persistente</option><option>Poco persistente</option>
-              </select>
-            </div>
           </div>
           <div class="fg" style="margin-top:8px"><label>Note sulla natura degli aromi <small style="color:var(--muted)">(verifica corrispondenza con l'olfatto)</small></label><textarea id="fd-natura-aromi" placeholder="Aromi percepiti al retrogusto…"></textarea></div>
+          <div class="fg" style="margin-top:8px">
+            <label>Fin di bocca <small style="color:var(--muted)">(P.A.I.)</small></label>
+            <select class="fisar-sel" id="fd-pai">
+              <option value="">— Seleziona —</option>
+              <option>Molto persistente</option><option>Persistente</option><option>Poco persistente</option>
+            </select>
+          </div>
         </div>
 
         <!-- STATO EVOLUTIVO E CONSIDERAZIONI FINALI -->
