@@ -929,6 +929,14 @@
           </select>
         </div>
         <div class="adv-filter-field">
+          <label>Sommelier</label>
+          <select id="nf-sommelier" onchange="renderNetworkFeed()">
+            <option value="">Tutti</option>
+            <option value="si">Sì</option>
+            <option value="no">No</option>
+          </select>
+        </div>
+        <div class="adv-filter-field">
           <label>Paese</label>
           <select id="nf-country" onchange="onNetworkCountryChange()">
             <option value="">Tutti</option>
@@ -4577,6 +4585,7 @@ function populateNetworkRegionOptions() {
 
 function resetNetworkFilters() {
   document.getElementById('nf-owner').value = '';
+  document.getElementById('nf-sommelier').value = '';
   document.getElementById('nf-country').value = '';
   document.getElementById('nf-region').value = '';
   document.getElementById('nf-pairing').value = '';
@@ -4586,7 +4595,7 @@ function resetNetworkFilters() {
 }
 
 function updateNetworkAdvFilterBadge() {
-  const n = ['nf-owner','nf-country','nf-region','nf-pairing','nf-grape'].filter(id => document.getElementById(id)?.value).length;
+  const n = ['nf-owner','nf-sommelier','nf-country','nf-region','nf-pairing','nf-grape'].filter(id => document.getElementById(id)?.value).length;
   const badge  = document.getElementById('nf-adv-filter-badge');
   const toggle = document.getElementById('nf-adv-filter-toggle');
   if (n > 0) { badge.textContent = n; badge.style.display = 'inline-flex'; toggle.classList.add('active'); }
@@ -4597,7 +4606,8 @@ function renderNetworkFeed() {
   const feedBox = document.getElementById('network-feed');
   if (!networkWinesCache.length) return;
   const q = (document.getElementById('network-feed-search')?.value || '').toLowerCase();
-  const nfOwner   = document.getElementById('nf-owner')?.value   || '';
+  const nfOwner     = document.getElementById('nf-owner')?.value     || '';
+  const nfSommelier = document.getElementById('nf-sommelier')?.value || '';
   const nfCountry = document.getElementById('nf-country')?.value || '';
   const nfRegion  = document.getElementById('nf-region')?.value  || '';
   const nfPairing = document.getElementById('nf-pairing')?.value || '';
@@ -4607,6 +4617,8 @@ function renderNetworkFeed() {
   const list = networkWinesCache.filter(w => {
     if (currentNetworkFilter !== 'all' && w.type !== currentNetworkFilter) return false;
     if (nfOwner && w.user_id !== nfOwner) return false;
+    if (nfSommelier === 'si' && !w.ownerAssoc) return false;
+    if (nfSommelier === 'no' && w.ownerAssoc) return false;
     if (nfCountry && w.country !== nfCountry) return false;
     if (nfRegion  && w.region  !== nfRegion)  return false;
     if (nfPairing) {
