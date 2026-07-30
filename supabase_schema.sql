@@ -643,3 +643,12 @@ create policy "profiles: visibili a chi condivide una cantina con me"
 -- convivono nello stesso record sotto deg_schema = 'ais')
 -- ════════════════════════════════════════════
 alter table public.wines add column if not exists ais_desc_params jsonb;
+
+-- ════════════════════════════════════════════
+-- Pop-up "profilo pubblico" al primo accesso — l'impostazione is_public
+-- (da cui dipende tutto il Network) è sepolta nella schermata Profilo e
+-- resta disattiva di default: questo flag traccia se all'utente è già
+-- stato mostrato il pop-up di spiegazione/attivazione, per non
+-- richiederlo ad ogni sessione.
+-- ════════════════════════════════════════════
+alter table public.profiles add column if not exists public_prompt_seen boolean not null default false;

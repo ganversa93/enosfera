@@ -693,6 +693,23 @@
     .install-banner-dismiss:hover { color: var(--ink); }
     @media (min-width: 480px) { .install-banner { left: auto; right: 1.25rem; width: 380px; } }
 
+    /* ── POP-UP PROFILO PUBBLICO (primo accesso) ── */
+    .public-prompt-overlay {
+      display: none; position: fixed; inset: 0; z-index: 300;
+      background: rgba(0,0,0,.55); align-items: center; justify-content: center; padding: 1rem;
+    }
+    .public-prompt-overlay.open { display: flex; }
+    .public-prompt-card {
+      background: var(--surf); border: 0.5px solid var(--border); border-radius: 18px;
+      padding: 1.6rem 1.35rem; max-width: 380px; width: 100%;
+      box-shadow: 0 12px 40px rgba(0,0,0,.28); text-align: center;
+    }
+    .public-prompt-card i.ti-users { font-size: 34px; color: var(--wine); margin-bottom: 10px; display: block; }
+    .public-prompt-card h3 { font-family: 'Cormorant Garamond', serif; font-size: 20px; color: var(--ink); margin-bottom: 8px; }
+    .public-prompt-card p { font-size: 13px; color: var(--muted); line-height: 1.55; margin-bottom: 1.2rem; }
+    .public-prompt-actions { display: flex; flex-direction: column; gap: 8px; }
+    .public-prompt-actions .btn { justify-content: center; width: 100%; }
+
     /* ── RESPONSIVE ── */
     @media (max-width: 520px) {
       .app-shell { padding: 1rem .75rem; }
@@ -2353,6 +2370,19 @@
   <button class="btn sm primary" id="install-banner-cta" onclick="triggerInstallPrompt()" style="display:none">Installa</button>
 </div>
 
+<!-- POP-UP PROFILO PUBBLICO (primo accesso) -->
+<div class="public-prompt-overlay" id="public-prompt-overlay">
+  <div class="public-prompt-card">
+    <i class="ti ti-users"></i>
+    <h3>Attiva il profilo pubblico?</h3>
+    <p>Il <b>Network</b> — dove segui altri appassionati e sommelier e vedi i loro vini — funziona solo se il tuo profilo è impostato come <b>pubblico</b>: altrimenti nessuno può trovarti né inviarti richieste di follow. Puoi cambiarlo in ogni momento dal tuo profilo.</p>
+    <div class="public-prompt-actions">
+      <button class="btn primary" onclick="acceptPublicPrompt()"><i class="ti ti-check"></i>Sì, rendi il profilo pubblico</button>
+      <button class="btn sm" onclick="dismissPublicPrompt()">Non ora</button>
+    </div>
+  </div>
+</div>
+
 <script type="module">
 /* ══════════════════════════════════════════════
    ENOSFERA — Supabase backend layer
@@ -2557,6 +2587,7 @@ async function loadProfile(authUser) {
     aiScanEnabled:     profile?.ai_scan_enabled || false,
     avatarBase64:      profile?.avatar_base64 || '',
     isPublic:          profile?.is_public || false,
+    publicPromptSeen:  profile?.public_prompt_seen || false,
     fisarMethod:       profile?.fisar_method || 'punteggio',
     emailConfirmed:    !!authUser.email_confirmed_at
   };
@@ -2572,6 +2603,36 @@ async function loadProfile(authUser) {
     } catch {}
   }
   await initApp();
+  maybeShowPublicPrompt();
+}
+
+/* ── POP-UP PROFILO PUBBLICO (primo accesso) ──
+   Il funzionamento del Network dipende interamente da profiles.is_public,
+   un'impostazione sepolta nella schermata Profilo: mostriamo un pop-up
+   una tantum (tracciato da public_prompt_seen) per farla notare subito. */
+function maybeShowPublicPrompt() {
+  if (!currentUser || currentUser.isPublic || currentUser.publicPromptSeen || !navigator.onLine) return;
+  setTimeout(() => document.getElementById('public-prompt-overlay')?.classList.add('open'), 600);
+}
+async function markPublicPromptSeen() {
+  if (!currentUser) return;
+  currentUser.publicPromptSeen = true;
+  try { await sb.from('profiles').update({ public_prompt_seen: true }).eq('id', currentUser.id); } catch {}
+}
+function dismissPublicPrompt() {
+  document.getElementById('public-prompt-overlay')?.classList.remove('open');
+  markPublicPromptSeen();
+}
+async function acceptPublicPrompt() {
+  document.getElementById('public-prompt-overlay')?.classList.remove('open');
+  try {
+    await sb.from('profiles').update({ is_public: true, public_prompt_seen: true }).eq('id', currentUser.id);
+    currentUser.isPublic = true;
+    currentUser.publicPromptSeen = true;
+    toast('Profilo impostato come pubblico! Ora puoi essere trovato nel Network.');
+  } catch (e) {
+    toastErr('Errore nell\'aggiornamento del profilo: ' + e.message);
+  }
 }
 
 /* ══ WINES — DB layer ══ */
@@ -4868,7 +4929,8 @@ Object.assign(window, {
   showGuideScreen,
   toggleAdvFilters, toggleChipIn, toggleFisarMethodField, toggleNavMenu, togglePairing, toggleSection, updateDelegazioniList, updateGrapePct, updateTonalitaColore, updateAisColore,
   updateRegionOptions, updateProvinceOptions, dismissInstallBanner, triggerInstallPrompt, resetInstallBanner,
-  setNetworkFilter, toggleNetworkAdvFilters, onNetworkCountryChange, resetNetworkFilters, renderNetworkFeed
+  setNetworkFilter, toggleNetworkAdvFilters, onNetworkCountryChange, resetNetworkFilters, renderNetworkFeed,
+  dismissPublicPrompt, acceptPublicPrompt
 });
 </script>
 </body>
