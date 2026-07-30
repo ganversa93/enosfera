@@ -923,6 +923,12 @@
     <div class="adv-filter-panel" id="nf-adv-filter-panel">
       <div class="adv-filter-row">
         <div class="adv-filter-field">
+          <label>Utente</label>
+          <select id="nf-owner" onchange="renderNetworkFeed()">
+            <option value="">Tutti</option>
+          </select>
+        </div>
+        <div class="adv-filter-field">
           <label>Paese</label>
           <select id="nf-country" onchange="onNetworkCountryChange()">
             <option value="">Tutti</option>
@@ -4525,10 +4531,16 @@ function toggleNetworkAdvFilters() {
 /* Opzioni ricavate dai vini realmente presenti nel feed, come per i filtri della Cantina */
 function populateNetworkFilterOptions() {
   const wines = networkWinesCache;
+  const ownerSel   = document.getElementById('nf-owner');
   const countrySel = document.getElementById('nf-country');
   const pairingSel = document.getElementById('nf-pairing');
   const grapeSel   = document.getElementById('nf-grape');
-  const prevCountry = countrySel.value, prevPairing = pairingSel.value, prevGrape = grapeSel.value;
+  const prevOwner = ownerSel.value, prevCountry = countrySel.value, prevPairing = pairingSel.value, prevGrape = grapeSel.value;
+
+  const owners = [...new Map(wines.map(w => [w.user_id, w.ownerName])).entries()]
+    .sort((a, b) => (a[1] || '').localeCompare(b[1] || ''));
+  ownerSel.innerHTML = '<option value="">Tutti</option>' + owners.map(([id, name]) => `<option value="${id}">${name}</option>`).join('');
+  ownerSel.value = owners.some(([id]) => id === prevOwner) ? prevOwner : '';
 
   const countries = [...new Set(wines.map(w => w.country).filter(Boolean))].sort();
   countrySel.innerHTML = '<option value="">Tutti</option>' + countries.map(c => `<option value="${c}">${c}</option>`).join('');
@@ -4564,6 +4576,7 @@ function populateNetworkRegionOptions() {
 }
 
 function resetNetworkFilters() {
+  document.getElementById('nf-owner').value = '';
   document.getElementById('nf-country').value = '';
   document.getElementById('nf-region').value = '';
   document.getElementById('nf-pairing').value = '';
@@ -4573,7 +4586,7 @@ function resetNetworkFilters() {
 }
 
 function updateNetworkAdvFilterBadge() {
-  const n = ['nf-country','nf-region','nf-pairing','nf-grape'].filter(id => document.getElementById(id)?.value).length;
+  const n = ['nf-owner','nf-country','nf-region','nf-pairing','nf-grape'].filter(id => document.getElementById(id)?.value).length;
   const badge  = document.getElementById('nf-adv-filter-badge');
   const toggle = document.getElementById('nf-adv-filter-toggle');
   if (n > 0) { badge.textContent = n; badge.style.display = 'inline-flex'; toggle.classList.add('active'); }
@@ -4584,6 +4597,7 @@ function renderNetworkFeed() {
   const feedBox = document.getElementById('network-feed');
   if (!networkWinesCache.length) return;
   const q = (document.getElementById('network-feed-search')?.value || '').toLowerCase();
+  const nfOwner   = document.getElementById('nf-owner')?.value   || '';
   const nfCountry = document.getElementById('nf-country')?.value || '';
   const nfRegion  = document.getElementById('nf-region')?.value  || '';
   const nfPairing = document.getElementById('nf-pairing')?.value || '';
@@ -4592,6 +4606,7 @@ function renderNetworkFeed() {
 
   const list = networkWinesCache.filter(w => {
     if (currentNetworkFilter !== 'all' && w.type !== currentNetworkFilter) return false;
+    if (nfOwner && w.user_id !== nfOwner) return false;
     if (nfCountry && w.country !== nfCountry) return false;
     if (nfRegion  && w.region  !== nfRegion)  return false;
     if (nfPairing) {
