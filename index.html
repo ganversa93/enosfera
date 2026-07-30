@@ -3360,6 +3360,7 @@ function renderAiBanner() {
   const el = document.getElementById('ai-banner');
   if (!el) return;
   if (currentUser?.aiScanEnabled) {
+    el.style.display = '';
     el.className = 'ai-banner';
     const hasImg = !!(frontImg || backImg);
     el.innerHTML = `
@@ -3370,14 +3371,11 @@ function renderAiBanner() {
       </button>
     `;
   } else {
-    el.className = 'ai-banner locked';
-    el.innerHTML = `
-      <span class="premium-pill"><i class="ti ti-crown" style="font-size:10px"></i> Premium</span>
-      <span class="ai-txt">Lettura automatica etichette con AI — 2,50€/mese, disdici quando vuoi</span>
-      <button class="btn gold sm" onclick="startPremiumCheckout()" id="premium-upgrade-btn">
-        <i class="ti ti-sparkles"></i>Passa a Premium
-      </button>
-    `;
+    // La scansione AI è riservata a un piano Premium non ancora attivo
+    // (nessun pagamento in app al momento): niente prezzo né upsell,
+    // il banner resta semplicemente nascosto per chi non ce l'ha.
+    el.style.display = 'none';
+    el.innerHTML = '';
   }
 }
 
