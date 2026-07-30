@@ -3603,11 +3603,11 @@ function fillForm(d) {
   set('f-province', d.province);
   const matchedDoc = matchAuthorizedDoc(d.doc, docSuggestions);
   if (matchedDoc) set('f-doc', matchedDoc);
-  set('f-abv', d.abv); set('f-drink', d.drink);
+  set('f-abv', d.abv);
   if (d.type) { const el = document.getElementById('f-type'); if (el) el.value = d.type; }
-  // Le note di degustazione (sezione "Dati Degustazione") restano sempre a
-  // inserimento manuale: l'AI non le compila mai, anche se l'etichetta ne
-  // riportasse alcune, per non sostituirsi al giudizio personale del degustatore.
+  // Le note di degustazione (sezione "Dati Degustazione") e la finestra di
+  // consumo ottimale restano sempre a inserimento manuale: l'AI non le
+  // compila mai, per non sostituirsi al giudizio personale del degustatore.
   toast('Etichetta letta! Controlla e completa i dati.');
 }
 
