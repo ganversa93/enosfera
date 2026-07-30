@@ -2817,7 +2817,7 @@ async function dbSaveWine(wine) {
     abv:          wine.abv          || null,
     format:       wine.format       || '750 ml',
     price:        wine.price        || null,
-    qty:          wine.qty          || 1,
+    qty:          wine.qty          ?? 1,
     date:         wine.date         || null,
     shop:         wine.shop         || null,
     shop_category: wine.shopCategory || null,
