@@ -3677,21 +3677,37 @@ async function saveWine() {
     frontImg, backImg
   };
 
-  // Offline: salva solo in locale, si sincronizza da solo alla prossima connessione
-  if (!navigator.onLine) {
+  // Salva in coda locale (si sincronizza da solo alla prossima connessione).
+  // Usato sia quando il browser sa già di essere offline, sia come fallback
+  // quando la richiesta al DB fallisce comunque nonostante navigator.onLine
+  // dica "true" (tipico di reti mobili instabili) — senza questo fallback la
+  // scheda compilata andrebbe persa in silenzio invece di finire in coda.
+  const queueWinePending = (message) => {
     const isPendingEdit = editId && editId.startsWith('pending-');
     wine.id = isPendingEdit ? editId : 'pending-' + Date.now();
     wine._pending = true;
     wine._targetOwnerId = currentCellarOwnerId;
     savePendingWine(wine);
-    toast('📴 Nessuna connessione — salvato in locale, si sincronizzerà da solo quando torna internet');
+    toast(message);
     showScreen('screen-list');
     renderAll();
+  };
+
+  if (!navigator.onLine) {
+    queueWinePending('📴 Nessuna connessione — salvato in locale, si sincronizzerà da solo quando torna internet');
     return;
   }
 
   showLoadingOverlay(true);
-  const savedId = await dbSaveWine(wine);
+  let savedId = null;
+  try {
+    savedId = await dbSaveWine(wine);
+  } catch (networkErr) {
+    console.warn('saveWine: richiesta fallita nonostante navigator.onLine, salvo in locale', networkErr);
+    showLoadingOverlay(false);
+    queueWinePending('📴 Connessione instabile — salvato in locale, si sincronizzerà da solo quando torna internet');
+    return;
+  }
   if (savedId) {
     winesCache = await loadWines();
     toast(editId ? 'Scheda aggiornata!' : 'Vino aggiunto alla cantina!');
