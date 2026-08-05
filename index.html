@@ -2129,7 +2129,7 @@
       <div class="deg-schema" id="deg-free">
         <div class="param-row" style="margin-bottom:14px">
           <span class="param-label">Punteggio personale</span>
-          <input type="range" min="1" max="100" value="88" step="1" id="f-score" oninput="document.getElementById('score-free').textContent=this.value" style="flex:1;accent-color:var(--wine)">
+          <input type="range" min="1" max="100" value="88" step="1" id="f-score" oninput="document.getElementById('score-free').textContent=this.value;markFScoreManual()" style="flex:1;accent-color:var(--wine)">
           <span style="font-size:20px;font-family:'Cormorant Garamond',serif;color:var(--wine);min-width:38px;text-align:right" id="score-free">88</span>
         </div>
         <div class="fg"><label>Note di degustazione</label><textarea id="f-notes" placeholder="Colore, profumo, gusto, persistenza…"></textarea></div>
@@ -2417,6 +2417,12 @@ let currentQtyFilter = 'all';
 let currentDetailId  = null;
 let frontImg = '', backImg = '';
 let activeDeg = 'ais';
+// Diventa true appena l'utente muove di persona lo slider "Punteggio
+// personale" della scheda Libera: finché resta false, passare alla scheda
+// Libera lo pre-compila con il punteggio calcolato da AIS/FISAR invece di
+// lasciarlo fermo sul default 88 — altrimenti chi guarda anche solo per
+// sbaglio quel tab rischia di salvare 88 senza accorgersene.
+let fScoreManuallySet = false;
 
 /* ── TOAST ── */
 function toast(msg) {
@@ -3209,6 +3215,7 @@ function showAdd() {
   });
   const fscore = document.getElementById('f-score'); if (fscore) fscore.value = 88;
   document.getElementById('score-free').textContent = '88';
+  fScoreManuallySet = false;
   document.getElementById('prev-front').innerHTML = '<i class="ti ti-photo-up" aria-hidden="true"></i><p><b>Carica</b> o scatta foto</p>';
   document.getElementById('prev-back').innerHTML  = '<i class="ti ti-photo-up" aria-hidden="true"></i><p><b>Carica</b> o scatta foto</p>';
   renderDegTabs();
@@ -3265,7 +3272,25 @@ function switchDeg(t) {
   });
   if (t === 'fisar_desc') updateTonalitaColore();
   if (t === 'ais') { updateAisColore(); toggleAisDescVisibility(); }
+  // Finché l'utente non ha mosso di persona lo slider "Punteggio personale",
+  // passare alla scheda Libera lo aggiorna con il punteggio calcolato dalla
+  // scheda a punti dell'associazione (AIS/FISAR), invece di lasciarlo fermo
+  // sul default 88 — così le due schede restano coerenti fino a quando non
+  // si sceglie esplicitamente un punteggio diverso.
+  if (t === 'free' && !fScoreManuallySet) {
+    const assoc = (currentUser?.assoc || '').toUpperCase();
+    const linkedScore = (assoc === 'AIS' || assoc === 'ONAV' || assoc === 'FIS') ? recalcAIS()
+                       : (assoc === 'FISAR' && currentUser?.fisarMethod !== 'descrittiva') ? recalcFISAR()
+                       : null;
+    if (linkedScore != null) {
+      const fscore = document.getElementById('f-score');
+      if (fscore) fscore.value = linkedScore;
+      const label = document.getElementById('score-free');
+      if (label) label.textContent = linkedScore;
+    }
+  }
 }
+function markFScoreManual() { fScoreManuallySet = true; }
 
 // La scheda analitico-descrittiva è un documento ufficiale AIS: il tab
 // "Metodo AIS" è condiviso anche da ONAV/FIS (schema di punteggio simile),
@@ -3962,6 +3987,9 @@ function editWine() {
   } else if (deg === 'free') {
     set('f-score', w.score);
     document.getElementById('score-free').textContent = w.score || 88;
+    // Punteggio già salvato dall'utente: non va sovrascritto passando da
+    // un'altra scheda, a differenza di un inserimento nuovo.
+    fScoreManuallySet = true;
   }
   showScreen('screen-add');
 }
@@ -4948,7 +4976,7 @@ Object.assign(window, {
   toggleAdvFilters, toggleChipIn, toggleFisarMethodField, toggleNavMenu, togglePairing, toggleSection, updateDelegazioniList, updateGrapePct, updateTonalitaColore, updateAisColore,
   updateRegionOptions, updateProvinceOptions, dismissInstallBanner, triggerInstallPrompt, resetInstallBanner,
   setNetworkFilter, toggleNetworkAdvFilters, onNetworkCountryChange, resetNetworkFilters, renderNetworkFeed,
-  dismissPublicPrompt, acceptPublicPrompt
+  dismissPublicPrompt, acceptPublicPrompt, markFScoreManual
 });
 </script>
 </body>
