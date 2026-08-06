@@ -708,7 +708,7 @@
       padding: 1.6rem 1.35rem; max-width: 380px; width: 100%;
       box-shadow: 0 12px 40px rgba(0,0,0,.28); text-align: center;
     }
-    .public-prompt-card i.ti-users { font-size: 34px; color: var(--wine); margin-bottom: 10px; display: block; }
+    .public-prompt-card > i { font-size: 34px; color: var(--wine); margin-bottom: 10px; display: block; }
     .public-prompt-card h3 { font-family: 'Cormorant Garamond', serif; font-size: 20px; color: var(--ink); margin-bottom: 8px; }
     .public-prompt-card p { font-size: 13px; color: var(--muted); line-height: 1.55; margin-bottom: 1.2rem; }
     .public-prompt-actions { display: flex; flex-direction: column; gap: 8px; }
@@ -2387,6 +2387,20 @@
   </div>
 </div>
 
+<!-- POP-UP VINO GIÀ IN CANTINA (doppione rilevato al salvataggio) -->
+<div class="public-prompt-overlay" id="duplicate-wine-overlay">
+  <div class="public-prompt-card">
+    <i class="ti ti-bottle"></i>
+    <h3>Vino già in cantina</h3>
+    <p id="dup-wine-text"></p>
+    <div class="public-prompt-actions">
+      <button class="btn primary" onclick="confirmSumDuplicateQty()"><i class="ti ti-plus"></i>Somma la quantità</button>
+      <button class="btn sm" onclick="confirmSaveDuplicateAsNew()">Salva come vino separato</button>
+      <a href="#" onclick="closeDuplicateWinePrompt();return false;" style="font-size:11px;color:var(--muted);text-decoration:underline;margin-top:2px">Annulla, torna al modulo</a>
+    </div>
+  </div>
+</div>
+
 <script type="module">
 /* ══════════════════════════════════════════════
    ENOSFERA — Supabase backend layer
@@ -3715,11 +3729,76 @@ async function saveWine() {
     frontImg, backImg
   };
 
-  // Salva in coda locale (si sincronizza da solo alla prossima connessione).
-  // Usato sia quando il browser sa già di essere offline, sia come fallback
-  // quando la richiesta al DB fallisce comunque nonostante navigator.onLine
-  // dica "true" (tipico di reti mobili instabili) — senza questo fallback la
-  // scheda compilata andrebbe persa in silenzio invece di finire in coda.
+  // Solo per un inserimento nuovo (non in modifica): se in cantina c'è già
+  // un vino con stesso nome, produttore e annata, chiediamo se sommare la
+  // quantità a quello esistente invece di creare un doppione — capita
+  // spesso catalogando più bottiglie identiche una alla volta.
+  if (!editId) {
+    const dup = findDuplicateWine(wine);
+    if (dup) { showDuplicateWinePrompt(dup, wine); return; }
+  }
+
+  await commitSaveWine(wine, editId);
+}
+
+// Stesso nome, produttore e annata (confronto case/spazi-insensitive);
+// i vini ancora in coda offline (_pending) non vengono considerati perché
+// non hanno ancora un id reale su cui sommare la quantità.
+function findDuplicateWine(wine) {
+  const norm = s => (s || '').trim().toLowerCase();
+  return myWines().find(w =>
+    !w._pending &&
+    norm(w.name) === norm(wine.name) &&
+    norm(w.producer) === norm(wine.producer) &&
+    (w.vintage || null) === (wine.vintage || null)
+  );
+}
+
+let pendingDuplicateWine = null;
+function showDuplicateWinePrompt(dup, wine) {
+  pendingDuplicateWine = wine;
+  const el = document.getElementById('duplicate-wine-overlay');
+  if (el) el.dataset.dupId = dup.id;
+  const qty = dup.qty ?? 1;
+  document.getElementById('dup-wine-text').textContent =
+    `Hai già "${dup.name}"${dup.producer ? ' di ' + dup.producer : ''}${dup.vintage ? ' ' + dup.vintage : ''} in cantina (${qty} bottigli${qty === 1 ? 'a' : 'e'}). Vuoi sommare la quantità o salvarlo come vino separato?`;
+  el?.classList.add('open');
+}
+function closeDuplicateWinePrompt() {
+  document.getElementById('duplicate-wine-overlay')?.classList.remove('open');
+}
+async function confirmSumDuplicateQty() {
+  const el = document.getElementById('duplicate-wine-overlay');
+  const dupId = el?.dataset.dupId;
+  const wine = pendingDuplicateWine;
+  closeDuplicateWinePrompt();
+  pendingDuplicateWine = null;
+  if (!wine || !dupId) return;
+  const dup = myWines().find(w => w.id === dupId);
+  const newQty = (dup?.qty ?? 1) + (wine.qty ?? 1);
+  showLoadingOverlay(true);
+  const ok = await dbUpdateQty(dupId, newQty);
+  if (ok) {
+    winesCache = await loadWines();
+    toast(`Quantità aggiornata: ora hai ${newQty} bottiglie di ${dup?.name || wine.name}`);
+  }
+  showLoadingOverlay(false);
+  showScreen('screen-list');
+}
+async function confirmSaveDuplicateAsNew() {
+  const wine = pendingDuplicateWine;
+  closeDuplicateWinePrompt();
+  pendingDuplicateWine = null;
+  if (!wine) return;
+  await commitSaveWine(wine, null);
+}
+
+// Salva in coda locale (si sincronizza da solo alla prossima connessione).
+// Usato sia quando il browser sa già di essere offline, sia come fallback
+// quando la richiesta al DB fallisce comunque nonostante navigator.onLine
+// dica "true" (tipico di reti mobili instabili) — senza questo fallback la
+// scheda compilata andrebbe persa in silenzio invece di finire in coda.
+async function commitSaveWine(wine, editId) {
   const queueWinePending = (message) => {
     const isPendingEdit = editId && editId.startsWith('pending-');
     wine.id = isPendingEdit ? editId : 'pending-' + Date.now();
@@ -4989,7 +5068,8 @@ Object.assign(window, {
   toggleAdvFilters, toggleChipIn, toggleFisarMethodField, toggleNavMenu, togglePairing, toggleSection, updateDelegazioniList, updateGrapePct, updateTonalitaColore, updateAisColore,
   updateRegionOptions, updateProvinceOptions, dismissInstallBanner, triggerInstallPrompt, resetInstallBanner,
   setNetworkFilter, toggleNetworkAdvFilters, onNetworkCountryChange, resetNetworkFilters, renderNetworkFeed,
-  dismissPublicPrompt, acceptPublicPrompt, markFScoreManual
+  dismissPublicPrompt, acceptPublicPrompt, markFScoreManual,
+  confirmSumDuplicateQty, confirmSaveDuplicateAsNew, closeDuplicateWinePrompt
 });
 </script>
 </body>
