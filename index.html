@@ -3132,6 +3132,19 @@ function wineQtyBadge(w) {
     : `<span class="wqty-badge tasted-only"><i class="ti ti-glass-full" style="font-size:11px"></i>Degustato</span>`;
 }
 
+// Ricerca per parole (non per frase intera): ogni parola della query deve
+// comparire come sottostringa in almeno uno dei campi, indipendentemente
+// dall'ordine e anche se le parole cadono su campi diversi (es. "barolo
+// piemonte" trova un vino con nome "Barolo" e regione "Piemonte" anche se
+// il produttore in mezzo è diverso). Le singole parole restano un semplice
+// "contiene", quindi funzionano anche i parziali (es. "cabern" trova
+// "Cabernet Sauvignon").
+function matchesSearch(query, fields) {
+  if (!query) return true;
+  const haystack = fields.filter(Boolean).join(' ').toLowerCase();
+  return query.trim().split(/\s+/).every(word => haystack.includes(word));
+}
+
 function renderGrid() {
   const q    = (document.getElementById('search-input')?.value || '').toLowerCase();
   const afCountry = document.getElementById('af-country')?.value || '';
@@ -3160,7 +3173,7 @@ function renderGrid() {
     if (afShopCat && w.shopCategory !== afShopCat) return false;
     if (!isNaN(afPriceMin) && !(w.price >= afPriceMin)) return false;
     if (!isNaN(afPriceMax) && !(w.price <= afPriceMax)) return false;
-    if (q && ![(w.name||''),(w.producer||''),(w.region||''),(w.pairing||'')].join(' ').toLowerCase().includes(q)) return false;
+    if (!matchesSearch(q, [w.name, w.producer, w.region, w.pairing])) return false;
     return true;
   });
   const g = document.getElementById('wine-grid');
@@ -4736,7 +4749,7 @@ function renderNetworkFeed() {
       const grapeNames = (w.grapes || '').split(',').map(g => g.trim().replace(/\s+\d{1,3}\s*%$/, ''));
       if (!grapeNames.includes(nfGrape)) return false;
     }
-    if (q && ![(w.name||''),(w.producer||''),(w.region||''),(w.pairing||''),(w.ownerName||'')].join(' ').toLowerCase().includes(q)) return false;
+    if (!matchesSearch(q, [w.name, w.producer, w.region, w.pairing, w.ownerName])) return false;
     return true;
   });
 
