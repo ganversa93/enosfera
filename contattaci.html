@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Contattaci — Enoscrigno</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Inter', sans-serif;
+    background: #6B1839;
+    color: #F8F5F1;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .card { max-width: 420px; width: 100%; text-align: center; }
+  .icon { font-size: 40px; color: #E6D2B4; margin-bottom: 1.1rem; display: block; }
+  h1 {
+    font-family: 'Cormorant Garamond', serif;
+    font-weight: 600;
+    font-size: 30px;
+    margin-bottom: .5rem;
+  }
+  p.intro {
+    font-size: 13.5px;
+    line-height: 1.6;
+    color: #E6D2B4;
+    margin-bottom: 1.75rem;
+  }
+  .fg { text-align: left; margin-bottom: 1rem; }
+  .fg label { display: block; font-size: 12px; font-weight: 500; color: #E6D2B4; margin-bottom: 5px; }
+  .fg .opt { font-weight: 400; color: rgba(230,210,180,.7); }
+  input, textarea {
+    width: 100%; font-family: 'Inter', sans-serif; font-size: 14px;
+    padding: 10px 12px; border-radius: 8px; border: 0.5px solid rgba(230,210,180,.3);
+    background: rgba(255,255,255,.06); color: #F8F5F1;
+  }
+  input::placeholder, textarea::placeholder { color: rgba(230,210,180,.5); }
+  input:focus, textarea:focus { outline: none; border-color: #B8892A; background: rgba(255,255,255,.1); }
+  textarea { resize: vertical; min-height: 90px; font-family: inherit; }
+  .actions { margin-top: 1.5rem; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+  button.btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    background: #B8892A; color: #2A1B0A; font-weight: 600; font-size: 15px;
+    padding: 13px 32px; border-radius: 30px; border: none; cursor: pointer; width: 100%;
+  }
+  button.btn:hover { opacity: .92; }
+  a.back {
+    font-size: 12px; color: rgba(230,210,180,.75); text-decoration: underline;
+  }
+  #msg { font-size: 12.5px; color: #E6D2B4; margin-top: -.5rem; margin-bottom: 1rem; display: none; }
+  #msg.err { color: #F3B5AE; }
+  #msg.ok { color: #C9E6D2; }
+  button.btn:disabled { opacity: .6; cursor: default; }
+  #login-required { display: none; font-size: 13px; color: #E6D2B4; line-height: 1.6; margin-top: .5rem; }
+  #login-required a { color: #F8F5F1; font-weight: 600; }
+  #form-wrap { display: none; }
+  .tagline {
+    margin-top: 2.25rem;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: rgba(230, 210, 180, 0.6);
+    text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+  <div class="card">
+    <i class="ti ti-mail icon" id="icon"></i>
+    <h1 id="title">Contattaci</h1>
+    <p class="intro" id="intro">Scrivici: ci arriverà via email, con i tuoi dati così possiamo risponderti.</p>
+
+    <div id="form-wrap">
+      <div class="fg">
+        <label>Oggetto</label>
+        <input type="text" id="subject" placeholder="Breve descrizione">
+      </div>
+      <div class="fg">
+        <label>Messaggio <span class="opt">(facoltativo)</span></label>
+        <textarea id="body" placeholder="Aggiungi dettagli, se vuoi…"></textarea>
+      </div>
+      <div id="msg"></div>
+
+      <div class="actions">
+        <button class="btn" id="send-btn"><i class="ti ti-send"></i>Invia</button>
+      </div>
+    </div>
+
+    <div id="login-required">
+      Devi avere effettuato l'accesso a Enoscrigno per inviarci un messaggio.<br>
+      <a href="index.html">Vai al login</a>
+    </div>
+
+    <div class="actions" style="margin-top:1.1rem">
+      <a class="back" href="index.html">Torna a Enoscrigno</a>
+    </div>
+
+    <div class="tagline">Salva · Ricorda · Degusta · Condividi</div>
+  </div>
+
+<script type="module">
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+const SUPABASE_URL      = 'https://xvtbsanxvkshqyeqordp.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh2dGJzYW54dmtzaHF5ZXFvcmRwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxMjY0MjIsImV4cCI6MjEwMDcwMjQyMn0._4YKqsrpBPeCKhFxmCJcIWvep0780H985hCPpWJw-Lg';
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const TYPES = {
+  bug:  { icon: 'ti-bug',  title: 'Segnala un bug',
+          intro: 'Descrivi il problema che hai riscontrato: ci arriverà via email, con i tuoi dati così possiamo risponderti.' },
+  idea: { icon: 'ti-bulb', title: 'Richiesta o idea',
+          intro: 'Raccontaci la tua idea o cosa vorresti vedere in Enoscrigno: ci arriverà via email, con i tuoi dati così possiamo risponderti.' }
+};
+
+const params = new URLSearchParams(window.location.search);
+const tipo = params.get('tipo') || '';
+const type = TYPES[tipo] || null;
+
+if (type) {
+  document.getElementById('icon').className = 'ti ' + type.icon + ' icon';
+  document.getElementById('title').textContent = type.title;
+  document.getElementById('intro').textContent = type.intro;
+} else {
+  document.getElementById('intro').textContent = 'Scrivici: ci arriverà via email, con i tuoi dati così possiamo risponderti.';
+}
+
+const msgEl = document.getElementById('msg');
+function showMsg(text, kind) {
+  msgEl.textContent = text;
+  msgEl.className = kind || '';
+  msgEl.style.display = 'block';
+}
+
+const { data: { session } } = await sb.auth.getSession();
+if (session?.user) {
+  document.getElementById('form-wrap').style.display = 'block';
+} else {
+  document.getElementById('login-required').style.display = 'block';
+}
+
+document.getElementById('send-btn')?.addEventListener('click', async () => {
+  const subject = document.getElementById('subject').value.trim();
+  const body = document.getElementById('body').value.trim();
+  if (!subject) { showMsg('Inserisci un oggetto prima di continuare.', 'err'); return; }
+
+  const btn = document.getElementById('send-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ti ti-loader-2"></i>Invio in corso…';
+  msgEl.style.display = 'none';
+
+  const { data, error } = await sb.functions.invoke('send-feedback-email', { body: { tipo, subject, body } });
+  if (error || data?.error) {
+    showMsg((data && data.error) || 'Invio non riuscito, riprova tra poco.', 'err');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="ti ti-send"></i>Invia';
+    return;
+  }
+
+  showMsg('Grazie, il tuo messaggio è stato inviato!', 'ok');
+  document.getElementById('form-wrap').style.display = 'none';
+});
+</script>
+</body>
+</html>

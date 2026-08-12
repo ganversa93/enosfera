@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ricomprimi immagini — Enoscrigno</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,500&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --wine: #6B1839; --gold: #B7924A; --ink: #2F3133; --muted: #6B6E72;
+    --border: rgba(107,24,57,0.15); --bg: #FFFFFF; --surf: #F8F5F1;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --ink: #F0EEEC; --muted: #A8ABAE; --border: rgba(215,190,200,0.15); --bg: #201519; --surf: #2A1B21; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Inter', sans-serif; background: var(--bg); color: var(--ink);
+    max-width: 560px; margin: 0 auto; padding: 2.5rem 1.5rem 4rem;
+  }
+  h1 { font-family: 'Cormorant Garamond', serif; font-size: 26px; color: var(--wine); margin-bottom: .25rem; }
+  p.lead { font-size: 13px; color: var(--muted); line-height: 1.6; margin-bottom: 1.5rem; }
+  .card { background: var(--surf); border: 0.5px solid var(--border); border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem; }
+  label { display: block; font-size: 12px; font-weight: 500; margin-bottom: 4px; }
+  input {
+    width: 100%; padding: 10px 12px; border-radius: 8px; border: 0.5px solid var(--border);
+    background: var(--bg); color: var(--ink); font-size: 14px; margin-bottom: 10px;
+  }
+  button {
+    background: var(--wine); color: #fff; border: none; border-radius: 24px;
+    padding: 11px 22px; font-size: 14px; font-weight: 500; cursor: pointer;
+  }
+  button:disabled { opacity: .5; cursor: default; }
+  button.ghost { background: transparent; color: var(--wine); border: 0.5px solid var(--wine); }
+  #log {
+    font-family: ui-monospace, monospace; font-size: 11.5px; line-height: 1.6;
+    background: var(--bg); border: 0.5px solid var(--border); border-radius: 8px;
+    padding: 10px 12px; max-height: 340px; overflow-y: auto; white-space: pre-wrap;
+    display: none;
+  }
+  .err { color: #B94A3F; }
+  .warn { color: var(--gold); }
+  .ok { color: #3F8A5C; }
+</style>
+</head>
+<body>
+  <h1>Ricomprimi immagini esistenti</h1>
+  <p class="lead">
+    Strumento una tantum per ridurre l'egress di Supabase: ricomprime le foto etichetta
+    già caricate, imposta una cache di 1 anno (di default Supabase la tiene solo 1 ora,
+    quindi le stesse foto vengono riscaricate dall'origine molto più spesso del
+    necessario) e, se presenti, migra a Supabase Storage quelle salvate come base64
+    direttamente nel database (le più pesanti, perché vengono ritrasferite ad ogni
+    apertura della cantina). Elabora solo i vini di cui sei proprietario. Puoi chiudere
+    e riaprire la pagina in sicurezza: rielaborare un'immagine già ottimizzata non la
+    peggiora, viene semplicemente saltata.
+  </p>
+
+  <div class="card" id="login-card">
+    <label>Email</label>
+    <input type="email" id="li-email" autocomplete="username">
+    <label>Password</label>
+    <input type="password" id="li-password" autocomplete="current-password">
+    <button id="li-btn">Accedi</button>
+    <div id="li-msg" style="font-size:12px;color:var(--muted);margin-top:8px"></div>
+  </div>
+
+  <div class="card" id="run-card" style="display:none">
+    <div style="font-size:13px;margin-bottom:10px">Connesso come <b id="run-email"></b></div>
+    <button id="run-btn">Avvia ricompressione</button>
+    <button class="ghost" id="logout-btn" style="margin-left:8px">Esci</button>
+  </div>
+
+  <pre id="log"></pre>
+
+<script type="module">
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+const SUPABASE_URL      = 'https://xvtbsanxvkshqyeqordp.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh2dGJzYW54dmtzaHF5ZXFvcmRwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxMjY0MjIsImV4cCI6MjEwMDcwMjQyMn0._4YKqsrpBPeCKhFxmCJcIWvep0780H985hCPpWJw-Lg';
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const logEl = document.getElementById('log');
+function log(msg, cls) {
+  logEl.style.display = 'block';
+  const line = document.createElement('div');
+  if (cls) line.className = cls;
+  line.textContent = msg;
+  logEl.appendChild(line);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+// Stessa logica di compressione lato client usata in index.html per i nuovi upload.
+function compressImage(blob, maxDim, quality) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(blob);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width, height } = img;
+      if (width > maxDim || height > maxDim) {
+        if (width > height) { height = Math.round(height * maxDim / width); width = maxDim; }
+        else { width = Math.round(width * maxDim / height); height = maxDim; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      canvas.toBlob(b => b ? resolve(b) : reject(new Error('Compressione fallita')), 'image/jpeg', quality);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Immagine non decodificabile')); };
+    img.src = url;
+  });
+}
+function blobToDataUrl(blob) {
+  return new Promise(resolve => {
+    const r = new FileReader();
+    r.onload = e => resolve(e.target.result);
+    r.readAsDataURL(blob);
+  });
+}
+function extractStoragePath(url) {
+  const marker = '/object/public/wine-labels/';
+  const idx = url.indexOf(marker);
+  return idx === -1 ? null : decodeURIComponent(url.slice(idx + marker.length));
+}
+const kb = n => (n / 1024).toFixed(0) + ' KB';
+
+let currentUserId = null;
+
+async function checkSession() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (session?.user) showRunCard(session.user);
+}
+function showRunCard(user) {
+  currentUserId = user.id;
+  document.getElementById('login-card').style.display = 'none';
+  document.getElementById('run-card').style.display = 'block';
+  document.getElementById('run-email').textContent = user.email;
+}
+
+document.getElementById('li-btn').addEventListener('click', async () => {
+  const email = document.getElementById('li-email').value.trim();
+  const password = document.getElementById('li-password').value;
+  const msg = document.getElementById('li-msg');
+  msg.textContent = 'Accesso in corso…';
+  const { data, error } = await sb.auth.signInWithPassword({ email, password });
+  if (error) { msg.textContent = 'Errore: ' + error.message; return; }
+  msg.textContent = '';
+  showRunCard(data.user);
+});
+document.getElementById('logout-btn').addEventListener('click', async () => {
+  await sb.auth.signOut();
+  location.reload();
+});
+
+document.getElementById('run-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('run-btn');
+  btn.disabled = true;
+  logEl.textContent = '';
+  try {
+    await reprocessWineImages();
+    await reprocessAvatar();
+    log('— Tutto completato —', 'ok');
+  } catch (e) {
+    log('Errore imprevisto: ' + (e.message || e), 'err');
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+async function reprocessWineImages() {
+  const { data: wines, error } = await sb.from('wines')
+    .select('id, name, front_img, back_img').eq('user_id', currentUserId);
+  if (error) { log('Errore nel caricare i vini: ' + error.message, 'err'); return; }
+  if (!wines.length) { log('Nessun vino in cantina.'); return; }
+
+  let bytesBefore = 0, bytesAfter = 0, touched = 0, skipped = 0, failed = 0;
+  for (let i = 0; i < wines.length; i++) {
+    const w = wines[i];
+    const updates = {};
+    for (const field of ['front_img', 'back_img']) {
+      const url = w[field];
+      if (!url) continue;
+      try {
+        const isBase64 = url.startsWith('data:');
+        const isStorage = !isBase64 && url.includes('/object/public/wine-labels/');
+        if (!isBase64 && !isStorage) { skipped++; continue; } // link esterno/sconosciuto: non lo tocchiamo
+
+        const origBlob = await (await fetch(url)).blob();
+        if (isStorage && origBlob.size < 350 * 1024) { skipped++; continue; } // già leggera
+
+        const compressed = await compressImage(origBlob, 1600, 0.82);
+        if (!isBase64 && compressed.size >= origBlob.size) { skipped++; continue; } // non conviene
+
+        if (isBase64) {
+          const side = field === 'front_img' ? 'front' : 'back';
+          const path = `${currentUserId}/${side}-migrated-${w.id}-${Date.now()}.jpg`;
+          const { error: upErr } = await sb.storage.from('wine-labels')
+            .upload(path, compressed, { upsert: true, contentType: 'image/jpeg', cacheControl: '31536000' });
+          if (upErr) throw upErr;
+          const { data: urlData } = sb.storage.from('wine-labels').getPublicUrl(path);
+          updates[field] = urlData.publicUrl;
+          log(`  ${field === 'front_img' ? 'fronte' : 'retro'}: migrata da base64 (${kb(origBlob.size)} → ${kb(compressed.size)})`);
+        } else {
+          const path = extractStoragePath(url);
+          if (!path) { skipped++; continue; }
+          const { error: upErr } = await sb.storage.from('wine-labels')
+            .upload(path, compressed, { upsert: true, contentType: 'image/jpeg', cacheControl: '31536000' });
+          if (upErr) throw upErr;
+          log(`  ${field === 'front_img' ? 'fronte' : 'retro'}: ricompressa (${kb(origBlob.size)} → ${kb(compressed.size)})`);
+        }
+        bytesBefore += origBlob.size; bytesAfter += compressed.size;
+        touched++;
+      } catch (e) {
+        failed++;
+        log(`  ⚠️ ${field}: ${e.message || e}`, 'warn');
+      }
+    }
+    if (Object.keys(updates).length) {
+      const { error: updErr } = await sb.from('wines').update(updates).eq('id', w.id);
+      if (updErr) log(`  ⚠️ impossibile aggiornare il link immagine: ${updErr.message}`, 'warn');
+    }
+    log(`(${i + 1}/${wines.length}) ${w.name || w.id}`);
+  }
+  const savedMB = ((bytesBefore - bytesAfter) / 1024 / 1024).toFixed(1);
+  log(`Vini: ${touched} immagini ottimizzate, ${skipped} già ok, ${failed} errori — risparmiati ~${savedMB} MB.`, 'ok');
+}
+
+async function reprocessAvatar() {
+  const { data: profile, error } = await sb.from('profiles')
+    .select('avatar_base64').eq('id', currentUserId).maybeSingle();
+  if (error) { log('Errore nel caricare il profilo: ' + error.message, 'err'); return; }
+  if (!profile?.avatar_base64) { log('Nessun avatar da ricomprimere.'); return; }
+  try {
+    const origBlob = await (await fetch(profile.avatar_base64)).blob();
+    const compressed = await compressImage(origBlob, 320, 0.82);
+    if (compressed.size >= origBlob.size) { log('Avatar già ottimizzato.'); return; }
+    const dataUrl = await blobToDataUrl(compressed);
+    const { error: updErr } = await sb.from('profiles').update({ avatar_base64: dataUrl }).eq('id', currentUserId);
+    if (updErr) throw updErr;
+    log(`Avatar ricompresso: ${kb(origBlob.size)} → ${kb(compressed.size)}`, 'ok');
+  } catch (e) {
+    log('⚠️ Avatar: ' + (e.message || e), 'warn');
+  }
+}
+
+checkSession();
+</script>
+</body>
+</html>

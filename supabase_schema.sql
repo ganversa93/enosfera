@@ -603,6 +603,34 @@ alter table public.profiles add column if not exists subscription_status text; -
 -- disattivato automaticamente dal webhook Stripe (vedi Edge Function
 -- stripe-webhook), non più solo a mano dall'amministratore.
 
+-- ════════════════════════════════════════════
+-- CONFERMA EMAIL CUSTOM (via Resend)
+-- ════════════════════════════════════════════
+create table if not exists public.email_confirmations (
+  token uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  email text not null,
+  sent_at timestamptz not null default now(),
+  confirmed_at timestamptz
+);
+alter table public.email_confirmations enable row level security;
+
+create index if not exists email_confirmations_user_id_idx
+  on public.email_confirmations (user_id);
+
+alter table public.profiles add column if not exists email_confirmed boolean not null default false;
+
+create or replace function public.get_user_id_by_email(lookup_email text)
+returns uuid
+language sql
+security definer
+set search_path = public
+as $$
+  select id from auth.users where email = lookup_email limit 1;
+$$;
+
+revoke all on function public.get_user_id_by_email(text) from public, anon, authenticated;
+
 -- ════════════════════════════════════════════════════════════════
 -- FIX: nome utente non in chiaro nelle richieste di follow e negli
 -- inviti a condividere la cantina. Chi manda una richiesta/invito
@@ -636,3 +664,193 @@ create policy "profiles: visibili a chi condivide una cantina con me"
          or (cs.member_id = auth.uid() and cs.owner_id = profiles.id)
     )
   );
+grant execute on function public.get_user_id_by_email(text) to service_role;
+
+-- ════════════════════════════════════════════
+-- AIS — scheda analitico-descrittiva (in aggiunta a quella a punteggio,
+-- che l'AIS compila sempre entrambe: niente toggle, i due schemi
+-- convivono nello stesso record sotto deg_schema = 'ais')
+-- ════════════════════════════════════════════
+alter table public.wines add column if not exists ais_desc_params jsonb;
+
+-- ════════════════════════════════════════════
+-- Pop-up "profilo pubblico" al primo accesso — l'impostazione is_public
+-- (da cui dipende tutto il Network) è sepolta nella schermata Profilo e
+-- resta disattiva di default: questo flag traccia se all'utente è già
+-- stato mostrato il pop-up di spiegazione/attivazione, per non
+-- richiederlo ad ogni sessione.
+-- ════════════════════════════════════════════
+alter table public.profiles add column if not exists public_prompt_seen boolean not null default false;
+
+-- ════════════════════════════════════════════════════════════════
+-- Posizione in cantina — tre livelli configurabili dal proprietario
+-- della cantina nel proprio profilo (es. livello 1 = luogo fisico
+-- "Cantina casa"/"Stock", livello 2 = zona "Bianchi"/"Rossi", livello
+-- 3 = piano/ripiano "Piano 1"/"Piano 2"/"Piano 3"), poi assegnabili a
+-- ciascun vino. Un vino può avere più posizioni (es. alcune bottiglie
+-- in cantina, altre nello stock), quindi cellar_positions è un array
+-- di combinazioni {l1,l2,l3}. Salviamo uno snapshot testuale delle
+-- etichette scelte (non un riferimento a un id) così una posizione
+-- resta leggibile sul vino anche se poi viene rinominata o rimossa
+-- dalle liste in profiles.
+-- ════════════════════════════════════════════════════════════════
+alter table public.profiles add column if not exists cellar_pos_l1 text[] not null default '{}';
+alter table public.profiles add column if not exists cellar_pos_l2 text[] not null default '{}';
+alter table public.profiles add column if not exists cellar_pos_l3 text[] not null default '{}';
+
+alter table public.wines add column if not exists cellar_positions jsonb not null default '[]';
+
+-- ════════════════════════════════════════════════════════════════
+-- Posizione in cantina — da tre liste piatte a un albero gerarchico:
+-- il livello 2 (zona) appartiene a uno specifico livello 1 (posizione),
+-- il livello 3 (piano) appartiene a uno specifico livello 2, invece di
+-- essere tre elenchi indipendenti mostrati sempre tutti insieme.
+-- cellar_pos_l1/l2/l3 restano in tabella (non usate più dal frontend)
+-- solo per non perdere lo storico; cellar_positions_tree è la nuova
+-- fonte di verità:
+--   [{ "name": "Cantina casa", "children": [
+--        { "name": "Rossi", "children": [ {"name":"Piano 1","children":[]}, ... ] },
+--        ...
+--   ]}, ...]
+-- wines.cellar_positions non cambia: resta uno snapshot testuale
+-- {l1,l2,l3} per ogni posizione assegnata al vino.
+-- ════════════════════════════════════════════════════════════════
+alter table public.profiles add column if not exists cellar_positions_tree jsonb not null default '[]';
+
+-- Migrazione una tantum: chi aveva già inserito valori nel vecchio
+-- livello 1 piatto (cellar_pos_l1) li ritrova come nodi radice
+-- dell'albero, pronti per aggiungerci sotto zone e piani.
+update public.profiles
+set cellar_positions_tree = (
+  select coalesce(jsonb_agg(jsonb_build_object('name', v, 'children', '[]'::jsonb)), '[]'::jsonb)
+  from unnest(cellar_pos_l1) as v
+)
+where (cellar_positions_tree = '[]'::jsonb or cellar_positions_tree is null)
+  and cellar_pos_l1 is not null and array_length(cellar_pos_l1, 1) > 0;
+
+-- ════════════════════════════════════════════════════════════════
+-- Un membro di cantina condivisa deve poter leggere l'albero posizioni
+-- del proprietario, per popolare le select quando assegna una posizione
+-- a un vino che non è suo. Finora questo passava dalla policy generale
+-- "profiles: visibili a chi condivide una cantina con me" via un
+-- semplice select dal client — ma un membro (es. Samantha) risultava
+-- non vedere affatto le opzioni, segno che quella lettura falliva
+-- silenziosamente lato client (nessun errore: RLS filtra le righe,
+-- non solleva eccezioni). Invece di continuare a fidarsi di una policy
+-- generale su cui il client non ha visibilità diretta in caso di
+-- fallimento, questa funzione fa il controllo di accesso esplicitamente
+-- e restituisce l'albero solo se autorizzato — stesso principio già
+-- usato per get_user_id_by_email.
+-- ════════════════════════════════════════════════════════════════
+create or replace function public.get_cellar_position_tree(p_owner_id uuid)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select p.cellar_positions_tree
+  from public.profiles p
+  where p.id = p_owner_id
+    and (
+      p_owner_id = auth.uid()
+      or exists (
+        select 1 from public.cellar_shares cs
+        where cs.owner_id = p_owner_id
+          and cs.member_id = auth.uid()
+          and cs.status = 'accepted'
+      )
+    );
+$$;
+
+revoke all on function public.get_cellar_position_tree(uuid) from public, anon;
+grant execute on function public.get_cellar_position_tree(uuid) to authenticated;
+
+-- ════════════════════════════════════════════════════════════════
+-- Anagrafica cantine (produttori): registro condiviso agganciato ai
+-- vini via wines.winery_id, per dare in futuro una scheda "scopri di
+-- più" (zona, sito, storia, logo) e permettere un primo import da
+-- fonte esterna (es. elenchi delle associazioni di turismo del vino).
+--
+-- Le schede si creano da sole (solo il nome, name_normalized calcolato
+-- lato client con lo stesso criterio case/spazi-insensitive già usato
+-- per i doppioni vino) quando un utente salva un vino con un
+-- produttore che non trova corrispondenza — vedi findOrCreateWinery()
+-- in index.html. I dettagli extra li può scrivere solo l'admin
+-- (profiles.is_admin), per evitare vandalismo su un registro condiviso
+-- da tutti gli utenti.
+-- ════════════════════════════════════════════════════════════════
+alter table public.profiles add column if not exists is_admin boolean not null default false;
+
+create or replace function public.is_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce((select p.is_admin from public.profiles p where p.id = auth.uid()), false);
+$$;
+revoke all on function public.is_admin() from public, anon;
+grant execute on function public.is_admin() to authenticated;
+
+create table if not exists public.wineries (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  name_normalized text not null,
+  region text,
+  website text,
+  description text,
+  logo_url text,
+  created_by uuid references public.profiles(id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create unique index if not exists wineries_name_normalized_key on public.wineries (name_normalized);
+
+alter table public.wines add column if not exists winery_id uuid references public.wineries(id);
+
+alter table public.wineries enable row level security;
+
+drop policy if exists "wineries: lettura per chiunque autenticato" on public.wineries;
+create policy "wineries: lettura per chiunque autenticato"
+  on public.wineries for select to authenticated using (true);
+
+-- Chiunque autenticato può creare una scheda "stub" (solo nome, nessun
+-- dettaglio) — è quello che succede in automatico salvando un vino.
+-- Solo l'admin può inserire (o modificare) una scheda già arricchita.
+drop policy if exists "wineries: stub per tutti, completa solo admin" on public.wineries;
+create policy "wineries: stub per tutti, completa solo admin"
+  on public.wineries for insert to authenticated
+  with check (
+    public.is_admin()
+    or (region is null and website is null and description is null and logo_url is null)
+  );
+
+drop policy if exists "wineries: modifica solo admin" on public.wineries;
+create policy "wineries: modifica solo admin"
+  on public.wineries for update to authenticated
+  using (public.is_admin()) with check (public.is_admin());
+
+drop policy if exists "wineries: eliminazione solo admin" on public.wineries;
+create policy "wineries: eliminazione solo admin"
+  on public.wineries for delete to authenticated
+  using (public.is_admin());
+
+-- Loghi cantina nello stesso bucket "wine-labels" (già pubblico in
+-- lettura), sotto il prefisso wineries/ — scrittura riservata all'admin.
+drop policy if exists "wine-labels: admin scrive i loghi cantina" on storage.objects;
+create policy "wine-labels: admin scrive i loghi cantina"
+  on storage.objects for insert to authenticated
+  with check (bucket_id = 'wine-labels' and (storage.foldername(name))[1] = 'wineries' and public.is_admin());
+
+drop policy if exists "wine-labels: admin aggiorna i loghi cantina" on storage.objects;
+create policy "wine-labels: admin aggiorna i loghi cantina"
+  on storage.objects for update to authenticated
+  using (bucket_id = 'wine-labels' and (storage.foldername(name))[1] = 'wineries' and public.is_admin())
+  with check (bucket_id = 'wine-labels' and (storage.foldername(name))[1] = 'wineries' and public.is_admin());
+
+-- Da lanciare una volta sola, sostituendo la tua email: ti rende admin
+-- e sblocca la sezione "Amministrazione" nel profilo.
+-- update public.profiles set is_admin = true
+-- where id = (select id from auth.users where email = 'TUA-EMAIL@esempio.it');

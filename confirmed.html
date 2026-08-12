@@ -55,10 +55,36 @@
 <body>
   <div class="card">
     <img src="assets/enoscrigno-icon-white.png" alt="Enoscrigno" class="icon">
-    <h1>Email confermata!</h1>
-    <p>Grazie per aver attivato il tuo account.<br>Ti aspettiamo presto su Enoscrigno.</p>
+    <h1 id="title">Un attimo…</h1>
+    <p id="message">Stiamo verificando il tuo link di conferma.</p>
     <a href="index.html" class="btn">Vai al login</a>
     <div class="tagline">Salva · Ricorda · Degusta · Condividi</div>
   </div>
+  <script type="module">
+    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+    const SUPABASE_URL      = 'https://xvtbsanxvkshqyeqordp.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh2dGJzYW54dmtzaHF5ZXFvcmRwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxMjY0MjIsImV4cCI6MjEwMDcwMjQyMn0._4YKqsrpBPeCKhFxmCJcIWvep0780H985hCPpWJw-Lg';
+    const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    const titleEl = document.getElementById('title');
+    const msgEl = document.getElementById('message');
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+
+    if (!token) {
+      titleEl.textContent = 'Email confermata!';
+      msgEl.textContent = 'Grazie per aver attivato il tuo account. Ti aspettiamo presto su Enoscrigno.';
+    } else {
+      const { data, error } = await sb.functions.invoke('confirm-email', { body: { token } });
+      if (error || data?.error) {
+        titleEl.textContent = 'Link non valido';
+        msgEl.textContent = (data && data.message) || 'Questo link di conferma non è valido o è scaduto. Puoi richiederne uno nuovo dal tuo profilo dopo l\'accesso.';
+      } else {
+        titleEl.textContent = 'Email confermata!';
+        msgEl.textContent = 'Grazie per aver confermato il tuo indirizzo. Ti aspettiamo presto su Enoscrigno.';
+      }
+    }
+  </script>
 </body>
 </html>
