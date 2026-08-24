@@ -3343,12 +3343,12 @@ async function showWineryDetail(id) {
       <div class="winery-catalog-list">${catalogRowsHtml}</div>
       ${!catalog?.length && !currentUser?.isAdmin ? `<div style="font-size:12px;color:var(--muted);padding:.5rem 0">Nessun vino ancora catalogato per questa cantina.</div>` : ''}
       ${currentUser?.isAdmin ? `
-        <div class="frow" style="margin-top:8px">
-          <div class="fg"><label>Nome del vino</label><input type="text" id="wy-catalog-name" placeholder="es. Ripasso" autocomplete="off"></div>
-          <div class="fg"><label>Uvaggio</label><input type="text" id="wy-catalog-grapes" placeholder="es. Corvina, Rondinella" autocomplete="off"></div>
-        </div>
-        <div class="fg"><label>Link</label><input type="text" id="wy-catalog-link" placeholder="https://…" autocomplete="off"></div>
-        <button class="btn sm" onclick="addWineryCatalogWine()"><i class="ti ti-plus"></i>Aggiungi vino</button>` : ''}
+        <div class="pos-add-row" style="margin-top:8px">
+          <input type="text" id="wy-catalog-name" placeholder="Nome del vino" autocomplete="off">
+          <input type="text" id="wy-catalog-grapes" placeholder="Uvaggio" autocomplete="off">
+          <input type="text" id="wy-catalog-link" placeholder="Link" autocomplete="off">
+          <button class="btn sm" onclick="addWineryCatalogWine()"><i class="ti ti-plus"></i></button>
+        </div>` : ''}
     </div>`;
 
   const adminForm = currentUser?.isAdmin ? `
