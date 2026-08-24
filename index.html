@@ -2626,6 +2626,7 @@ let wineriesCache = [];    // [{id,name,region}] anagrafica cantine/produttori, 
 let selectedWineryId = null; // cantina scelta esplicitamente nel form vino (autocomplete "Produttore"), null = risolvi per nome al salvataggio
 let currentWineryId = null;  // cantina aperta sulla schermata scheda-cantina
 let wineryReturnScreen = 'screen-list'; // schermata da cui si è aperta la scheda-cantina
+let wineryProvinceSuggestions = []; // autocomplete provincia nella scheda-cantina (admin), dipende dalla regione scelta
 let currentFilter    = 'all';
 let currentQtyFilter = 'all';
 let sortField = 'created'; // 'created' | 'vintage' | 'price' | 'type' — cantina
@@ -3245,7 +3246,7 @@ function normalizeWineryName(s) {
 
 async function loadWineriesCache() {
   try {
-    const { data, error } = await sb.from('wineries').select('id,name,region').order('name');
+    const { data, error } = await sb.from('wineries').select('id,name,region,province').order('name');
     if (error) throw error;
     wineriesCache = data || [];
   } catch (err) {
@@ -3253,7 +3254,10 @@ async function loadWineriesCache() {
   }
 }
 
-function wineryLabel(w) { return w.region ? `${w.name} — ${w.region}` : w.name; }
+function wineryLabel(w) {
+  const loc = [w.region, w.province].filter(Boolean).join(', ');
+  return loc ? `${w.name} — ${loc}` : w.name;
+}
 
 // Mostra/nasconde il link "Scopri di più" accanto al campo Produttore nel
 // form vino, a seconda che il vino risulti agganciato a una scheda cantina.
@@ -3314,7 +3318,10 @@ async function showWineryDetail(id) {
   const adminForm = currentUser?.isAdmin ? `
     <div class="fsec" style="margin-top:1.25rem">
       <div class="stitle"><i class="ti ti-edit"></i>Modifica scheda (admin)</div>
-      <div class="fg"><label>Zona / regione</label><input type="text" id="wy-region" value="${w.region || ''}" placeholder="es. Valpolicella, Veneto"></div>
+      <div class="frow">
+        <div class="fg"><label>Regione</label><input type="text" id="wy-region" value="${w.region || ''}" placeholder="es. Veneto" autocomplete="off"></div>
+        <div class="fg"><label>Provincia</label><input type="text" id="wy-province" value="${w.province || ''}" placeholder="es. Verona" autocomplete="off"></div>
+      </div>
       <div class="fg"><label>Sito web</label><input type="text" id="wy-website" value="${w.website || ''}" placeholder="https://…"></div>
       <div class="fg"><label>Descrizione / storia</label><textarea id="wy-description" rows="4" placeholder="Storia, filosofia della cantina…">${w.description || ''}</textarea></div>
       <div class="fg">
@@ -3333,7 +3340,7 @@ async function showWineryDetail(id) {
       ${w.logo_url ? `<img src="${w.logo_url}" class="winery-logo" alt="">` : `<div class="winery-logo winery-logo-ph"><i class="ti ti-building-warehouse"></i></div>`}
       <div>
         <div class="winery-name">${w.name}</div>
-        ${w.region ? `<div style="font-size:12.5px;color:var(--muted)"><i class="ti ti-map-pin" style="font-size:12px"></i> ${w.region}</div>` : ''}
+        ${(w.region || w.province) ? `<div style="font-size:12.5px;color:var(--muted)"><i class="ti ti-map-pin" style="font-size:12px"></i> ${[w.region, w.province].filter(Boolean).join(', ')}</div>` : ''}
         ${w.website ? `<a href="${w.website}" target="_blank" rel="noopener" style="font-size:12.5px;color:var(--wine)"><i class="ti ti-world" style="font-size:12px"></i> ${w.website.replace(/^https?:\/\//,'')}</a>` : ''}
       </div>
     </div>
@@ -3344,6 +3351,22 @@ async function showWineryDetail(id) {
     </div>
     ${adminForm}
   `;
+
+  // Le select-autocomplete Regione/Provincia della scheda vino sono
+  // agganciate una volta sola su input statici del form; qui gli input
+  // vengono ricreati a ogni render (l'HTML è rigenerato), quindi vanno
+  // riagganciati ogni volta — stesso criterio del form vino: provincia
+  // suggerita in base alla regione scelta (elenco solo Italia).
+  if (currentUser?.isAdmin) {
+    wineryProvinceSuggestions = GEO_PROVINCES_ITALIA[w.region] || [];
+    const onRegionChange = () => { wineryProvinceSuggestions = GEO_PROVINCES_ITALIA[document.getElementById('wy-region')?.value] || []; };
+    attachAutocomplete('wy-region', () => GEO_REGIONS['Italia'] || [], sel => {
+      document.getElementById('wy-region').value = sel;
+      onRegionChange();
+    });
+    attachAutocomplete('wy-province', () => wineryProvinceSuggestions);
+    document.getElementById('wy-region')?.addEventListener('input', onRegionChange);
+  }
 }
 
 // Nota: se la policy RLS di update blocca la riga (es. is_admin() non
@@ -3354,7 +3377,7 @@ async function showWineryDetail(id) {
 async function saveWineryDetails() {
   if (!currentUser?.isAdmin || !currentWineryId) return;
   const g = id => document.getElementById(id)?.value.trim() || null;
-  const row = { region: g('wy-region'), website: g('wy-website'), description: g('wy-description'), updated_at: new Date().toISOString() };
+  const row = { region: g('wy-region'), province: g('wy-province'), website: g('wy-website'), description: g('wy-description'), updated_at: new Date().toISOString() };
   const { data, error } = await sb.from('wineries').update(row).eq('id', currentWineryId).select('id');
   if (error) { toastErr('Errore salvataggio: ' + error.message); return; }
   if (!data?.length) { toastErr('Salvataggio non riuscito: verifica di essere admin (is_admin) e di aver eseguito tutta la migrazione SQL delle cantine.'); return; }
@@ -3410,7 +3433,7 @@ function goBackFromWinery() { showScreen(wineryReturnScreen || 'screen-list'); }
 async function loadWineriesToComplete() {
   const { data, error } = await sb.from('wineries')
     .select('id,name,created_at')
-    .is('region', null).is('website', null).is('description', null).is('logo_url', null)
+    .is('region', null).is('province', null).is('website', null).is('description', null).is('logo_url', null)
     .order('created_at', { ascending: false });
   if (error) { toastErr('Errore caricamento cantine: ' + error.message); return []; }
   return data || [];
@@ -3564,7 +3587,7 @@ async function updateAdminWineriesBadge() {
   const card = document.getElementById('home-admin-card');
   if (card) card.style.display = '';
   const { count } = await sb.from('wineries').select('*', { count: 'exact', head: true })
-    .is('region', null).is('website', null).is('description', null).is('logo_url', null);
+    .is('region', null).is('province', null).is('website', null).is('description', null).is('logo_url', null);
   const n = count || 0;
   const badge = document.getElementById('home-admin-badge');
   if (badge) {

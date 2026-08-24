@@ -854,3 +854,20 @@ create policy "wine-labels: admin aggiorna i loghi cantina"
 -- e sblocca la sezione "Amministrazione" nel profilo.
 -- update public.profiles set is_admin = true
 -- where id = (select id from auth.users where email = 'TUA-EMAIL@esempio.it');
+
+-- ════════════════════════════════════════════════════════════════
+-- Provincia della cantina, per riusare in compilazione la stessa
+-- struttura Regione → Provincia già usata nel form vino (GEO_REGIONS /
+-- GEO_PROVINCES_ITALIA in index.html), invece di un unico campo libero
+-- "Zona / regione". In visualizzazione i due campi vengono concatenati
+-- ("Regione, Provincia").
+-- ════════════════════════════════════════════════════════════════
+alter table public.wineries add column if not exists province text;
+
+drop policy if exists "wineries: stub per tutti, completa solo admin" on public.wineries;
+create policy "wineries: stub per tutti, completa solo admin"
+  on public.wineries for insert to authenticated
+  with check (
+    public.is_admin()
+    or (region is null and province is null and website is null and description is null and logo_url is null)
+  );
