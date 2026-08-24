@@ -688,8 +688,11 @@
       padding: 9px 0; border-bottom: 0.5px solid var(--border);
     }
     .winery-catalog-row:last-child { border-bottom: none; }
-    .winery-catalog-row .rm-btn { cursor: pointer; color: var(--muted); opacity: .7; font-size: 16px; line-height: 1; flex-shrink: 0; }
+    .winery-catalog-row .rm-btn, .winery-catalog-row .edit-btn { cursor: pointer; opacity: .7; font-size: 15px; line-height: 1; flex-shrink: 0; }
+    .winery-catalog-row .rm-btn { color: var(--muted); font-size: 16px; }
+    .winery-catalog-row .edit-btn { color: var(--wine); }
     .winery-catalog-row .rm-btn:hover { opacity: 1; color: #c0392b; }
+    .winery-catalog-row .edit-btn:hover { opacity: 1; }
 
     /* ── Desktop: immagini grandi a destra, info a sinistra ── */
     @media (min-width: 700px) {
@@ -2383,6 +2386,7 @@
     <div class="nav" style="margin-bottom:.9rem">
       <button class="btn sm" onclick="showScreen('screen-home')"><i class="ti ti-arrow-left"></i>Home</button>
       <span style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--ink)">Cantine da completare (<span id="admin-wineries-count">0</span>)</span>
+      <button class="btn sm primary" onclick="addWineryManually()"><i class="ti ti-plus"></i>Aggiungi cantina</button>
     </div>
     <div id="admin-wineries-list"></div>
   </div>
@@ -2637,6 +2641,7 @@ let currentWineryId = null;  // cantina aperta sulla schermata scheda-cantina
 let wineryReturnScreen = 'screen-list'; // schermata da cui si è aperta la scheda-cantina
 let wineryRegionSuggestions = [];   // autocomplete regione nella scheda-cantina (admin), dipende dal paese scelto
 let wineryProvinceSuggestions = []; // autocomplete provincia nella scheda-cantina (admin), dipende dalla regione scelta
+let editingWineryWineId = null; // id del vino-catalogo in modifica nella riga di aggiunta, null = si sta aggiungendo
 let currentFilter    = 'all';
 let currentQtyFilter = 'all';
 let sortField = 'created'; // 'created' | 'vintage' | 'price' | 'type' — cantina
@@ -3334,6 +3339,7 @@ async function showWineryDetail(id) {
           ${c.grapes ? `<div style="font-size:11px;color:var(--muted)">${c.grapes}</div>` : ''}
         </div>
         ${c.link ? `<a href="${c.link}" target="_blank" rel="noopener" class="winery-link" style="text-decoration:none" title="Apri il link"><i class="ti ti-external-link"></i></a>` : ''}
+        ${currentUser?.isAdmin ? `<span class="edit-btn" onclick="editWineryCatalogWine('${c.id}')" title="Modifica"><i class="ti ti-edit"></i></span>` : ''}
         ${currentUser?.isAdmin ? `<span class="rm-btn" onclick="removeWineryCatalogWine('${c.id}')">×</span>` : ''}
       </div>`).join('')
     : '';
@@ -3347,7 +3353,8 @@ async function showWineryDetail(id) {
           <input type="text" id="wy-catalog-name" placeholder="Nome del vino" autocomplete="off">
           <input type="text" id="wy-catalog-grapes" placeholder="Uvaggio" autocomplete="off">
           <input type="text" id="wy-catalog-link" placeholder="Link" autocomplete="off">
-          <button class="btn sm" onclick="addWineryCatalogWine()"><i class="ti ti-plus"></i></button>
+          <button class="btn sm" id="wy-catalog-submit-btn" onclick="addWineryCatalogWine()"><i class="ti ti-plus"></i></button>
+          <button class="btn sm" id="wy-catalog-cancel-btn" style="display:none" onclick="cancelEditWineryCatalogWine()" title="Annulla modifica"><i class="ti ti-x"></i></button>
         </div>` : ''}
     </div>`;
 
@@ -3439,9 +3446,41 @@ async function addWineryCatalogWine() {
   const g = id => document.getElementById(id)?.value.trim() || null;
   const name = g('wy-catalog-name');
   if (!name) return;
-  const { error } = await sb.from('winery_wines').insert({ winery_id: currentWineryId, name, grapes: g('wy-catalog-grapes'), link: g('wy-catalog-link') });
-  if (error) { toastErr('Errore aggiunta: ' + error.message); return; }
+  const payload = { name, grapes: g('wy-catalog-grapes'), link: g('wy-catalog-link') };
+  const { error } = editingWineryWineId
+    ? await sb.from('winery_wines').update(payload).eq('id', editingWineryWineId)
+    : await sb.from('winery_wines').insert({ winery_id: currentWineryId, ...payload });
+  if (error) { toastErr('Errore: ' + error.message); return; }
+  editingWineryWineId = null;
   showWineryDetail(currentWineryId);
+}
+
+// Precompila la riga di aggiunta coi valori esistenti: il tasto "+" diventa
+// così "salva modifica" (vedi addWineryCatalogWine) finché non si annulla
+// o si salva — evita di dover cancellare e ricreare una voce per correggerla.
+async function editWineryCatalogWine(wineryWineId) {
+  if (!currentUser?.isAdmin) return;
+  const { data, error } = await sb.from('winery_wines').select('id,name,grapes,link').eq('id', wineryWineId).maybeSingle();
+  if (error || !data) { toastErr('Impossibile caricare il vino'); return; }
+  editingWineryWineId = data.id;
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ''; };
+  set('wy-catalog-name', data.name);
+  set('wy-catalog-grapes', data.grapes);
+  set('wy-catalog-link', data.link);
+  document.getElementById('wy-catalog-name')?.focus();
+  const submitBtn = document.getElementById('wy-catalog-submit-btn');
+  if (submitBtn) submitBtn.innerHTML = '<i class="ti ti-device-floppy"></i>';
+  const cancelBtn = document.getElementById('wy-catalog-cancel-btn');
+  if (cancelBtn) cancelBtn.style.display = '';
+}
+
+function cancelEditWineryCatalogWine() {
+  editingWineryWineId = null;
+  ['wy-catalog-name', 'wy-catalog-grapes', 'wy-catalog-link'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  const submitBtn = document.getElementById('wy-catalog-submit-btn');
+  if (submitBtn) submitBtn.innerHTML = '<i class="ti ti-plus"></i>';
+  const cancelBtn = document.getElementById('wy-catalog-cancel-btn');
+  if (cancelBtn) cancelBtn.style.display = 'none';
 }
 
 async function removeWineryCatalogWine(wineryWineId) {
@@ -3537,6 +3576,20 @@ async function loadWineriesToComplete() {
     .order('created_at', { ascending: false });
   if (error) { toastErr('Errore caricamento cantine: ' + error.message); return []; }
   return data || [];
+}
+
+// Crea una cantina proattivamente (es. prima ancora che qualcuno inserisca
+// un vino con quel produttore), invece di aspettare che nasca da sola come
+// stub — riusa findOrCreateWinery() per non ricreare la stessa logica di
+// ricerca per nome/gestione dei doppioni.
+async function addWineryManually() {
+  if (!currentUser?.isAdmin) return;
+  const name = (prompt('Nome della nuova cantina:') || '').trim();
+  if (!name) return;
+  const id = await findOrCreateWinery(name);
+  if (!id) { toastErr('Errore creazione cantina'); return; }
+  loadWineriesCache();
+  showWineryDetail(id);
 }
 
 async function showAdminWineriesScreen() {
@@ -6314,7 +6367,8 @@ Object.assign(window, {
   addPosNode, removePosNode, addWinePosition, removeWinePosition, onPosL1Change, onPosL2Change, onPosL3Change,
   addDetailPosition, removeDetailPosition, onDetailPosL1Change, onDetailPosL2Change, onDetailPosL3Change,
   showWineryDetail, saveWineryDetails, uploadWineryLogo, goBackFromWinery, showAdminWineriesScreen, deleteWinery,
-  addWineryCatalogWine, removeWineryCatalogWine, useFaviconAsLogo
+  addWineryCatalogWine, removeWineryCatalogWine, useFaviconAsLogo,
+  editWineryCatalogWine, cancelEditWineryCatalogWine, addWineryManually
 });
 </script>
 </body>
