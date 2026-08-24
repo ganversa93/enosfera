@@ -2389,6 +2389,12 @@
       <button class="btn sm primary" onclick="addWineryManually()"><i class="ti ti-plus"></i>Aggiungi cantina</button>
     </div>
     <div id="admin-wineries-list"></div>
+
+    <div class="fsec" style="margin-top:1.5rem">
+      <div class="stitle"><i class="ti ti-plug-connected-x"></i>Produttori senza cantina collegata</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Vini (di qualunque utente) il cui produttore non è ancora agganciato a nessuna scheda in anagrafica — capita per i vini inseriti prima che esistesse l'anagrafica cantine.</p>
+      <div id="admin-unlinked-producers-list"></div>
+    </div>
   </div>
 
   <!-- ══ PROFILE ══ -->
@@ -3627,6 +3633,9 @@ async function showAdminWineriesScreen() {
   showScreen('screen-admin-wineries');
   const list = document.getElementById('admin-wineries-list');
   list.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted)">Caricamento…</div>';
+  const unlinkedList = document.getElementById('admin-unlinked-producers-list');
+  unlinkedList.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--muted)">Caricamento…</div>';
+
   const wineries = await loadWineriesToComplete();
   document.getElementById('admin-wineries-count').textContent = wineries.length;
   list.innerHTML = wineries.length
@@ -3636,6 +3645,41 @@ async function showAdminWineriesScreen() {
         <i class="ti ti-chevron-right"></i>
       </div>`).join('')
     : '<div style="text-align:center;padding:2rem;color:var(--muted)">Nessuna cantina da completare 🎉</div>';
+
+  const producers = await loadUnlinkedProducers();
+  unlinkedList.innerHTML = producers.length
+    ? producers.map(p => `
+      <div class="winery-row">
+        <div class="winery-row-name"><i class="ti ti-alert-triangle"></i>${p.producer} <span style="font-size:11px;color:var(--muted);font-weight:400">(${p.wine_count} vin${p.wine_count === 1 ? 'o' : 'i'})</span></div>
+        <button class="btn sm" data-producer="${escapeAttr(p.producer)}" onclick="linkProducerToWinery(this.dataset.producer)"><i class="ti ti-link"></i>Collega</button>
+      </div>`).join('')
+    : '<div style="text-align:center;padding:1.5rem;color:var(--muted)">Nessun produttore scollegato 🎉</div>';
+}
+
+function escapeAttr(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
+async function loadUnlinkedProducers() {
+  const { data, error } = await sb.rpc('get_unlinked_producers');
+  if (error) { console.warn('loadUnlinkedProducers', error); return []; }
+  return data || [];
+}
+
+// Crea (o trova) la cantina per quel produttore e ci aggancia tutti i vini
+// esistenti che hanno quel testo esatto in producer e sono ancora senza
+// winery_id — richiede una funzione SECURITY DEFINER perché deve poter
+// aggiornare vini di qualunque utente, non solo i propri (vedi
+// supabase_schema.sql, link_producer_to_winery).
+async function linkProducerToWinery(producer) {
+  if (!currentUser?.isAdmin || !producer) return;
+  const id = await findOrCreateWinery(producer);
+  if (!id) { toastErr('Errore creazione cantina'); return; }
+  const { data, error } = await sb.rpc('link_producer_to_winery', { p_producer: producer, p_winery_id: id });
+  if (error) { toastErr('Errore collegamento: ' + error.message); return; }
+  toast(`✓ Collegati ${data ?? 0} vin${data === 1 ? 'o' : 'i'} a "${producer}"`);
+  loadWineriesCache();
+  showAdminWineriesScreen();
 }
 
 /* ══ APP INIT ══ */
@@ -6398,7 +6442,8 @@ Object.assign(window, {
   addDetailPosition, removeDetailPosition, onDetailPosL1Change, onDetailPosL2Change, onDetailPosL3Change,
   showWineryDetail, saveWineryDetails, uploadWineryLogo, goBackFromWinery, showAdminWineriesScreen, deleteWinery,
   addWineryCatalogWine, removeWineryCatalogWine, useFaviconAsLogo,
-  editWineryCatalogWine, cancelEditWineryCatalogWine, addWineryManually, importWineryCatalogFromShop
+  editWineryCatalogWine, cancelEditWineryCatalogWine, addWineryManually, importWineryCatalogFromShop,
+  linkProducerToWinery
 });
 </script>
 </body>

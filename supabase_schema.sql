@@ -909,3 +909,55 @@ create policy "winery_wines: scrittura solo admin"
 -- ogni voce del catalogo.
 alter table public.winery_wines add column if not exists grapes text;
 alter table public.winery_wines add column if not exists link text;
+
+-- ════════════════════════════════════════════════════════════════
+-- Vini "orfani": inseriti prima che esistesse l'anagrafica cantine (o
+-- comunque rimasti senza winery_id) — il produttore in wines.producer
+-- non è agganciato a nessuna scheda. Servono due funzioni SECURITY
+-- DEFINER perché wines ha RLS per-utente (solo i propri vini + cantine
+-- condivise): l'admin deve poter vedere/collegare TUTTI i vini
+-- dell'app, non solo i suoi. Stesso principio già usato per
+-- get_cellar_position_tree — controllo di accesso esplicito dentro la
+-- funzione, invece di allargare le policy RLS generali.
+-- ════════════════════════════════════════════════════════════════
+create or replace function public.get_unlinked_producers()
+returns table(producer text, wine_count bigint)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select w.producer, count(*)::bigint as wine_count
+  from public.wines w
+  where w.winery_id is null
+    and w.producer is not null
+    and trim(w.producer) <> ''
+    and public.is_admin()
+  group by w.producer
+  order by count(*) desc, w.producer;
+$$;
+revoke all on function public.get_unlinked_producers() from public, anon;
+grant execute on function public.get_unlinked_producers() to authenticated;
+
+create or replace function public.link_producer_to_winery(p_producer text, p_winery_id uuid)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_count integer;
+begin
+  if not public.is_admin() then
+    raise exception 'not authorized';
+  end if;
+  update public.wines
+  set winery_id = p_winery_id
+  where producer = p_producer
+    and winery_id is null;
+  get diagnostics v_count = row_count;
+  return v_count;
+end;
+$$;
+revoke all on function public.link_producer_to_winery(text, uuid) from public, anon;
+grant execute on function public.link_producer_to_winery(text, uuid) to authenticated;
