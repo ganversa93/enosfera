@@ -58,6 +58,11 @@
          in chiaro il bordeaux si legge bene su sfondo bianco, ma in scuro la
          card ha sfondo quasi nero e lo stesso colore diventa illeggibile. */
       .stat-n { color: #fff; }
+      /* Link "Scopri di più" sulla cantina: sta sull'hero della scheda
+         vino, sfondo --wine-pale — in chiaro è un rosa quasi bianco (testo
+         bordeaux ok), ma in scuro diventa un bordeaux scuro su cui lo
+         stesso bordeaux del link è quasi illeggibile. */
+      .winery-link { color: #fff; }
     }
 
     html { font-size: 16px; }
@@ -658,6 +663,7 @@
     .dprod { font-size: 12px; color: var(--muted); margin-bottom: 2px; line-height: 1.4; }
     .dchips { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 8px; }
     .dchip { font-size: 11px; padding: 3px 9px; border-radius: 20px; background: #fff; color: var(--wine); font-weight: 500; }
+    .winery-link { font-size: 11.5px; color: var(--wine); text-decoration: underline; }
 
     /* ── SCHEDA CANTINA (produttore) ── */
     .winery-hero { display: flex; align-items: center; gap: 14px; }
@@ -3340,12 +3346,18 @@ async function showWineryDetail(id) {
   `;
 }
 
+// Nota: se la policy RLS di update blocca la riga (es. is_admin() non
+// configurato correttamente sul DB), Supabase non dà errore — restituisce
+// semplicemente zero righe aggiornate. Senza il .select() qui sotto quel
+// caso passerebbe per un salvataggio riuscito quando in realtà non ha
+// scritto nulla: controlliamo esplicitamente che una riga sia tornata.
 async function saveWineryDetails() {
   if (!currentUser?.isAdmin || !currentWineryId) return;
   const g = id => document.getElementById(id)?.value.trim() || null;
   const row = { region: g('wy-region'), website: g('wy-website'), description: g('wy-description'), updated_at: new Date().toISOString() };
-  const { error } = await sb.from('wineries').update(row).eq('id', currentWineryId);
+  const { data, error } = await sb.from('wineries').update(row).eq('id', currentWineryId).select('id');
   if (error) { toastErr('Errore salvataggio: ' + error.message); return; }
+  if (!data?.length) { toastErr('Salvataggio non riuscito: verifica di essere admin (is_admin) e di aver eseguito tutta la migrazione SQL delle cantine.'); return; }
   toast('✓ Scheda cantina aggiornata');
   loadWineriesCache();
   showWineryDetail(currentWineryId);
@@ -3359,7 +3371,7 @@ async function saveWineryDetails() {
 async function deleteWinery() {
   if (!currentUser?.isAdmin || !currentWineryId) return;
   if (!confirm('Eliminare questa cantina dall\'anagrafica? Non è reversibile.')) return;
-  const { error } = await sb.from('wineries').delete().eq('id', currentWineryId);
+  const { data, error } = await sb.from('wineries').delete().eq('id', currentWineryId).select('id');
   if (error) {
     if (error.code === '23503') {
       toastErr('Non puoi eliminarla: è ancora agganciata a uno o più vini. Correggi prima il produttore su quei vini.');
@@ -3368,6 +3380,7 @@ async function deleteWinery() {
     }
     return;
   }
+  if (!data?.length) { toastErr('Eliminazione non riuscita: verifica di essere admin (is_admin) e di aver eseguito tutta la migrazione SQL delle cantine.'); return; }
   toast('✓ Cantina eliminata');
   loadWineriesCache();
   updateAdminWineriesBadge();
@@ -3383,8 +3396,9 @@ async function uploadWineryLogo(input) {
   const { error } = await sb.storage.from('wine-labels').upload(path, toUpload, { upsert: true, contentType: toUpload.type || 'image/jpeg', cacheControl: '31536000' });
   if (error) { toastErr('Errore caricamento logo: ' + error.message); return; }
   const { data: urlData } = sb.storage.from('wine-labels').getPublicUrl(path);
-  const { error: updErr } = await sb.from('wineries').update({ logo_url: urlData.publicUrl }).eq('id', currentWineryId);
+  const { data: updData, error: updErr } = await sb.from('wineries').update({ logo_url: urlData.publicUrl }).eq('id', currentWineryId).select('id');
   if (updErr) { toastErr('Errore salvataggio logo: ' + updErr.message); return; }
+  if (!updData?.length) { toastErr('Salvataggio non riuscito: verifica di essere admin (is_admin) e di aver eseguito tutta la migrazione SQL delle cantine.'); return; }
   toast('✓ Logo aggiornato');
   showWineryDetail(currentWineryId);
 }
@@ -4573,7 +4587,7 @@ function showDetail(id) {
       <div class="dinfo" style="flex:1">
         ${w.visibility === false ? `<div style="font-size:10px;font-weight:600;color:var(--muted);background:var(--surf);border:0.5px solid var(--border);border-radius:20px;padding:2px 9px;display:inline-flex;align-items:center;gap:4px;margin-bottom:8px"><i class="ti ti-lock" style="font-size:10px"></i>Privato — non visibile nel Network</div>` : ''}
         <div class="dname">${w.name}</div>
-        <div class="dprod">${w.producer || ''}${w.wineryId ? ` <a href="#" onclick="showWineryDetail('${w.wineryId}'); return false;" style="font-size:11.5px;color:var(--wine);text-decoration:underline">Scopri di più</a>` : ''}</div>
+        <div class="dprod">${w.producer || ''}${w.wineryId ? ` <a href="#" class="winery-link" onclick="showWineryDetail('${w.wineryId}'); return false;">Scopri di più</a>` : ''}</div>
         <div class="dvintage">${w.vintage ? 'Annata: ' + w.vintage : ''}</div>
         ${w.doc ? `<div style="font-size:12px;color:var(--muted);line-height:1.4;margin-bottom:8px">${w.doc}</div>` : ''}
         <div style="display:flex;align-items:center;gap:7px;margin-bottom:10px">
@@ -5940,7 +5954,7 @@ function showNetworkWinePreview(id) {
       </div>
       <div class="dinfo" style="flex:1">
         <div class="dname">${w.name}</div>
-        <div class="dprod">${w.producer || ''}${w.wineryId ? ` <a href="#" onclick="showWineryDetail('${w.wineryId}'); return false;" style="font-size:11.5px;color:var(--wine);text-decoration:underline">Scopri di più</a>` : ''}</div>
+        <div class="dprod">${w.producer || ''}${w.wineryId ? ` <a href="#" class="winery-link" onclick="showWineryDetail('${w.wineryId}'); return false;">Scopri di più</a>` : ''}</div>
         <div class="dvintage">${w.vintage ? 'Annata: ' + w.vintage : ''}</div>
         <div style="display:flex;align-items:center;gap:6px;margin:6px 0 8px;font-size:12px;color:var(--muted)">
           ${w.ownerAvatar ? `<img src="${w.ownerAvatar}" style="width:20px;height:20px;border-radius:50%;object-fit:cover">` : ''}
