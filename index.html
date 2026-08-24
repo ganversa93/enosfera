@@ -414,6 +414,16 @@
     .home-card i { font-size: 34px; color: var(--wine); margin-bottom: 10px; display: block; }
     .home-card-title { font-family: 'Cormorant Garamond', serif; font-size: 18px; color: var(--ink); margin-bottom: 3px; }
     .home-card-sub { font-size: 11px; color: var(--muted); }
+    .home-card-wide {
+      grid-column: 1 / -1; display: flex; align-items: center; gap: 14px;
+      text-align: left; padding: 1.1rem 1.25rem;
+    }
+    .home-card-wide i { margin-bottom: 0; }
+    .home-admin-badge {
+      background: var(--wine); color: #fff; font-size: 12px; font-weight: 700;
+      min-width: 22px; height: 22px; border-radius: 12px; padding: 0 7px;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
     .home-feedback-row { display: flex; gap: 12px; margin-top: 14px; }
     .home-feedback-btn {
       flex: 1; display: flex; align-items: center; justify-content: center; gap: 10px;
@@ -967,6 +977,14 @@
     </div>
     <div class="home-welcome">Cosa vuoi fare oggi?</div>
     <div class="home-grid">
+      <div class="home-card home-card-wide" id="home-admin-card" onclick="showAdminWineriesScreen()" style="display:none">
+        <i class="ti ti-building-warehouse"></i>
+        <div style="flex:1">
+          <div class="home-card-title">Amministrazione</div>
+          <div class="home-card-sub">Cantine da completare</div>
+        </div>
+        <span class="home-admin-badge" id="home-admin-badge" style="display:none">0</span>
+      </div>
       <div class="home-card" onclick="showScreen('screen-list')">
         <i class="ti ti-bottle"></i>
         <div class="home-card-title">Cantina e Degustazioni</div>
@@ -1403,7 +1421,10 @@
       <div class="fsec-body">
       <div class="frow">
         <div class="fg"><label>Nome vino *</label><input type="text" id="f-name" placeholder="es. Amarone della Valpolicella"></div>
-        <div class="fg"><label>Produttore / Cantina</label><input type="text" id="f-producer" placeholder="es. Masi Agricola"></div>
+        <div class="fg">
+          <label>Produttore / Cantina <a href="#" id="f-producer-winery-link" onclick="selectedWineryId &amp;&amp; showWineryDetail(selectedWineryId); return false;" style="display:none;font-weight:400;font-size:11px;color:var(--wine);text-decoration:underline;margin-left:4px">Scopri di più</a></label>
+          <input type="text" id="f-producer" placeholder="es. Masi Agricola">
+        </div>
       </div>
       <div class="frow">
         <div class="fg">
@@ -2345,7 +2366,7 @@
   <!-- ══ ADMIN: CANTINE DA COMPLETARE ══ -->
   <div id="screen-admin-wineries" class="screen">
     <div class="nav" style="margin-bottom:.9rem">
-      <button class="btn sm" onclick="showScreen('screen-profile')"><i class="ti ti-arrow-left"></i>Indietro</button>
+      <button class="btn sm" onclick="showScreen('screen-home')"><i class="ti ti-arrow-left"></i>Home</button>
       <span style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--ink)">Cantine da completare (<span id="admin-wineries-count">0</span>)</span>
     </div>
     <div id="admin-wineries-list"></div>
@@ -2477,13 +2498,6 @@
       <div class="stitle"><i class="ti ti-device-mobile"></i>App sulla home del telefono</div>
       <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Se hai chiuso l'avviso di installazione toccando "Non mi interessa" e vuoi rivederlo, tocca qui sotto.</p>
       <button class="btn sm" onclick="resetInstallBanner()"><i class="ti ti-download"></i>Mostra di nuovo l'avviso di installazione</button>
-    </div>
-
-    <!-- Amministrazione (visibile solo all'admin) -->
-    <div class="fsec" id="fsec-admin" style="display:none">
-      <div class="stitle"><i class="ti ti-building-warehouse"></i>Amministrazione</div>
-      <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Cantine create in automatico dagli inserimenti degli utenti, ancora senza scheda compilata.</p>
-      <button class="btn sm" onclick="showAdminWineriesScreen()"><i class="ti ti-list"></i>Cantine da completare</button>
     </div>
 
     <div style="display:flex;gap:9px;justify-content:flex-end;margin-top:1rem;margin-bottom:.5rem">
@@ -3235,6 +3249,13 @@ async function loadWineriesCache() {
 
 function wineryLabel(w) { return w.region ? `${w.name} — ${w.region}` : w.name; }
 
+// Mostra/nasconde il link "Scopri di più" accanto al campo Produttore nel
+// form vino, a seconda che il vino risulti agganciato a una scheda cantina.
+function updateWineryLinkVisibility() {
+  const el = document.getElementById('f-producer-winery-link');
+  if (el) el.style.display = selectedWineryId ? '' : 'none';
+}
+
 // Trova la cantina per nome (case/spazi-insensitive) o la crea come "stub"
 // (solo nome) se non esiste ancora. Se un'altra sessione la crea nello
 // stesso istante, l'inserimento fallisce per il vincolo di unicità sul
@@ -3290,7 +3311,10 @@ async function showWineryDetail(id) {
         ${w.logo_url ? `<img src="${w.logo_url}" style="height:60px;border-radius:8px;display:block;margin-bottom:8px" alt="">` : ''}
         <input type="file" accept="image/*" onchange="uploadWineryLogo(this)">
       </div>
-      <button class="btn primary sm" onclick="saveWineryDetails()"><i class="ti ti-device-floppy"></i>Salva scheda</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn primary sm" onclick="saveWineryDetails()"><i class="ti ti-device-floppy"></i>Salva scheda</button>
+        <button class="btn sm danger" onclick="deleteWinery()"><i class="ti ti-trash"></i>Elimina cantina</button>
+      </div>
     </div>` : '';
 
   body.innerHTML = `
@@ -3320,6 +3344,30 @@ async function saveWineryDetails() {
   toast('✓ Scheda cantina aggiornata');
   loadWineriesCache();
   showWineryDetail(currentWineryId);
+}
+
+// L'eliminazione fallisce con un errore chiaro se ci sono ancora vini
+// agganciati a questa cantina (vincolo di chiave esterna) — capita per
+// una scheda "stub" creata per un refuso nel produttore: prima va corretto
+// il produttore sui vini collegati (che si riaggancia da solo alla cantina
+// giusta), poi la scheda sbagliata risulta senza vini e si può eliminare.
+async function deleteWinery() {
+  if (!currentUser?.isAdmin || !currentWineryId) return;
+  if (!confirm('Eliminare questa cantina dall\'anagrafica? Non è reversibile.')) return;
+  const { error } = await sb.from('wineries').delete().eq('id', currentWineryId);
+  if (error) {
+    if (error.code === '23503') {
+      toastErr('Non puoi eliminarla: è ancora agganciata a uno o più vini. Correggi prima il produttore su quei vini.');
+    } else {
+      toastErr('Errore eliminazione: ' + error.message);
+    }
+    return;
+  }
+  toast('✓ Cantina eliminata');
+  loadWineriesCache();
+  updateAdminWineriesBadge();
+  if (wineryReturnScreen === 'screen-admin-wineries') showAdminWineriesScreen();
+  else goBackFromWinery();
 }
 
 async function uploadWineryLogo(input) {
@@ -3488,6 +3536,22 @@ async function updateNotificationBadge() {
     if (n > 0) { el.textContent = n > 9 ? '9+' : n; el.style.display = 'flex'; }
     else { el.style.display = 'none'; }
   });
+  if (currentUser?.isAdmin) updateAdminWineriesBadge();
+}
+
+// Tasto "Amministrazione" in Home, visibile solo all'admin, col numero di
+// cantine create in automatico e ancora senza scheda compilata.
+async function updateAdminWineriesBadge() {
+  const card = document.getElementById('home-admin-card');
+  if (card) card.style.display = '';
+  const { count } = await sb.from('wineries').select('*', { count: 'exact', head: true })
+    .is('region', null).is('website', null).is('description', null).is('logo_url', null);
+  const n = count || 0;
+  const badge = document.getElementById('home-admin-badge');
+  if (badge) {
+    if (n > 0) { badge.textContent = n > 99 ? '99+' : n; badge.style.display = 'flex'; }
+    else badge.style.display = 'none';
+  }
 }
 
 function showScreen(id) {
@@ -3745,6 +3809,7 @@ function showAdd() {
   document.getElementById('form-save-label').textContent = 'Salva in cantina';
   frontImg = ''; backImg = '';
   selectedWineryId = null;
+  updateWineryLinkVisibility();
   renderAiBanner();
   // Reset accordion: Foto + Identità aperte, il resto chiuso (nuovo inserimento)
   resetSections();
@@ -4693,6 +4758,7 @@ function editWine() {
   const set = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
   set('f-name', w.name); set('f-producer', w.producer); set('f-vintage', w.vintage);
   selectedWineryId = w.wineryId || null;
+  updateWineryLinkVisibility();
   set('f-type', w.type); set('f-doc', w.doc); applyGrapesToForm(w.grapes);
   set('f-country', w.country); updateRegionOptions();
   set('f-region', w.region); updateProvinceOptions();
@@ -5417,7 +5483,6 @@ function showProfileScreen() {
   // già qualcosa di configurato, altrimenti restano chiuse di default
   document.getElementById('fsec-assoc')?.classList.toggle('collapsed', !u.assoc);
   document.getElementById('fsec-cellar-mgmt')?.classList.toggle('collapsed', !(u.cellarPosTree && u.cellarPosTree.length));
-  document.getElementById('fsec-admin').style.display = u.isAdmin ? '' : 'none';
 
   // Immagine profilo
   pendingAvatarBase64 = null;
@@ -6076,8 +6141,9 @@ attachAutocomplete('f-producer', () => wineriesCache.map(wineryLabel), sel => {
   const w = wineriesCache.find(x => wineryLabel(x) === sel);
   document.getElementById('f-producer').value = w ? w.name : sel;
   selectedWineryId = w ? w.id : null;
+  updateWineryLinkVisibility();
 });
-document.getElementById('f-producer')?.addEventListener('input', () => { selectedWineryId = null; });
+document.getElementById('f-producer')?.addEventListener('input', () => { selectedWineryId = null; updateWineryLinkVisibility(); });
 
 /* ── INIT ── */
 calcAIS(); calcFISAR();
@@ -6105,7 +6171,7 @@ Object.assign(window, {
   confirmSumDuplicateQty, confirmSaveDuplicateAsNew, closeDuplicateWinePrompt,
   addPosNode, removePosNode, addWinePosition, removeWinePosition, onPosL1Change, onPosL2Change, onPosL3Change,
   addDetailPosition, removeDetailPosition, onDetailPosL1Change, onDetailPosL2Change, onDetailPosL3Change,
-  showWineryDetail, saveWineryDetails, uploadWineryLogo, goBackFromWinery, showAdminWineriesScreen
+  showWineryDetail, saveWineryDetails, uploadWineryLogo, goBackFromWinery, showAdminWineriesScreen, deleteWinery
 });
 </script>
 </body>
