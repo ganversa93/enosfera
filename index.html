@@ -681,6 +681,14 @@
     .winery-row:last-child { border-bottom: none; }
     .winery-row-name { font-size: 13.5px; display: flex; align-items: center; gap: 8px; }
     .winery-row-name i { color: var(--wine); }
+    .winery-catalog-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .winery-catalog-chip {
+      display: flex; align-items: center; gap: 6px;
+      background: var(--wine); color: #fff; border-radius: 20px;
+      padding: 5px 10px 5px 12px; font-size: 12px;
+    }
+    .winery-catalog-chip .rm-btn { cursor: pointer; opacity: .7; font-size: 15px; line-height: 1; }
+    .winery-catalog-chip .rm-btn:hover { opacity: 1; }
 
     /* ── Desktop: immagini grandi a destra, info a sinistra ── */
     @media (min-width: 700px) {
@@ -3316,6 +3324,26 @@ async function showWineryDetail(id) {
       </div>`).join('')
     : `<div style="font-size:12px;color:var(--muted);padding:.5rem 0">Nessun vino di questa cantina ancora visibile nel tuo Enoscrigno.</div>`;
 
+  const { data: catalog } = await sb.from('winery_wines').select('id,name').eq('winery_id', id).order('name');
+  const catalogChipsHtml = (catalog && catalog.length)
+    ? catalog.map(c => `
+      <span class="winery-catalog-chip">
+        ${c.name}
+        ${currentUser?.isAdmin ? `<span class="rm-btn" onclick="removeWineryCatalogWine('${c.id}')">×</span>` : ''}
+      </span>`).join('')
+    : '';
+  const catalogSection = `
+    <div class="fsec" style="margin-top:1.25rem">
+      <div class="stitle"><i class="ti ti-bottle-filled"></i>Vini prodotti da questa cantina</div>
+      <div class="winery-catalog-chips">${catalogChipsHtml}</div>
+      ${!catalog?.length && !currentUser?.isAdmin ? `<div style="font-size:12px;color:var(--muted);padding:.5rem 0">Nessun vino ancora catalogato per questa cantina.</div>` : ''}
+      ${currentUser?.isAdmin ? `
+        <div class="pos-add-row" style="margin-top:8px">
+          <input type="text" id="wy-catalog-input" placeholder="Aggiungi un vino…" autocomplete="off">
+          <button class="btn sm" onclick="addWineryCatalogWine()"><i class="ti ti-plus"></i></button>
+        </div>` : ''}
+    </div>`;
+
   const adminForm = currentUser?.isAdmin ? `
     <div class="fsec" style="margin-top:1.25rem">
       <div class="stitle"><i class="ti ti-edit"></i>Modifica scheda (admin)</div>
@@ -3327,9 +3355,9 @@ async function showWineryDetail(id) {
             <option>Italia</option><option>Francia</option><option>Germania</option><option>Spagna</option><option>Stati Uniti</option><option>Cile</option><option>Argentina</option><option>Nuova Zelanda</option><option>Sud Africa</option><option>Australia</option><option>Altro</option>
           </select>
         </div>
-        <div class="fg"><label>Regione</label><input type="text" id="wy-region" value="${w.region || ''}" placeholder="es. Veneto" autocomplete="off"></div>
+        <div class="fg" style="position:relative"><label>Regione</label><input type="text" id="wy-region" value="${w.region || ''}" placeholder="es. Veneto" autocomplete="off"></div>
       </div>
-      <div class="fg" id="wy-province-wrap">
+      <div class="fg" id="wy-province-wrap" style="position:relative">
         <label>Provincia <span style="font-weight:400;color:var(--muted)">(se applicabile)</span></label>
         <input type="text" id="wy-province" value="${w.province || ''}" placeholder="es. Verona" autocomplete="off">
       </div>
@@ -3356,8 +3384,9 @@ async function showWineryDetail(id) {
       </div>
     </div>
     ${w.description ? `<p style="font-size:13px;color:var(--ink);line-height:1.6;margin-top:1rem">${w.description}</p>` : (!currentUser?.isAdmin ? `<p style="font-size:12.5px;color:var(--muted);margin-top:1rem">Non ci sono ancora informazioni su questa cantina.</p>` : '')}
+    ${catalogSection}
     <div class="fsec" style="margin-top:1.25rem">
-      <div class="stitle"><i class="ti ti-bottle"></i>Vini di questa cantina</div>
+      <div class="stitle"><i class="ti ti-bottle"></i>Vini degli utenti di questa cantina</div>
       <div class="winery-wine-list">${winesHtml}</div>
     </div>
     ${adminForm}
@@ -3374,9 +3403,10 @@ async function showWineryDetail(id) {
     const onRegionChange = () => {
       const country = document.getElementById('wy-country')?.value;
       const region  = document.getElementById('wy-region')?.value;
+      // A differenza del form vino, qui la Provincia resta sempre visibile
+      // anche per un paese diverso dall'Italia (compilabile liberamente,
+      // solo senza suggerimenti che per ora coprono solo le province italiane).
       wineryProvinceSuggestions = (country === 'Italia' && GEO_PROVINCES_ITALIA[region]) ? GEO_PROVINCES_ITALIA[region] : [];
-      const provinceWrap = document.getElementById('wy-province-wrap');
-      if (provinceWrap) provinceWrap.style.display = (country === 'Italia' || !country) ? '' : 'none';
     };
     const onCountryChange = () => {
       const country = document.getElementById('wy-country')?.value;
@@ -3391,7 +3421,29 @@ async function showWineryDetail(id) {
     attachAutocomplete('wy-province', () => wineryProvinceSuggestions);
     countryEl?.addEventListener('change', onCountryChange);
     document.getElementById('wy-region')?.addEventListener('input', onRegionChange);
+    document.getElementById('wy-catalog-input')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); addWineryCatalogWine(); }
+    });
   }
+}
+
+// Elenco dei vini prodotti dalla cantina (catalogo curato dall'admin),
+// distinto dai vini che gli utenti hanno effettivamente in cantina.
+async function addWineryCatalogWine() {
+  if (!currentUser?.isAdmin || !currentWineryId) return;
+  const input = document.getElementById('wy-catalog-input');
+  const name = (input?.value || '').trim();
+  if (!name) return;
+  const { error } = await sb.from('winery_wines').insert({ winery_id: currentWineryId, name });
+  if (error) { toastErr('Errore aggiunta: ' + error.message); return; }
+  showWineryDetail(currentWineryId);
+}
+
+async function removeWineryCatalogWine(wineryWineId) {
+  if (!currentUser?.isAdmin) return;
+  const { error } = await sb.from('winery_wines').delete().eq('id', wineryWineId);
+  if (error) { toastErr('Errore eliminazione: ' + error.message); return; }
+  showWineryDetail(currentWineryId);
 }
 
 // Nota: se la policy RLS di update blocca la riga (es. is_admin() non
@@ -6238,7 +6290,8 @@ Object.assign(window, {
   confirmSumDuplicateQty, confirmSaveDuplicateAsNew, closeDuplicateWinePrompt,
   addPosNode, removePosNode, addWinePosition, removeWinePosition, onPosL1Change, onPosL2Change, onPosL3Change,
   addDetailPosition, removeDetailPosition, onDetailPosL1Change, onDetailPosL2Change, onDetailPosL3Change,
-  showWineryDetail, saveWineryDetails, uploadWineryLogo, goBackFromWinery, showAdminWineriesScreen, deleteWinery
+  showWineryDetail, saveWineryDetails, uploadWineryLogo, goBackFromWinery, showAdminWineriesScreen, deleteWinery,
+  addWineryCatalogWine, removeWineryCatalogWine
 });
 </script>
 </body>

@@ -879,3 +879,28 @@ create policy "wineries: stub per tutti, completa solo admin"
     public.is_admin()
     or (country is null and region is null and province is null and website is null and description is null and logo_url is null)
   );
+
+-- ════════════════════════════════════════════════════════════════
+-- Catalogo dei vini prodotti da una cantina (curato dall'admin), distinto
+-- dai vini che gli utenti hanno effettivamente in cantina (wines.winery_id):
+-- una cosa è "questa cantina produce l'Amarone", un'altra è "Mario ha
+-- l'Amarone di questa cantina nella sua cantina personale".
+-- ════════════════════════════════════════════════════════════════
+create table if not exists public.winery_wines (
+  id uuid primary key default gen_random_uuid(),
+  winery_id uuid not null references public.wineries(id) on delete cascade,
+  name text not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists winery_wines_winery_id_idx on public.winery_wines(winery_id);
+
+alter table public.winery_wines enable row level security;
+
+drop policy if exists "winery_wines: lettura per chiunque autenticato" on public.winery_wines;
+create policy "winery_wines: lettura per chiunque autenticato"
+  on public.winery_wines for select to authenticated using (true);
+
+drop policy if exists "winery_wines: scrittura solo admin" on public.winery_wines;
+create policy "winery_wines: scrittura solo admin"
+  on public.winery_wines for all to authenticated
+  using (public.is_admin()) with check (public.is_admin());
