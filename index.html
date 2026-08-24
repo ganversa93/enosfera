@@ -3739,13 +3739,17 @@ function renderGrid() {
 
 /* ── ADD FORM ── */
 function showAdd() {
+  exitWizardMode(); // in caso si arrivi qui da una degustazione guidata non conclusa
+  document.getElementById('f-edit-id').value = '';
+  document.getElementById('form-title').textContent = 'Aggiungi vino';
+  document.getElementById('form-save-label').textContent = 'Salva in cantina';
   frontImg = ''; backImg = '';
   selectedWineryId = null;
   renderAiBanner();
   // Reset accordion: Foto + Identità aperte, il resto chiuso (nuovo inserimento)
   resetSections();
   const clear = ids => ids.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
-  clear(['f-name','f-producer','f-doc','f-grapes','f-region','f-country','f-province','f-shop','f-shop-category','f-drink','f-notes','f-tags','ap-olfnote','ap-gustnote','fp-note','f-pairing-custom',
+  clear(['f-name','f-producer','f-type','f-format','f-doc','f-grapes','f-region','f-country','f-province','f-shop','f-shop-category','f-drink','f-tastingdate','f-tastingplace','f-notes','f-tags','ap-olfnote','ap-gustnote','fp-note','f-pairing-custom',
     'fd-limpidezza','fd-trasparenza','fd-tonalita','fd-intensita-colore','fd-fluidita','fd-perlage-grana','fd-perlage-persistenza',
     'fd-intensita-olf','fd-franchezza','fd-finezza','fd-natura-profumi','fd-complessita',
     'fd-corpo','fd-alcolicita','fd-morbidezza','fd-zuccheri','fd-acidita','fd-sapidita','fd-tannicita','fd-effervescenza-gusto','fd-equilibrio',
@@ -4670,6 +4674,7 @@ async function deleteWine() {
 
 function editWine() {
   const w = myWines().find(x => x.id === currentDetailId); if (!w) return;
+  exitWizardMode(); // in caso si arrivi qui da una degustazione guidata non conclusa
   openAllSections(); // in modifica mostra subito tutte le sezioni con i dati esistenti
   // Pre-fill edit id
   document.getElementById('f-edit-id').value = w.id;
