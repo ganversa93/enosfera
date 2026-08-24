@@ -3346,6 +3346,7 @@ async function showWineryDetail(id) {
   const catalogSection = `
     <div class="fsec" style="margin-top:1.25rem">
       <div class="stitle"><i class="ti ti-bottle-filled"></i>Vini prodotti da questa cantina</div>
+      ${currentUser?.isAdmin ? `<button class="btn sm" style="margin-bottom:10px" onclick="importWineryCatalogFromShop()"><i class="ti ti-download"></i>Importa dal sito</button>` : ''}
       <div class="winery-catalog-list">${catalogRowsHtml}</div>
       ${!catalog?.length && !currentUser?.isAdmin ? `<div style="font-size:12px;color:var(--muted);padding:.5rem 0">Nessun vino ancora catalogato per questa cantina.</div>` : ''}
       ${currentUser?.isAdmin ? `
@@ -3481,6 +3482,23 @@ function cancelEditWineryCatalogWine() {
   if (submitBtn) submitBtn.innerHTML = '<i class="ti ti-plus"></i>';
   const cancelBtn = document.getElementById('wy-catalog-cancel-btn');
   if (cancelBtn) cancelBtn.style.display = 'none';
+}
+
+// Popola in blocco la base del catalogo (solo nome + link) leggendo la
+// pagina negozio del sito della cantina, invece di inserire ogni vino a
+// mano — vedi supabase/functions/import-winery-catalog. Deliberatamente
+// senza uvaggio: quello si aggiunge dopo con l'icona di modifica sul
+// catalogo, vino per vino.
+async function importWineryCatalogFromShop() {
+  if (!currentUser?.isAdmin || !currentWineryId) return;
+  const defaultUrl = document.getElementById('wy-website')?.value.trim() || '';
+  const shopUrl = (prompt('Link alla pagina del negozio/catalogo vini:', defaultUrl) || '').trim();
+  if (!shopUrl) return;
+  toast('Importazione in corso…');
+  const { data, error } = await sb.functions.invoke('import-winery-catalog', { body: { wineryId: currentWineryId, shopUrl } });
+  if (error || data?.error) { toastErr((data && data.error) || 'Importazione non riuscita'); return; }
+  toast(`✓ Importati ${data.imported} vini (trovati ${data.found}, già presenti ${data.skipped})`);
+  showWineryDetail(currentWineryId);
 }
 
 async function removeWineryCatalogWine(wineryWineId) {
@@ -6368,7 +6386,7 @@ Object.assign(window, {
   addDetailPosition, removeDetailPosition, onDetailPosL1Change, onDetailPosL2Change, onDetailPosL3Change,
   showWineryDetail, saveWineryDetails, uploadWineryLogo, goBackFromWinery, showAdminWineriesScreen, deleteWinery,
   addWineryCatalogWine, removeWineryCatalogWine, useFaviconAsLogo,
-  editWineryCatalogWine, cancelEditWineryCatalogWine, addWineryManually
+  editWineryCatalogWine, cancelEditWineryCatalogWine, addWineryManually, importWineryCatalogFromShop
 });
 </script>
 </body>
