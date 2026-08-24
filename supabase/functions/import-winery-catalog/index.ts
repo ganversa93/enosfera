@@ -56,27 +56,61 @@ function decodeEntities(s: string): string {
     .trim();
 }
 
-// Cerca coppie (link, nome) nei blocchi prodotto tipici di WooCommerce:
-// un <a href="..."> seguito, entro poche centinaia di caratteri, da un
-// titolo <h2>/<h3>. Il primo pattern punta alla classe standard
-// "woocommerce-loop-product__title"; il secondo è un fallback più
-// permissivo per temi che non la usano.
-function extractProducts(html: string, baseUrl: string): { name: string; link: string }[] {
-  const patterns = [
-    /<a[^>]+href="([^"]+)"[^>]*>[\s\S]{0,500}?<h[23][^>]*class="[^"]*product[^"]*title[^"]*"[^>]*>([^<]+)<\/h[23]>/gi,
-    /<a[^>]+href="([^"]+)"[^>]*>\s*<h[23][^>]*>([^<]+)<\/h[23]>/gi,
-  ];
-  const seen = new Map<string, string>();
-  for (const re of patterns) {
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(html)) && seen.size < MAX_PRODUCTS) {
-      let link: string;
-      try { link = new URL(m[1], baseUrl).toString(); } catch { continue; }
-      const name = decodeEntities(m[2]);
-      if (name && !seen.has(link)) seen.set(link, name);
-    }
-    if (seen.size) break;
+function stripTags(html: string): string {
+  return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+// Filtro minimo per scartare voci di menu/nav catturate per sbaglio dal
+// pattern 3 (link generico), che non ha nessun ancoraggio semantico oltre
+// al percorso dell'URL.
+const NAV_WORDS = ['home', 'contatt', 'chi siamo', 'cookie', 'privacy', 'menu', 'carrello', 'accedi', 'login', 'cerca', 'blog', 'news', 'faq', 'newsletter'];
+function looksLikeProductName(name: string): boolean {
+  if (!name || name.length < 2 || name.length > 70) return false;
+  if (!/[a-zA-ZÀ-ÿ]/.test(name)) return false;
+  const lower = name.toLowerCase();
+  return !NAV_WORDS.some(w => lower === w || lower.includes(w));
+}
+
+function collect(re: RegExp, html: string, baseUrl: string, seen: Map<string, string>, getName: (m: RegExpExecArray) => string) {
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) && seen.size < MAX_PRODUCTS) {
+    let link: string;
+    try { link = new URL(m[1], baseUrl).toString(); } catch { continue; }
+    const name = getName(m);
+    if (looksLikeProductName(name) && !seen.has(link)) seen.set(link, name);
   }
+}
+
+// Tre livelli, dal più preciso al più generico — si passa al successivo
+// solo se il precedente non ha trovato nulla:
+// 1) WooCommerce: <a href>...<h2/h3 class="...product...title...">Nome</h2>
+// 2) Titolo generico (h2/h3) subito dopo il link, per temi non WooCommerce
+//    che comunque strutturano la griglia prodotti allo stesso modo.
+// 3) Ultima spiaggia per siti costruiti a mano/non e-commerce: link il cui
+//    percorso somiglia a una scheda vino/prodotto, usando il testo del
+//    link stesso come nome.
+function extractProducts(html: string, baseUrl: string): { name: string; link: string }[] {
+  const seen = new Map<string, string>();
+
+  collect(
+    /<a[^>]+href="([^"]+)"[^>]*>[\s\S]{0,500}?<h[23][^>]*class="[^"]*product[^"]*title[^"]*"[^>]*>([^<]+)<\/h[23]>/gi,
+    html, baseUrl, seen, m => decodeEntities(m[2])
+  );
+
+  if (!seen.size) {
+    collect(
+      /<a[^>]+href="([^"]+)"[^>]*>\s*<h[23][^>]*>([^<]+)<\/h[23]>/gi,
+      html, baseUrl, seen, m => decodeEntities(m[2])
+    );
+  }
+
+  if (!seen.size) {
+    collect(
+      /<a[^>]+href="([^"]*\/(?:vini?|prodott[oi]|products?|shop|negozio|wines?)\/[^"?#]+)"[^>]*>([\s\S]{0,200}?)<\/a>/gi,
+      html, baseUrl, seen, m => decodeEntities(stripTags(m[2]))
+    );
+  }
+
   return [...seen.entries()].map(([link, name]) => ({ name, link }));
 }
 
@@ -115,7 +149,7 @@ Deno.serve(async (req) => {
 
     const found = extractProducts(html, parsed.toString());
     if (!found.length) {
-      return json({ error: 'Nessun vino trovato su quella pagina (funziona meglio con negozi WooCommerce)' }, 404);
+      return json({ error: 'Nessun vino trovato su quella pagina: prova un link diverso (es. la pagina del negozio invece che una vetrina) o aggiungi i vini a mano.' }, 404);
     }
 
     const { data: existing } = await sbAdmin.from('winery_wines').select('name,link').eq('winery_id', wineryId);

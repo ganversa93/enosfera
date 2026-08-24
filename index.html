@@ -3496,7 +3496,19 @@ async function importWineryCatalogFromShop() {
   if (!shopUrl) return;
   toast('Importazione in corso…');
   const { data, error } = await sb.functions.invoke('import-winery-catalog', { body: { wineryId: currentWineryId, shopUrl } });
-  if (error || data?.error) { toastErr((data && data.error) || 'Importazione non riuscita'); return; }
+  if (error || data?.error) {
+    // Su un errore HTTP (4xx/5xx) supabase-js spesso non mette il corpo
+    // della risposta in `data`: senza questo tentativo di rilettura si
+    // vedrebbe sempre lo stesso messaggio generico, qualunque fosse la
+    // vera causa (funzione non deployata, sito irraggiungibile, nessun
+    // vino trovato…).
+    let msg = data?.error;
+    if (!msg && error?.context?.json) {
+      try { msg = (await error.context.json())?.error; } catch {}
+    }
+    toastErr(msg || error?.message || 'Importazione non riuscita');
+    return;
+  }
   toast(`✓ Importati ${data.imported} vini (trovati ${data.found}, già presenti ${data.skipped})`);
   showWineryDetail(currentWineryId);
 }
