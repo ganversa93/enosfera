@@ -682,14 +682,14 @@
     .winery-row:last-child { border-bottom: none; }
     .winery-row-name { font-size: 13.5px; display: flex; align-items: center; gap: 8px; }
     .winery-row-name i { color: var(--wine); }
-    .winery-catalog-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-    .winery-catalog-chip {
-      display: flex; align-items: center; gap: 6px;
-      background: var(--wine); color: #fff; border-radius: 20px;
-      padding: 5px 10px 5px 12px; font-size: 12px;
+    .winery-catalog-list { display: flex; flex-direction: column; gap: 2px; }
+    .winery-catalog-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 0; border-bottom: 0.5px solid var(--border);
     }
-    .winery-catalog-chip .rm-btn { cursor: pointer; opacity: .7; font-size: 15px; line-height: 1; }
-    .winery-catalog-chip .rm-btn:hover { opacity: 1; }
+    .winery-catalog-row:last-child { border-bottom: none; }
+    .winery-catalog-row .rm-btn { cursor: pointer; color: var(--muted); opacity: .7; font-size: 16px; line-height: 1; flex-shrink: 0; }
+    .winery-catalog-row .rm-btn:hover { opacity: 1; color: #c0392b; }
 
     /* ── Desktop: immagini grandi a destra, info a sinistra ── */
     @media (min-width: 700px) {
@@ -3325,24 +3325,30 @@ async function showWineryDetail(id) {
       </div>`).join('')
     : `<div style="font-size:12px;color:var(--muted);padding:.5rem 0">Nessun vino di questa cantina ancora visibile nel tuo Enoscrigno.</div>`;
 
-  const { data: catalog } = await sb.from('winery_wines').select('id,name').eq('winery_id', id).order('name');
-  const catalogChipsHtml = (catalog && catalog.length)
+  const { data: catalog } = await sb.from('winery_wines').select('id,name,grapes,link').eq('winery_id', id).order('name');
+  const catalogRowsHtml = (catalog && catalog.length)
     ? catalog.map(c => `
-      <span class="winery-catalog-chip">
-        ${c.name}
+      <div class="winery-catalog-row">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;color:var(--ink)">${c.name}</div>
+          ${c.grapes ? `<div style="font-size:11px;color:var(--muted)">${c.grapes}</div>` : ''}
+        </div>
+        ${c.link ? `<a href="${c.link}" target="_blank" rel="noopener" class="winery-link" style="text-decoration:none" title="Apri il link"><i class="ti ti-external-link"></i></a>` : ''}
         ${currentUser?.isAdmin ? `<span class="rm-btn" onclick="removeWineryCatalogWine('${c.id}')">×</span>` : ''}
-      </span>`).join('')
+      </div>`).join('')
     : '';
   const catalogSection = `
     <div class="fsec" style="margin-top:1.25rem">
       <div class="stitle"><i class="ti ti-bottle-filled"></i>Vini prodotti da questa cantina</div>
-      <div class="winery-catalog-chips">${catalogChipsHtml}</div>
+      <div class="winery-catalog-list">${catalogRowsHtml}</div>
       ${!catalog?.length && !currentUser?.isAdmin ? `<div style="font-size:12px;color:var(--muted);padding:.5rem 0">Nessun vino ancora catalogato per questa cantina.</div>` : ''}
       ${currentUser?.isAdmin ? `
-        <div class="pos-add-row" style="margin-top:8px">
-          <input type="text" id="wy-catalog-input" placeholder="Aggiungi un vino…" autocomplete="off">
-          <button class="btn sm" onclick="addWineryCatalogWine()"><i class="ti ti-plus"></i></button>
-        </div>` : ''}
+        <div class="frow" style="margin-top:8px">
+          <div class="fg"><label>Nome del vino</label><input type="text" id="wy-catalog-name" placeholder="es. Ripasso" autocomplete="off"></div>
+          <div class="fg"><label>Uvaggio</label><input type="text" id="wy-catalog-grapes" placeholder="es. Corvina, Rondinella" autocomplete="off"></div>
+        </div>
+        <div class="fg"><label>Link</label><input type="text" id="wy-catalog-link" placeholder="https://…" autocomplete="off"></div>
+        <button class="btn sm" onclick="addWineryCatalogWine()"><i class="ti ti-plus"></i>Aggiungi vino</button>` : ''}
     </div>`;
 
   const adminForm = currentUser?.isAdmin ? `
@@ -3422,9 +3428,6 @@ async function showWineryDetail(id) {
     attachAutocomplete('wy-province', () => wineryProvinceSuggestions);
     countryEl?.addEventListener('change', onCountryChange);
     document.getElementById('wy-region')?.addEventListener('input', onRegionChange);
-    document.getElementById('wy-catalog-input')?.addEventListener('keydown', e => {
-      if (e.key === 'Enter') { e.preventDefault(); addWineryCatalogWine(); }
-    });
   }
 }
 
@@ -3432,10 +3435,10 @@ async function showWineryDetail(id) {
 // distinto dai vini che gli utenti hanno effettivamente in cantina.
 async function addWineryCatalogWine() {
   if (!currentUser?.isAdmin || !currentWineryId) return;
-  const input = document.getElementById('wy-catalog-input');
-  const name = (input?.value || '').trim();
+  const g = id => document.getElementById(id)?.value.trim() || null;
+  const name = g('wy-catalog-name');
   if (!name) return;
-  const { error } = await sb.from('winery_wines').insert({ winery_id: currentWineryId, name });
+  const { error } = await sb.from('winery_wines').insert({ winery_id: currentWineryId, name, grapes: g('wy-catalog-grapes'), link: g('wy-catalog-link') });
   if (error) { toastErr('Errore aggiunta: ' + error.message); return; }
   showWineryDetail(currentWineryId);
 }

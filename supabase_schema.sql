@@ -904,3 +904,8 @@ drop policy if exists "winery_wines: scrittura solo admin" on public.winery_wine
 create policy "winery_wines: scrittura solo admin"
   on public.winery_wines for all to authenticated
   using (public.is_admin()) with check (public.is_admin());
+
+-- Uvaggio e link (es. alla scheda del vino sul sito della cantina) per
+-- ogni voce del catalogo.
+alter table public.winery_wines add column if not exists grapes text;
+alter table public.winery_wines add column if not exists link text;
