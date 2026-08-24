@@ -3275,7 +3275,12 @@ async function findOrCreateWinery(rawName) {
 }
 
 async function showWineryDetail(id) {
-  wineryReturnScreen = document.querySelector('.screen.active')?.id || 'screen-list';
+  // Salvare la scheda o caricare il logo richiamano questa stessa funzione
+  // per aggiornare la vista mentre si è già su screen-winery: in quel caso
+  // NON va toccato il "ritorno", altrimenti "Indietro" punterebbe a
+  // screen-winery stessa e sembrerebbe non fare nulla.
+  const activeId = document.querySelector('.screen.active')?.id;
+  if (activeId && activeId !== 'screen-winery') wineryReturnScreen = activeId;
   showScreen('screen-winery');
   const body = document.getElementById('winery-detail-body');
   body.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted)">Caricamento…</div>';
