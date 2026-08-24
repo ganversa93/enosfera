@@ -2626,6 +2626,7 @@ let wineriesCache = [];    // [{id,name,region}] anagrafica cantine/produttori, 
 let selectedWineryId = null; // cantina scelta esplicitamente nel form vino (autocomplete "Produttore"), null = risolvi per nome al salvataggio
 let currentWineryId = null;  // cantina aperta sulla schermata scheda-cantina
 let wineryReturnScreen = 'screen-list'; // schermata da cui si è aperta la scheda-cantina
+let wineryRegionSuggestions = [];   // autocomplete regione nella scheda-cantina (admin), dipende dal paese scelto
 let wineryProvinceSuggestions = []; // autocomplete provincia nella scheda-cantina (admin), dipende dalla regione scelta
 let currentFilter    = 'all';
 let currentQtyFilter = 'all';
@@ -3319,8 +3320,18 @@ async function showWineryDetail(id) {
     <div class="fsec" style="margin-top:1.25rem">
       <div class="stitle"><i class="ti ti-edit"></i>Modifica scheda (admin)</div>
       <div class="frow">
+        <div class="fg">
+          <label>Paese</label>
+          <select id="wy-country">
+            <option value="">Seleziona…</option>
+            <option>Italia</option><option>Francia</option><option>Germania</option><option>Spagna</option><option>Stati Uniti</option><option>Cile</option><option>Argentina</option><option>Nuova Zelanda</option><option>Sud Africa</option><option>Australia</option><option>Altro</option>
+          </select>
+        </div>
         <div class="fg"><label>Regione</label><input type="text" id="wy-region" value="${w.region || ''}" placeholder="es. Veneto" autocomplete="off"></div>
-        <div class="fg"><label>Provincia</label><input type="text" id="wy-province" value="${w.province || ''}" placeholder="es. Verona" autocomplete="off"></div>
+      </div>
+      <div class="fg" id="wy-province-wrap">
+        <label>Provincia <span style="font-weight:400;color:var(--muted)">(se applicabile)</span></label>
+        <input type="text" id="wy-province" value="${w.province || ''}" placeholder="es. Verona" autocomplete="off">
       </div>
       <div class="fg"><label>Sito web</label><input type="text" id="wy-website" value="${w.website || ''}" placeholder="https://…"></div>
       <div class="fg"><label>Descrizione / storia</label><textarea id="wy-description" rows="4" placeholder="Storia, filosofia della cantina…">${w.description || ''}</textarea></div>
@@ -3340,7 +3351,7 @@ async function showWineryDetail(id) {
       ${w.logo_url ? `<img src="${w.logo_url}" class="winery-logo" alt="">` : `<div class="winery-logo winery-logo-ph"><i class="ti ti-building-warehouse"></i></div>`}
       <div>
         <div class="winery-name">${w.name}</div>
-        ${(w.region || w.province) ? `<div style="font-size:12.5px;color:var(--muted)"><i class="ti ti-map-pin" style="font-size:12px"></i> ${[w.region, w.province].filter(Boolean).join(', ')}</div>` : ''}
+        ${(w.country || w.region || w.province) ? `<div style="font-size:12.5px;color:var(--muted)"><i class="ti ti-map-pin" style="font-size:12px"></i> ${[w.country, w.region, w.province].filter(Boolean).join(', ')}</div>` : ''}
         ${w.website ? `<a href="${w.website}" target="_blank" rel="noopener" style="font-size:12.5px;color:var(--wine)"><i class="ti ti-world" style="font-size:12px"></i> ${w.website.replace(/^https?:\/\//,'')}</a>` : ''}
       </div>
     </div>
@@ -3352,19 +3363,33 @@ async function showWineryDetail(id) {
     ${adminForm}
   `;
 
-  // Le select-autocomplete Regione/Provincia della scheda vino sono
-  // agganciate una volta sola su input statici del form; qui gli input
-  // vengono ricreati a ogni render (l'HTML è rigenerato), quindi vanno
-  // riagganciati ogni volta — stesso criterio del form vino: provincia
-  // suggerita in base alla regione scelta (elenco solo Italia).
+  // Le select-autocomplete Paese/Regione/Provincia del form vino sono
+  // agganciate una volta sola su input statici; qui gli input vengono
+  // ricreati a ogni render (l'HTML è rigenerato), quindi vanno riagganciati
+  // ogni volta — stessa cascata Paese → Regione → Provincia del form vino
+  // (province suggerite/visibili solo per l'Italia).
   if (currentUser?.isAdmin) {
-    wineryProvinceSuggestions = GEO_PROVINCES_ITALIA[w.region] || [];
-    const onRegionChange = () => { wineryProvinceSuggestions = GEO_PROVINCES_ITALIA[document.getElementById('wy-region')?.value] || []; };
-    attachAutocomplete('wy-region', () => GEO_REGIONS['Italia'] || [], sel => {
+    const countryEl = document.getElementById('wy-country');
+    if (countryEl) countryEl.value = w.country || '';
+    const onRegionChange = () => {
+      const country = document.getElementById('wy-country')?.value;
+      const region  = document.getElementById('wy-region')?.value;
+      wineryProvinceSuggestions = (country === 'Italia' && GEO_PROVINCES_ITALIA[region]) ? GEO_PROVINCES_ITALIA[region] : [];
+      const provinceWrap = document.getElementById('wy-province-wrap');
+      if (provinceWrap) provinceWrap.style.display = (country === 'Italia' || !country) ? '' : 'none';
+    };
+    const onCountryChange = () => {
+      const country = document.getElementById('wy-country')?.value;
+      wineryRegionSuggestions = GEO_REGIONS[country] || [];
+      onRegionChange();
+    };
+    onCountryChange();
+    attachAutocomplete('wy-region', () => wineryRegionSuggestions, sel => {
       document.getElementById('wy-region').value = sel;
       onRegionChange();
     });
     attachAutocomplete('wy-province', () => wineryProvinceSuggestions);
+    countryEl?.addEventListener('change', onCountryChange);
     document.getElementById('wy-region')?.addEventListener('input', onRegionChange);
   }
 }
@@ -3377,7 +3402,7 @@ async function showWineryDetail(id) {
 async function saveWineryDetails() {
   if (!currentUser?.isAdmin || !currentWineryId) return;
   const g = id => document.getElementById(id)?.value.trim() || null;
-  const row = { region: g('wy-region'), province: g('wy-province'), website: g('wy-website'), description: g('wy-description'), updated_at: new Date().toISOString() };
+  const row = { country: g('wy-country'), region: g('wy-region'), province: g('wy-province'), website: g('wy-website'), description: g('wy-description'), updated_at: new Date().toISOString() };
   const { data, error } = await sb.from('wineries').update(row).eq('id', currentWineryId).select('id');
   if (error) { toastErr('Errore salvataggio: ' + error.message); return; }
   if (!data?.length) { toastErr('Salvataggio non riuscito: verifica di essere admin (is_admin) e di aver eseguito tutta la migrazione SQL delle cantine.'); return; }
@@ -3433,7 +3458,7 @@ function goBackFromWinery() { showScreen(wineryReturnScreen || 'screen-list'); }
 async function loadWineriesToComplete() {
   const { data, error } = await sb.from('wineries')
     .select('id,name,created_at')
-    .is('region', null).is('province', null).is('website', null).is('description', null).is('logo_url', null)
+    .is('country', null).is('region', null).is('province', null).is('website', null).is('description', null).is('logo_url', null)
     .order('created_at', { ascending: false });
   if (error) { toastErr('Errore caricamento cantine: ' + error.message); return []; }
   return data || [];
@@ -3587,7 +3612,7 @@ async function updateAdminWineriesBadge() {
   const card = document.getElementById('home-admin-card');
   if (card) card.style.display = '';
   const { count } = await sb.from('wineries').select('*', { count: 'exact', head: true })
-    .is('region', null).is('province', null).is('website', null).is('description', null).is('logo_url', null);
+    .is('country', null).is('region', null).is('province', null).is('website', null).is('description', null).is('logo_url', null);
   const n = count || 0;
   const badge = document.getElementById('home-admin-badge');
   if (badge) {

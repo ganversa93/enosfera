@@ -864,10 +864,18 @@ create policy "wine-labels: admin aggiorna i loghi cantina"
 -- ════════════════════════════════════════════════════════════════
 alter table public.wineries add column if not exists province text;
 
+-- ════════════════════════════════════════════════════════════════
+-- Paese della cantina, per completare la cascata Paese → Regione →
+-- Provincia identica a quella del form vino (GEO_REGIONS dipende dal
+-- paese, GEO_PROVINCES_ITALIA/il campo provincia si applicano solo
+-- quando il paese è Italia).
+-- ════════════════════════════════════════════════════════════════
+alter table public.wineries add column if not exists country text;
+
 drop policy if exists "wineries: stub per tutti, completa solo admin" on public.wineries;
 create policy "wineries: stub per tutti, completa solo admin"
   on public.wineries for insert to authenticated
   with check (
     public.is_admin()
-    or (region is null and province is null and website is null and description is null and logo_url is null)
+    or (country is null and region is null and province is null and website is null and description is null and logo_url is null)
   );
