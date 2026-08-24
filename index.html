@@ -3374,6 +3374,7 @@ async function showWineryDetail(id) {
         <label>Logo</label>
         ${w.logo_url ? `<img src="${w.logo_url}" style="height:60px;border-radius:8px;display:block;margin-bottom:8px" alt="">` : ''}
         <input type="file" accept="image/*" onchange="uploadWineryLogo(this)">
+        <button type="button" class="btn sm" style="margin-top:8px" onclick="useFaviconAsLogo()"><i class="ti ti-world"></i>Usa la favicon del sito</button>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn primary sm" onclick="saveWineryDetails()"><i class="ti ti-device-floppy"></i>Salva scheda</button>
@@ -3500,10 +3501,28 @@ async function uploadWineryLogo(input) {
   const { error } = await sb.storage.from('wine-labels').upload(path, toUpload, { upsert: true, contentType: toUpload.type || 'image/jpeg', cacheControl: '31536000' });
   if (error) { toastErr('Errore caricamento logo: ' + error.message); return; }
   const { data: urlData } = sb.storage.from('wine-labels').getPublicUrl(path);
-  const { data: updData, error: updErr } = await sb.from('wineries').update({ logo_url: urlData.publicUrl }).eq('id', currentWineryId).select('id');
-  if (updErr) { toastErr('Errore salvataggio logo: ' + updErr.message); return; }
-  if (!updData?.length) { toastErr('Salvataggio non riuscito: verifica di essere admin (is_admin) e di aver eseguito tutta la migrazione SQL delle cantine.'); return; }
-  toast('✓ Logo aggiornato');
+  await updateWineryLogoUrl(urlData.publicUrl, '✓ Logo aggiornato');
+}
+
+// Riempimento rapido "di cortesia" quando non si ha ancora un logo vero:
+// la favicon del sito non è un logo di qualità, ma è gratis, istantanea
+// (nessun download/upload, solo un link a un servizio esterno) e sempre
+// meglio di niente. Se il risultato non convince resta comunque possibile
+// caricare un logo vero a mano, che sovrascrive questo.
+function useFaviconAsLogo() {
+  if (!currentUser?.isAdmin || !currentWineryId) return;
+  const website = document.getElementById('wy-website')?.value.trim();
+  let host;
+  try { host = new URL(website).hostname; } catch { toastErr('Imposta prima un sito web valido'); return; }
+  updateWineryLogoUrl(`https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=128`, '✓ Favicon impostata come logo');
+}
+
+async function updateWineryLogoUrl(logoUrl, successMsg) {
+  const { data, error } = await sb.from('wineries').update({ logo_url: logoUrl }).eq('id', currentWineryId).select('id');
+  if (error) { toastErr('Errore salvataggio: ' + error.message); return; }
+  if (!data?.length) { toastErr('Salvataggio non riuscito: verifica di essere admin (is_admin) e di aver eseguito tutta la migrazione SQL delle cantine.'); return; }
+  toast(successMsg);
+  loadWineriesCache();
   showWineryDetail(currentWineryId);
 }
 
@@ -6295,7 +6314,7 @@ Object.assign(window, {
   addPosNode, removePosNode, addWinePosition, removeWinePosition, onPosL1Change, onPosL2Change, onPosL3Change,
   addDetailPosition, removeDetailPosition, onDetailPosL1Change, onDetailPosL2Change, onDetailPosL3Change,
   showWineryDetail, saveWineryDetails, uploadWineryLogo, goBackFromWinery, showAdminWineriesScreen, deleteWinery,
-  addWineryCatalogWine, removeWineryCatalogWine
+  addWineryCatalogWine, removeWineryCatalogWine, useFaviconAsLogo
 });
 </script>
 </body>
