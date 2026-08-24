@@ -12,6 +12,10 @@
 // piccoli produttori italiani); con temi molto diversi potrebbe non
 // trovare nulla — in tal caso resta comunque possibile aggiungere i
 // vini a mano dalla scheda cantina.
+//
+// Accetta sia il link a una pagina elenco (prova a estrarre più vini
+// insieme) sia il link alla scheda di un singolo vino (in quel caso
+// aggiunge solo quello, prendendone il nome dall'<h1> della pagina).
 // ════════════════════════════════════════════════════════════════
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -62,13 +66,32 @@ function stripTags(html: string): string {
 
 // Filtro minimo per scartare voci di menu/nav catturate per sbaglio dal
 // pattern 3 (link generico), che non ha nessun ancoraggio semantico oltre
-// al percorso dell'URL.
+// al percorso dell'URL — inclusi i selettori di lingua ("ITA", "ENG"),
+// sigle corte tutte maiuscole senza spazi, molto improbabili come nome
+// di un vino.
 const NAV_WORDS = ['home', 'contatt', 'chi siamo', 'cookie', 'privacy', 'menu', 'carrello', 'accedi', 'login', 'cerca', 'blog', 'news', 'faq', 'newsletter'];
 function looksLikeProductName(name: string): boolean {
   if (!name || name.length < 2 || name.length > 70) return false;
   if (!/[a-zA-ZÀ-ÿ]/.test(name)) return false;
+  if (name.length <= 4 && !/\s/.test(name) && name === name.toUpperCase()) return false;
   const lower = name.toLowerCase();
   return !NAV_WORDS.some(w => lower === w || lower.includes(w));
+}
+
+function extractH1(html: string): string | null {
+  const m = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+  if (!m) return null;
+  const text = decodeEntities(stripTags(m[1]));
+  return text || null;
+}
+
+// Una singola pagina prodotto (es. /prodotti/nome-vino, senza altri
+// segmenti dopo lo slug) va trattata diversamente da una pagina elenco:
+// cercarci dentro pattern da griglia prodotti raccoglie solo link della
+// navigazione della pagina stessa (selettore lingua, correlati…), non il
+// vino in questione. In questo caso il nome giusto è quello della pagina.
+function isSingleProductPath(pathname: string): boolean {
+  return /^\/(?:vini?|prodott[oi]|products?|shop|negozio|wines?)\/[^/]+\/?$/i.test(pathname);
 }
 
 function collect(re: RegExp, html: string, baseUrl: string, seen: Map<string, string>, getName: (m: RegExpExecArray) => string) {
@@ -147,7 +170,12 @@ Deno.serve(async (req) => {
     if (!pageResp.ok) return json({ error: `Impossibile raggiungere la pagina (${pageResp.status})` }, 502);
     const html = (await pageResp.text()).slice(0, MAX_HTML_BYTES);
 
-    const found = extractProducts(html, parsed.toString());
+    let found: { name: string; link: string }[] = [];
+    if (isSingleProductPath(parsed.pathname)) {
+      const h1 = extractH1(html);
+      if (h1) found = [{ name: h1, link: parsed.toString() }];
+    }
+    if (!found.length) found = extractProducts(html, parsed.toString());
     if (!found.length) {
       return json({ error: 'Nessun vino trovato su quella pagina: prova un link diverso (es. la pagina del negozio invece che una vetrina) o aggiungi i vini a mano.' }, 404);
     }
