@@ -58,11 +58,11 @@
          in chiaro il bordeaux si legge bene su sfondo bianco, ma in scuro la
          card ha sfondo quasi nero e lo stesso colore diventa illeggibile. */
       .stat-n { color: #fff; }
-      /* Link "Scopri di più" sulla cantina: sta sull'hero della scheda
+      /* Link "Scopri di più" e punteggio numerico sull'hero della scheda
          vino, sfondo --wine-pale — in chiaro è un rosa quasi bianco (testo
          bordeaux ok), ma in scuro diventa un bordeaux scuro su cui lo
-         stesso bordeaux del link è quasi illeggibile. */
-      .winery-link { color: #fff; }
+         stesso bordeaux di link/numero è quasi illeggibile. */
+      .winery-link, .dscore-num { color: #fff; }
     }
 
     html { font-size: 16px; }
@@ -664,6 +664,7 @@
     .dchips { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 8px; }
     .dchip { font-size: 11px; padding: 3px 9px; border-radius: 20px; background: #fff; color: var(--wine); font-weight: 500; }
     .winery-link { font-size: 11.5px; color: var(--wine); text-decoration: underline; }
+    .dscore-num { color: var(--wine); }
 
     /* ── SCHEDA CANTINA (produttore) ── */
     .winery-hero { display: flex; align-items: center; gap: 14px; }
@@ -4692,7 +4693,7 @@ function showDetail(id) {
         ${w.doc ? `<div style="font-size:12px;color:var(--muted);line-height:1.4;margin-bottom:8px">${w.doc}</div>` : ''}
         <div style="display:flex;align-items:center;gap:7px;margin-bottom:10px">
           <span style="font-size:15px;color:var(--gold);letter-spacing:-1px">${st(w.score)}</span>
-          <span style="font-size:20px;font-family:'Cormorant Garamond',serif;color:var(--wine);font-weight:500">${w.score || '—'}</span>
+          <span class="dscore-num" style="font-size:20px;font-family:'Cormorant Garamond',serif;font-weight:500">${w.score || '—'}</span>
           <span style="font-size:11px;color:var(--muted)">/100</span>
         </div>
         <div class="dchips">${chips.map(c => `<span class="dchip">${c}</span>`).join('')}</div>
