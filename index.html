@@ -3721,10 +3721,32 @@ async function linkProducerToWinery(producer) {
    events, RLS identica a wineries — lettura per tutti, scrittura solo
    admin), visibili a chiunque. Il reperimento automatico dal web è
    volutamente rimandato: per ora è solo inserimento manuale. */
+const EVENT_CATEGORIES = ['Vino', 'Food', 'Enogastronomia', 'Sagra Paesana'];
+const EVENT_ASSOCIATIONS = ['FISAR', 'AIS', 'ONAV', 'Slow Food', 'Slow Wine', 'ONAF'];
+
+// Query mirata a #ev-assoc-chips: i chip di selezione abbinamento del form
+// vino (.p-chip, riusati qui per lo stesso comportamento) restano sempre
+// nel DOM anche quando questa schermata non è attiva — una query globale
+// su .p-chip.active prenderebbe anche quelli.
+function getSelectedEventAssociations() {
+  return [...document.querySelectorAll('#ev-assoc-chips .p-chip.active')].map(c => c.dataset.a);
+}
 async function loadEvents() {
-  const { data, error } = await sb.from('events').select('id,name,region,province,description').order('name');
+  const { data, error } = await sb.from('events')
+    .select('id,name,category,date_from,date_to,region,province,description')
+    .order('date_from', { ascending: true, nullsFirst: false });
   if (error) { console.warn('loadEvents', error); return []; }
   return data || [];
+}
+
+// Le date arrivano come stringhe "YYYY-MM-DD" (colonna date): passarle
+// direttamente a new Date() le interpreta come UTC e può farle slittare
+// di un giorno nei fusi orari negativi — da qui il T00:00:00 esplicito.
+function formatEventDateRange(dateFrom, dateTo) {
+  if (!dateFrom && !dateTo) return '';
+  const fmt = d => { try { return new Date(d + 'T00:00:00').toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return d; } };
+  if (dateFrom && dateTo && dateFrom !== dateTo) return `${fmt(dateFrom)} – ${fmt(dateTo)}`;
+  return fmt(dateFrom || dateTo);
 }
 
 async function showEventsScreen() {
@@ -3737,7 +3759,11 @@ async function showEventsScreen() {
   list.innerHTML = events.length
     ? events.map(e => `
       <div class="event-card" onclick="showEventDetail('${e.id}')">
-        <div class="event-card-name">${e.name}</div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:2px">
+          <div class="event-card-name" style="margin-bottom:0">${e.name}</div>
+          ${e.category ? `<span class="dchip">${e.category}</span>` : ''}
+        </div>
+        ${formatEventDateRange(e.date_from, e.date_to) ? `<div class="event-card-loc"><i class="ti ti-calendar-event"></i>${formatEventDateRange(e.date_from, e.date_to)}</div>` : ''}
         ${(e.region || e.province) ? `<div class="event-card-loc"><i class="ti ti-map-pin"></i>${[e.region, e.province].filter(Boolean).join(', ')}</div>` : ''}
         ${e.description ? `<div class="event-card-desc">${e.description}</div>` : ''}
       </div>`).join('')
@@ -3764,15 +3790,21 @@ async function showEventDetail(id) {
   }
 
   const featuresList = ev ? (ev.main_features || '').split('\n').map(f => f.trim()).filter(Boolean) : [];
+  const dateRange = ev ? formatEventDateRange(ev.date_from, ev.date_to) : '';
 
   const readView = ev ? `
     <div class="winery-hero">
       <div>
-        <div class="winery-name">${ev.name}</div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:2px">
+          <div class="winery-name">${ev.name}</div>
+          ${ev.category ? `<span class="dchip">${ev.category}</span>` : ''}
+        </div>
+        ${dateRange ? `<div style="font-size:12.5px;color:var(--muted)"><i class="ti ti-calendar-event" style="font-size:12px"></i> ${dateRange}</div>` : ''}
         ${(ev.region || ev.province) ? `<div style="font-size:12.5px;color:var(--muted)"><i class="ti ti-map-pin" style="font-size:12px"></i> ${[ev.region, ev.province].filter(Boolean).join(', ')}</div>` : ''}
         ${ev.website ? `<a href="${ev.website}" target="_blank" rel="noopener" class="winery-link" style="text-decoration:none"><i class="ti ti-world" style="font-size:12px"></i> ${ev.website.replace(/^https?:\/\//,'')}</a>` : ''}
       </div>
     </div>
+    ${(ev.associations && ev.associations.length) ? `<div class="dchips" style="margin-top:.75rem">${ev.associations.map(a => `<span class="dchip">${a}</span>`).join('')}</div>` : ''}
     ${ev.description ? `<p style="font-size:13px;color:var(--ink);line-height:1.6;margin-top:1rem">${ev.description}</p>` : ''}
     ${featuresList.length ? `
       <div class="fsec" style="margin-top:1.25rem">
@@ -3786,10 +3818,29 @@ async function showEventDetail(id) {
       <div class="stitle"><i class="ti ti-edit"></i>${ev ? 'Modifica evento' : 'Nuovo evento'}</div>
       <div class="fg"><label>Nome evento *</label><input type="text" id="ev-name" value="${ev?.name || ''}" placeholder="es. Vinitaly"></div>
       <div class="frow">
+        <div class="fg">
+          <label>Categoria</label>
+          <select id="ev-category">
+            <option value="">Seleziona…</option>
+            ${EVENT_CATEGORIES.map(c => `<option ${ev?.category === c ? 'selected' : ''}>${c}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="frow">
+        <div class="fg"><label>Data inizio</label><input type="date" id="ev-date-from" value="${ev?.date_from || ''}"></div>
+        <div class="fg"><label>Data fine</label><input type="date" id="ev-date-to" value="${ev?.date_to || ''}"></div>
+      </div>
+      <div class="frow">
         <div class="fg" style="position:relative"><label>Regione</label><input type="text" id="ev-region" value="${ev?.region || ''}" placeholder="es. Veneto" autocomplete="off"></div>
         <div class="fg" style="position:relative"><label>Provincia</label><input type="text" id="ev-province" value="${ev?.province || ''}" placeholder="es. Verona" autocomplete="off"></div>
       </div>
       <div class="fg"><label>Sito web</label><input type="text" id="ev-website" value="${ev?.website || ''}" placeholder="https://…"></div>
+      <div class="fg">
+        <label>Associazioni collegate</label>
+        <div class="pairing-chips" id="ev-assoc-chips">
+          ${EVENT_ASSOCIATIONS.map(a => `<div class="p-chip${(ev?.associations || []).includes(a) ? ' active' : ''}" data-a="${a}" onclick="togglePairing(this)">${a}</div>`).join('')}
+        </div>
+      </div>
       <div class="fg"><label>Descrizione evento</label><textarea id="ev-description" rows="4" placeholder="Racconta di cosa si tratta…">${ev?.description || ''}</textarea></div>
       <div class="fg"><label>Caratteristiche principali <span style="font-weight:400;color:var(--muted)">(una per riga)</span></label><textarea id="ev-features" rows="4" placeholder="es. Oltre 50 produttori
 Degustazioni guidate
@@ -3820,7 +3871,13 @@ async function saveEvent() {
   const g = id => document.getElementById(id)?.value.trim() || null;
   const name = g('ev-name');
   if (!name) { toastErr('Il nome evento è obbligatorio'); return; }
-  const row = { name, region: g('ev-region'), province: g('ev-province'), website: g('ev-website'), description: g('ev-description'), main_features: g('ev-features') };
+  const row = {
+    name, category: g('ev-category'),
+    date_from: g('ev-date-from'), date_to: g('ev-date-to'),
+    region: g('ev-region'), province: g('ev-province'), website: g('ev-website'),
+    description: g('ev-description'), main_features: g('ev-features'),
+    associations: getSelectedEventAssociations(),
+  };
   let data, error;
   if (currentEventId) {
     ({ data, error } = await sb.from('events').update(row).eq('id', currentEventId).select('id'));
