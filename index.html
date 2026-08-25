@@ -2716,6 +2716,33 @@
   </div>
 </div>
 
+<!-- POP-UP ASSOCIAZIONE/TESSERA (primo accesso via Google, mai chiesto in fase di registrazione) -->
+<div class="public-prompt-overlay" id="assoc-prompt-overlay">
+  <div class="public-prompt-card">
+    <i class="ti ti-award"></i>
+    <h3>Completa il tuo profilo</h3>
+    <p>Con l'accesso Google non abbiamo la tua associazione di appartenenza. Se sei socio AIS, FISAR, ONAV o FIS puoi indicarlo ora — o farlo più tardi dal tuo profilo.</p>
+    <div class="fg" style="text-align:left">
+      <label>Associazione</label>
+      <select id="ap-assoc">
+        <option value="">Nessuna / Appassionato</option>
+        <option value="AIS">AIS — Associazione Italiana Sommelier</option>
+        <option value="FISAR">FISAR — Fed. Italiana Sommelier Albergatori Ristoratori</option>
+        <option value="ONAV">ONAV — Org. Nazionale Assaggiatori Vino</option>
+        <option value="FIS">FIS — Fondazione Italiana Sommelier</option>
+      </select>
+    </div>
+    <div class="fg" style="text-align:left">
+      <label>Numero tessera (opzionale)</label>
+      <input type="text" id="ap-card" placeholder="es. AIS-2024-00123">
+    </div>
+    <div class="public-prompt-actions">
+      <button class="btn primary" onclick="saveAssocPrompt()"><i class="ti ti-check"></i>Salva</button>
+      <button class="btn sm" onclick="dismissAssocPrompt()">Più tardi</button>
+    </div>
+  </div>
+</div>
+
 <!-- POP-UP VINO GIÀ IN CANTINA (doppione rilevato al salvataggio) -->
 <div class="public-prompt-overlay" id="duplicate-wine-overlay">
   <div class="public-prompt-card">
@@ -3019,7 +3046,8 @@ async function loadProfile(authUser) {
     fisarMethod:       profile?.fisar_method || 'punteggio',
     emailConfirmed:    !!authUser.email_confirmed_at,
     cellarPosTree:     profile?.cellar_positions_tree || [],
-    isAdmin:           profile?.is_admin || false
+    isAdmin:           profile?.is_admin || false,
+    assocPromptPending: profile?.assoc_prompt_pending || false
   };
   // Se non esiste ancora un profilo (caso raro, es. trigger non installato),
   // lo creiamo ora che l'utente è sicuramente autenticato — solo se online,
@@ -3033,6 +3061,46 @@ async function loadProfile(authUser) {
     } catch {}
   }
   await initApp();
+  maybeShowAssocPrompt();
+}
+
+/* ── POP-UP ASSOCIAZIONE/TESSERA (primo accesso via Google) ──
+   Chi si registra con Google salta il form di registrazione, quindi non
+   ha mai indicato associazione/tessera (vedi assoc_prompt_pending,
+   impostato dal trigger handle_new_user() solo per quei profili) — lo
+   chiediamo una tantum qui, poi si incatena al pop-up profilo pubblico
+   sotto, così i due non compaiono mai insieme. */
+function maybeShowAssocPrompt() {
+  if (currentUser?.assocPromptPending) {
+    setTimeout(() => document.getElementById('assoc-prompt-overlay')?.classList.add('open'), 600);
+  } else {
+    maybeShowPublicPrompt();
+  }
+}
+async function dismissAssocPrompt() {
+  document.getElementById('assoc-prompt-overlay')?.classList.remove('open');
+  if (currentUser) {
+    currentUser.assocPromptPending = false;
+    try { await sb.from('profiles').update({ assoc_prompt_pending: false }).eq('id', currentUser.id); } catch {}
+  }
+  maybeShowPublicPrompt();
+}
+async function saveAssocPrompt() {
+  const assoc = document.getElementById('ap-assoc').value;
+  const card = document.getElementById('ap-card').value.trim();
+  document.getElementById('assoc-prompt-overlay')?.classList.remove('open');
+  try {
+    await sb.from('profiles').update({ assoc, card, assoc_prompt_pending: false }).eq('id', currentUser.id);
+    currentUser.assoc = assoc; currentUser.card = card; currentUser.assocPromptPending = false;
+    const bc = document.getElementById('nav-badge');
+    if (bc) {
+      if (assoc) { bc.textContent = assoc; bc.className = 'assoc-badge badge-' + assoc.toLowerCase(); bc.style.display = ''; }
+      else bc.style.display = 'none';
+    }
+    toast('✓ Profilo aggiornato');
+  } catch (e) {
+    toastErr('Errore: ' + e.message);
+  }
   maybeShowPublicPrompt();
 }
 
@@ -7019,7 +7087,7 @@ Object.assign(window, {
   updateRegionOptions, updateProvinceOptions, dismissInstallBanner, triggerInstallPrompt, resetInstallBanner,
   dismissUpdateBanner, reloadApp,
   setNetworkFilter, toggleNetworkAdvFilters, onNetworkCountryChange, resetNetworkFilters, renderNetworkFeed,
-  dismissPublicPrompt, acceptPublicPrompt, markFScoreManual,
+  dismissPublicPrompt, acceptPublicPrompt, markFScoreManual, dismissAssocPrompt, saveAssocPrompt,
   confirmSumDuplicateQty, confirmSaveDuplicateAsNew, closeDuplicateWinePrompt,
   addPosNode, removePosNode, addWinePosition, removeWinePosition, onPosL1Change, onPosL2Change, onPosL3Change,
   addDetailPosition, removeDetailPosition, onDetailPosL1Change, onDetailPosL2Change, onDetailPosL3Change,

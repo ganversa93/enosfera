@@ -1089,3 +1089,49 @@ drop policy if exists "event_favorites: solo le proprie righe" on public.event_f
 create policy "event_favorites: solo le proprie righe"
   on public.event_favorites for all to authenticated
   using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- ════════════════════════════════════════════════════════════════
+-- Chi si registra con Google non passa dal form di registrazione, quindi
+-- non ha mai indicato associazione/tessera: assoc_prompt_pending segna i
+-- profili nati così, per mostrare loro una sola volta (al primo accesso)
+-- un pop-up che chiede questi dati — esattamente come già succede per il
+-- pop-up "profilo pubblico" (public_prompt_seen), stesso meccanismo.
+-- Chi si registra con email/password li ha già forniti nel form, quindi
+-- resta false per loro (valore di default).
+-- ════════════════════════════════════════════════════════════════
+alter table public.profiles add column if not exists assoc_prompt_pending boolean not null default false;
+
+-- Ridefinizione di handle_new_user() (vedi sopra) che imposta
+-- assoc_prompt_pending a true solo per i nuovi account creati via Google.
+-- "create or replace" sovrascrive la versione precedente della funzione:
+-- rilanciando l'intero script, questa in fondo al file è quella che vince.
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  new_cellar_id uuid;
+begin
+  insert into public.profiles (id, full_name, assoc, card, delegazione, delegazione_custom, assoc_prompt_pending)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)),
+    coalesce(new.raw_user_meta_data->>'assoc', ''),
+    coalesce(new.raw_user_meta_data->>'card', ''),
+    '', '',
+    (new.raw_app_meta_data->>'provider') = 'google'
+  )
+  on conflict (id) do nothing;
+
+  insert into public.cellars (name, owner_id, invite_code, is_default)
+  values ('La mia cantina', new.id, upper(substr(md5(random()::text), 1, 6)), true)
+  returning id into new_cellar_id;
+
+  insert into public.cellar_members (cellar_id, user_id, status)
+  values (new_cellar_id, new.id, 'accepted');
+
+  return new;
+end;
+$$;
