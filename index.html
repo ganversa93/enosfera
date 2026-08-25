@@ -233,6 +233,15 @@
     .lerr { font-size: 12px; color: #c0392b; text-align: center; margin-top: 8px; display: none; }
     .lok { font-size: 12px; color: #2e8b57; text-align: center; margin-top: 8px; display: none; }
     .lforgot-link { display: block; text-align: right; font-size: 12px; color: var(--muted); text-decoration: underline; margin: -6px 0 1rem; }
+    .google-btn {
+      width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px;
+      padding: 10px; font-size: 14px; font-weight: 500; font-family: 'Inter', sans-serif;
+      background: #fff; color: #3c4043; border: 1px solid #dadce0; border-radius: 8px;
+      cursor: pointer; transition: background .15s;
+    }
+    .google-btn:hover { background: #f8f8f8; }
+    .ldivider { display: flex; align-items: center; gap: 10px; margin: 1.1rem 0; font-size: 11.5px; color: var(--muted); }
+    .ldivider::before, .ldivider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
     .demo-hint { font-size: 11px; color: var(--muted); text-align: center; margin-top: 10px; }
     .demo-hint b { color: var(--ink); }
 
@@ -954,6 +963,13 @@
         <div class="ltab" id="ltab-reg" onclick="switchLTab('reg')">Registrati</div>
       </div>
       <div class="lcard">
+        <div id="lform-oauth">
+          <button type="button" class="google-btn" onclick="doGoogleAuth()">
+            <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84c-.21 1.13-.84 2.09-1.8 2.73v2.27h2.92c1.7-1.57 2.68-3.88 2.68-6.64z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.17l-2.92-2.27c-.81.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.71H.96v2.33C2.44 15.98 5.48 18 9 18z"/><path fill="#FBBC05" d="M3.97 10.71c-.18-.54-.28-1.11-.28-1.71s.1-1.17.28-1.71V4.96H.96C.35 6.17 0 7.55 0 9s.35 2.83.96 4.04l3.01-2.33z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.51.45 3.44 1.35l2.59-2.59C13.46.89 11.43 0 9 0 5.48 0 2.44 2.02.96 4.96l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58z"/></svg>
+            Continua con Google
+          </button>
+          <div class="ldivider"><span>oppure</span></div>
+        </div>
         <div id="lform-login">
           <div class="lfield"><label>Email</label><input type="email" id="l-email" placeholder="nome@email.it" onkeydown="if(event.key==='Enter')doLogin()"></div>
           <div class="lfield"><label>Password</label><input type="password" id="l-pwd" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
@@ -2790,6 +2806,7 @@ function switchLTab(t) {
   document.getElementById('lform-login').style.display = t === 'login' ? '' : 'none';
   document.getElementById('lform-reg').style.display   = t === 'reg'   ? '' : 'none';
   document.getElementById('lform-forgot').style.display = 'none';
+  document.getElementById('lform-oauth').style.display = '';
 }
 
 function showForgotPasswordForm() {
@@ -2797,6 +2814,7 @@ function showForgotPasswordForm() {
   document.getElementById('ltab-reg').classList.remove('active');
   document.getElementById('lform-login').style.display = 'none';
   document.getElementById('lform-reg').style.display = 'none';
+  document.getElementById('lform-oauth').style.display = 'none';
   document.getElementById('lform-forgot').style.display = '';
   document.getElementById('fperr').style.display = 'none';
   document.getElementById('fpok').style.display = 'none';
@@ -2824,6 +2842,21 @@ async function doForgotPassword() {
   // a meno di un errore tecnico vero e proprio (rete, rate limit).
   if (error) { errEl.textContent = 'Errore: ' + error.message; errEl.style.display = 'block'; return; }
   okEl.style.display = 'block';
+}
+
+// Login/registrazione unificati: Supabase crea l'account al primo accesso
+// con Google (il trigger handle_new_user() lo legge da raw_user_meta_data,
+// che Google popola con "full_name" — stesso campo già usato per la
+// registrazione via email) o autentica quello esistente se l'email
+// coincide già con un account. Il redirect torna sulla stessa pagina;
+// il resto (creazione sessione, caricamento profilo) lo gestisce già
+// il codice di ripristino sessione più sotto.
+async function doGoogleAuth() {
+  const { error } = await sb.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: window.location.origin + window.location.pathname }
+  });
+  if (error) toastErr('Errore Google: ' + error.message);
 }
 
 async function doLogin() {
@@ -4319,6 +4352,13 @@ function showLoadingOverlay(show) {
   try {
     ({ data: { session } } = await sb.auth.getSession());
   } catch (e) { console.warn('getSession fallita (probabile assenza di rete):', e); }
+  // Se veniamo da un redirect OAuth (Google) o da un magic link, l'URL
+  // contiene ancora i token/il codice temporanei che il client Supabase
+  // ha già consumato qui sopra (dentro getSession()) per creare la
+  // sessione — puliamo la barra degli indirizzi ora che non servono più.
+  if (window.location.hash.includes('access_token') || window.location.search.includes('code=')) {
+    history.replaceState(null, '', window.location.pathname);
+  }
   if (session?.user) {
     await loadProfile(session.user);
   } else {
@@ -6965,7 +7005,7 @@ calcAIS(); calcFISAR();
    le funzioni dichiarate qui non sono automaticamente globali,
    ma gli onclick="..." nell'HTML devono poterle richiamare. */
 Object.assign(window, {
-  adjustQty, calcAIS, calcFISAR, cancelForm, closeNavMenu, deleteWine, doLogin, doLogout, doRegister,
+  adjustQty, calcAIS, calcFISAR, cancelForm, closeNavMenu, deleteWine, doLogin, doLogout, doRegister, doGoogleAuth,
   showForgotPasswordForm, doForgotPassword,
   startTastingWizard, exitWizardMode, wizardBack, wizardNext,
   editWine, exportCSV, exportInventory, exportJSON, exportTasting, inviteToShareCellar, onAdvCountryChange, previewAvatar, previewImg,
