@@ -2747,6 +2747,7 @@ let wineryRegionSuggestions = [];   // autocomplete regione nella scheda-cantina
 let wineryProvinceSuggestions = []; // autocomplete provincia nella scheda-cantina (admin), dipende dalla regione scelta
 let editingWineryWineId = null; // id del vino-catalogo in modifica nella riga di aggiunta, null = si sta aggiungendo
 let currentEventId = null;          // evento aperto sulla schermata dettaglio (null = nuovo evento)
+let currentEventData = null;        // riga completa dell'evento aperto (per "Duplica evento")
 let eventProvinceSuggestions = [];  // autocomplete provincia nella scheda evento (admin), dipende dalla regione scelta
 let eventsCache = [];       // tutti gli eventi caricati una volta, filtrati/ordinati lato client
 let showPastEvents = false; // false = in programma (default), true = passati
@@ -4052,25 +4053,31 @@ function showAddEventForm() {
   showEventDetail(null);
 }
 
-async function showEventDetail(id) {
+async function showEventDetail(id, prefill) {
   if (!id && !currentUser?.isAdmin) return;
   showScreen('screen-event-detail');
   currentEventId = id;
+  currentEventData = null;
   const body = document.getElementById('event-detail-body');
 
-  let ev = null;
+  let ev = prefill || null;
   if (id) {
     body.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted)">Caricamento…</div>';
     const { data, error } = await sb.from('events').select('*').eq('id', id).maybeSingle();
     if (error || !data) { body.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted)">Evento non trovato.</div>'; return; }
     ev = data;
+    currentEventData = data;
   }
 
   const featuresList = ev ? (ev.main_features || '').split('\n').map(f => f.trim()).filter(Boolean) : [];
   const dateRange = ev ? formatEventDateRange(ev.date_from, ev.date_to) : '';
   const mapQuery = ev ? [ev.location_name, ev.address, [ev.region, ev.province].filter(Boolean).join(' ')].filter(Boolean).join(', ') : '';
 
-  const readView = ev ? `
+  // La vista di lettura ha senso solo per un evento già salvato: quando
+  // stiamo duplicando (prefill senza id) mostriamo solo il form, come
+  // per un evento nuovo — il duplicato non esiste ancora finché non si
+  // salva.
+  const readView = (ev && id) ? `
     <div class="winery-hero" style="position:relative">
       ${currentUser ? `<button class="event-fav-btn${favoriteEventIds.has(ev.id) ? ' active' : ''}" data-id="${ev.id}" onclick="toggleEventFavorite('${ev.id}', event)"><i class="ti ${favoriteEventIds.has(ev.id) ? 'ti-star-filled' : 'ti-star'}"></i></button>` : ''}
       <div>
@@ -4102,7 +4109,7 @@ async function showEventDetail(id) {
 
   const adminForm = currentUser?.isAdmin ? `
     <div class="fsec" style="margin-top:1.25rem">
-      <div class="stitle"><i class="ti ti-edit"></i>${ev ? 'Modifica evento' : 'Nuovo evento'}</div>
+      <div class="stitle"><i class="ti ti-edit"></i>${id ? 'Modifica evento' : 'Nuovo evento'}</div>
       <div class="fg"><label>Nome evento *</label><input type="text" id="ev-name" value="${ev?.name || ''}" placeholder="es. Vinitaly"></div>
       <div class="frow">
         <div class="fg">
@@ -4142,7 +4149,8 @@ Degustazioni guidate
 Area food">${ev?.main_features || ''}</textarea></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn primary sm" onclick="saveEvent()"><i class="ti ti-device-floppy"></i>Salva evento</button>
-        ${ev ? `<button class="btn sm danger" onclick="deleteEvent()"><i class="ti ti-trash"></i>Elimina evento</button>` : ''}
+        ${id ? `<button class="btn sm" onclick="duplicateEvent()"><i class="ti ti-copy"></i>Duplica evento</button>` : ''}
+        ${id ? `<button class="btn sm danger" onclick="deleteEvent()"><i class="ti ti-trash"></i>Elimina evento</button>` : ''}
       </div>
     </div>` : '';
 
@@ -4196,6 +4204,18 @@ async function deleteEvent() {
   if (!data?.length) { toastErr('Eliminazione non riuscita: verifica di essere admin (is_admin).'); return; }
   toast('✓ Evento eliminato');
   showEventsScreen();
+}
+
+// Riapre la scheda evento in modalità "nuovo" (niente id, quindi il
+// salvataggio successivo fa un insert) ma con tutti i campi già
+// precompilati con i dati dell'evento corrente — comodo per gli eventi
+// che si ripetono ogni anno, così basta aggiornare le date invece di
+// reinserire tutto da capo.
+function duplicateEvent() {
+  if (!currentUser?.isAdmin || !currentEventData) return;
+  const { id, created_at, updated_at, created_by, ...rest } = currentEventData;
+  showEventDetail(null, rest);
+  toast('Evento duplicato: aggiorna le date e salva');
 }
 
 /* ══ APP INIT ══ */
@@ -6963,7 +6983,7 @@ Object.assign(window, {
   addWineryCatalogWine, removeWineryCatalogWine, useFaviconAsLogo,
   editWineryCatalogWine, cancelEditWineryCatalogWine, addWineryManually, importWineryCatalogFromShop,
   linkProducerToWinery,
-  showEventsScreen, showAddEventForm, showEventDetail, saveEvent, deleteEvent,
+  showEventsScreen, showAddEventForm, showEventDetail, saveEvent, deleteEvent, duplicateEvent,
   renderEventsList, updateEventsProvinceFilterOptions, toggleShowPastEvents, toggleEventFavorite,
   showConfigListsScreen, selectConfigList, addConfigListValue, removeConfigListValue
 });
