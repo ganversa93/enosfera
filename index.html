@@ -3998,6 +3998,7 @@ async function showEventDetail(id) {
 
   const featuresList = ev ? (ev.main_features || '').split('\n').map(f => f.trim()).filter(Boolean) : [];
   const dateRange = ev ? formatEventDateRange(ev.date_from, ev.date_to) : '';
+  const mapQuery = ev ? [ev.location_name, ev.address, [ev.region, ev.province].filter(Boolean).join(' ')].filter(Boolean).join(', ') : '';
 
   const readView = ev ? `
     <div class="winery-hero">
@@ -4012,6 +4013,12 @@ async function showEventDetail(id) {
       </div>
     </div>
     ${(ev.associations && ev.associations.length) ? `<div class="dchips" style="margin-top:.75rem">${ev.associations.map(a => `<span class="dchip">${a}</span>`).join('')}</div>` : ''}
+    ${mapQuery ? `
+      <div class="fsec" style="margin-top:1.25rem">
+        <div class="stitle"><i class="ti ti-map-2"></i>Dove</div>
+        <iframe src="https://maps.google.com/maps?q=${encodeURIComponent(mapQuery)}&output=embed" style="width:100%;height:220px;border:0;border-radius:10px;display:block" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+        <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapQuery)}" target="_blank" rel="noopener" class="btn sm" style="text-decoration:none;margin-top:8px"><i class="ti ti-map-pin"></i>Apri in Maps</a>
+      </div>` : ''}
     ${ev.description ? `<p style="font-size:13px;color:var(--ink);line-height:1.6;margin-top:1rem">${ev.description}</p>` : ''}
     ${featuresList.length ? `
       <div class="fsec" style="margin-top:1.25rem">
