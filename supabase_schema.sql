@@ -961,3 +961,36 @@ end;
 $$;
 revoke all on function public.link_producer_to_winery(text, uuid) from public, anon;
 grant execute on function public.link_producer_to_winery(text, uuid) to authenticated;
+
+-- ════════════════════════════════════════════════════════════════
+-- Eventi (fiere, degustazioni...): stessa impostazione dell'anagrafica
+-- cantine — registro condiviso, lettura per chiunque autenticato,
+-- scrittura solo admin. Prima versione "struttura": solo inserimento
+-- manuale, il reperimento automatico dal web è rimandato a dopo.
+-- main_features è testo libero, una riga per caratteristica (mostrata
+-- come elenco puntato in lettura) — non una tabella a parte, per non
+-- appesantire una prima versione pensata per essere semplice.
+-- ════════════════════════════════════════════════════════════════
+create table if not exists public.events (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  region text,
+  province text,
+  website text,
+  description text,
+  main_features text,
+  created_by uuid references public.profiles(id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.events enable row level security;
+
+drop policy if exists "events: lettura per chiunque autenticato" on public.events;
+create policy "events: lettura per chiunque autenticato"
+  on public.events for select to authenticated using (true);
+
+drop policy if exists "events: scrittura solo admin" on public.events;
+create policy "events: scrittura solo admin"
+  on public.events for all to authenticated
+  using (public.is_admin()) with check (public.is_admin());

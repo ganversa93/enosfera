@@ -694,6 +694,20 @@
     .winery-catalog-row .rm-btn:hover { opacity: 1; color: #c0392b; }
     .winery-catalog-row .edit-btn:hover { opacity: 1; }
 
+    /* ── EVENTI ── */
+    .event-card {
+      background: var(--bg); border: 0.5px solid var(--border); border-radius: 14px;
+      padding: 1rem 1.1rem; margin-bottom: 10px; cursor: pointer;
+      transition: transform .15s, border-color .15s;
+    }
+    .event-card:hover { border-color: var(--wine); transform: translateY(-2px); }
+    .event-card-name { font-family: 'Cormorant Garamond', serif; font-size: 18px; color: var(--ink); margin-bottom: 3px; }
+    .event-card-loc { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 4px; margin-bottom: 6px; }
+    .event-card-desc {
+      font-size: 12.5px; color: var(--ink); line-height: 1.5;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+
     /* ── Desktop: immagini grandi a destra, info a sinistra ── */
     @media (min-width: 700px) {
       .dhero { align-items: stretch; padding: 1.75rem; gap: 1.75rem; }
@@ -1018,10 +1032,10 @@
         <div class="home-card-title">Approfondimenti</div>
         <div class="home-card-sub">In arrivo</div>
       </div>
-      <div class="home-card" onclick="showComingSoon('Eventi')">
+      <div class="home-card" onclick="showEventsScreen()">
         <i class="ti ti-calendar-event"></i>
         <div class="home-card-title">Eventi</div>
-        <div class="home-card-sub">In arrivo</div>
+        <div class="home-card-sub">Fiere e degustazioni</div>
       </div>
       <div class="home-card" onclick="showNetworkScreen()">
         <i class="ti ti-users"></i>
@@ -1051,7 +1065,7 @@
     <div class="nav-menu-item" onclick="closeNavMenu();showScreen('screen-list')"><i class="ti ti-bottle"></i>Cantina e Degustazioni</div>
     <div class="nav-menu-item" onclick="closeNavMenu();showComingSoon('Highlights')"><i class="ti ti-sparkles"></i>Highlights</div>
     <div class="nav-menu-item" onclick="closeNavMenu();showComingSoon('Approfondimenti')"><i class="ti ti-news"></i>Approfondimenti</div>
-    <div class="nav-menu-item" onclick="closeNavMenu();showComingSoon('Eventi')"><i class="ti ti-calendar-event"></i>Eventi</div>
+    <div class="nav-menu-item" onclick="closeNavMenu();showEventsScreen()"><i class="ti ti-calendar-event"></i>Eventi</div>
     <div class="nav-menu-item" onclick="closeNavMenu();showNetworkScreen()"><i class="ti ti-users"></i>Network</div>
     <div class="nav-menu-item" onclick="closeNavMenu();showGuideScreen()"><i class="ti ti-book"></i>Guida</div>
     <a class="nav-menu-item" style="text-decoration:none" href="contattaci.html" onclick="closeNavMenu()"><i class="ti ti-mail"></i>Segnala un problema o un'idea</a>
@@ -1145,6 +1159,24 @@
       <button class="btn sm" onclick="showScreen('screen-network')"><i class="ti ti-arrow-left"></i>Network</button>
     </div>
     <div id="network-preview-content"></div>
+  </div>
+
+  <!-- ══ EVENTI ══ -->
+  <div id="screen-events" class="screen">
+    <div class="nav" style="margin-bottom:1.1rem">
+      <button class="btn sm" onclick="showScreen('screen-home')"><i class="ti ti-arrow-left"></i>Home</button>
+      <span style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--ink)">Eventi</span>
+      <button class="btn sm primary" id="events-add-btn" style="display:none" onclick="showAddEventForm()"><i class="ti ti-plus"></i>Aggiungi evento</button>
+    </div>
+    <div id="events-list"></div>
+  </div>
+
+  <!-- ══ DETTAGLIO EVENTO ══ -->
+  <div id="screen-event-detail" class="screen">
+    <div class="nav" style="margin-bottom:.9rem">
+      <button class="btn sm" onclick="showEventsScreen()"><i class="ti ti-arrow-left"></i>Eventi</button>
+    </div>
+    <div id="event-detail-body"></div>
   </div>
 
   <!-- ══ GUIDA ══ -->
@@ -2648,6 +2680,8 @@ let wineryReturnScreen = 'screen-list'; // schermata da cui si è aperta la sche
 let wineryRegionSuggestions = [];   // autocomplete regione nella scheda-cantina (admin), dipende dal paese scelto
 let wineryProvinceSuggestions = []; // autocomplete provincia nella scheda-cantina (admin), dipende dalla regione scelta
 let editingWineryWineId = null; // id del vino-catalogo in modifica nella riga di aggiunta, null = si sta aggiungendo
+let currentEventId = null;          // evento aperto sulla schermata dettaglio (null = nuovo evento)
+let eventProvinceSuggestions = [];  // autocomplete provincia nella scheda evento (admin), dipende dalla regione scelta
 let currentFilter    = 'all';
 let currentQtyFilter = 'all';
 let sortField = 'created'; // 'created' | 'vintage' | 'price' | 'type' — cantina
@@ -3680,6 +3714,134 @@ async function linkProducerToWinery(producer) {
   toast(`✓ Collegati ${data ?? 0} vin${data === 1 ? 'o' : 'i'} a "${producer}"`);
   loadWineriesCache();
   showAdminWineriesScreen();
+}
+
+/* ══ EVENTI ══
+   Sezione "struttura": schede evento curate solo dall'admin (tabella
+   events, RLS identica a wineries — lettura per tutti, scrittura solo
+   admin), visibili a chiunque. Il reperimento automatico dal web è
+   volutamente rimandato: per ora è solo inserimento manuale. */
+async function loadEvents() {
+  const { data, error } = await sb.from('events').select('id,name,region,province,description').order('name');
+  if (error) { console.warn('loadEvents', error); return []; }
+  return data || [];
+}
+
+async function showEventsScreen() {
+  showScreen('screen-events');
+  const addBtn = document.getElementById('events-add-btn');
+  if (addBtn) addBtn.style.display = currentUser?.isAdmin ? '' : 'none';
+  const list = document.getElementById('events-list');
+  list.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted)">Caricamento…</div>';
+  const events = await loadEvents();
+  list.innerHTML = events.length
+    ? events.map(e => `
+      <div class="event-card" onclick="showEventDetail('${e.id}')">
+        <div class="event-card-name">${e.name}</div>
+        ${(e.region || e.province) ? `<div class="event-card-loc"><i class="ti ti-map-pin"></i>${[e.region, e.province].filter(Boolean).join(', ')}</div>` : ''}
+        ${e.description ? `<div class="event-card-desc">${e.description}</div>` : ''}
+      </div>`).join('')
+    : `<div class="empty"><i class="ti ti-calendar-event"></i><p>${currentUser?.isAdmin ? 'Nessun evento ancora — aggiungine uno.' : 'Nessun evento al momento.'}</p></div>`;
+}
+
+function showAddEventForm() {
+  if (!currentUser?.isAdmin) return;
+  showEventDetail(null);
+}
+
+async function showEventDetail(id) {
+  if (!id && !currentUser?.isAdmin) return;
+  showScreen('screen-event-detail');
+  currentEventId = id;
+  const body = document.getElementById('event-detail-body');
+
+  let ev = null;
+  if (id) {
+    body.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted)">Caricamento…</div>';
+    const { data, error } = await sb.from('events').select('*').eq('id', id).maybeSingle();
+    if (error || !data) { body.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted)">Evento non trovato.</div>'; return; }
+    ev = data;
+  }
+
+  const featuresList = ev ? (ev.main_features || '').split('\n').map(f => f.trim()).filter(Boolean) : [];
+
+  const readView = ev ? `
+    <div class="winery-hero">
+      <div>
+        <div class="winery-name">${ev.name}</div>
+        ${(ev.region || ev.province) ? `<div style="font-size:12.5px;color:var(--muted)"><i class="ti ti-map-pin" style="font-size:12px"></i> ${[ev.region, ev.province].filter(Boolean).join(', ')}</div>` : ''}
+        ${ev.website ? `<a href="${ev.website}" target="_blank" rel="noopener" class="winery-link" style="text-decoration:none"><i class="ti ti-world" style="font-size:12px"></i> ${ev.website.replace(/^https?:\/\//,'')}</a>` : ''}
+      </div>
+    </div>
+    ${ev.description ? `<p style="font-size:13px;color:var(--ink);line-height:1.6;margin-top:1rem">${ev.description}</p>` : ''}
+    ${featuresList.length ? `
+      <div class="fsec" style="margin-top:1.25rem">
+        <div class="stitle"><i class="ti ti-list-check"></i>Caratteristiche principali</div>
+        <ul style="margin:0;padding-left:1.1rem;font-size:13px;color:var(--ink);line-height:1.8">${featuresList.map(f => `<li>${f}</li>`).join('')}</ul>
+      </div>` : ''}
+  ` : '';
+
+  const adminForm = currentUser?.isAdmin ? `
+    <div class="fsec" style="margin-top:1.25rem">
+      <div class="stitle"><i class="ti ti-edit"></i>${ev ? 'Modifica evento' : 'Nuovo evento'}</div>
+      <div class="fg"><label>Nome evento *</label><input type="text" id="ev-name" value="${ev?.name || ''}" placeholder="es. Vinitaly"></div>
+      <div class="frow">
+        <div class="fg" style="position:relative"><label>Regione</label><input type="text" id="ev-region" value="${ev?.region || ''}" placeholder="es. Veneto" autocomplete="off"></div>
+        <div class="fg" style="position:relative"><label>Provincia</label><input type="text" id="ev-province" value="${ev?.province || ''}" placeholder="es. Verona" autocomplete="off"></div>
+      </div>
+      <div class="fg"><label>Sito web</label><input type="text" id="ev-website" value="${ev?.website || ''}" placeholder="https://…"></div>
+      <div class="fg"><label>Descrizione evento</label><textarea id="ev-description" rows="4" placeholder="Racconta di cosa si tratta…">${ev?.description || ''}</textarea></div>
+      <div class="fg"><label>Caratteristiche principali <span style="font-weight:400;color:var(--muted)">(una per riga)</span></label><textarea id="ev-features" rows="4" placeholder="es. Oltre 50 produttori
+Degustazioni guidate
+Area food">${ev?.main_features || ''}</textarea></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn primary sm" onclick="saveEvent()"><i class="ti ti-device-floppy"></i>Salva evento</button>
+        ${ev ? `<button class="btn sm danger" onclick="deleteEvent()"><i class="ti ti-trash"></i>Elimina evento</button>` : ''}
+      </div>
+    </div>` : '';
+
+  body.innerHTML = readView + adminForm;
+
+  if (currentUser?.isAdmin) {
+    eventProvinceSuggestions = GEO_PROVINCES_ITALIA[ev?.region || ''] || [];
+    attachAutocomplete('ev-region', () => GEO_REGIONS['Italia'] || [], sel => {
+      document.getElementById('ev-region').value = sel;
+      eventProvinceSuggestions = GEO_PROVINCES_ITALIA[sel] || [];
+    });
+    attachAutocomplete('ev-province', () => eventProvinceSuggestions);
+    document.getElementById('ev-region')?.addEventListener('input', () => {
+      eventProvinceSuggestions = GEO_PROVINCES_ITALIA[document.getElementById('ev-region')?.value] || [];
+    });
+  }
+}
+
+async function saveEvent() {
+  if (!currentUser?.isAdmin) return;
+  const g = id => document.getElementById(id)?.value.trim() || null;
+  const name = g('ev-name');
+  if (!name) { toastErr('Il nome evento è obbligatorio'); return; }
+  const row = { name, region: g('ev-region'), province: g('ev-province'), website: g('ev-website'), description: g('ev-description'), main_features: g('ev-features') };
+  let data, error;
+  if (currentEventId) {
+    ({ data, error } = await sb.from('events').update(row).eq('id', currentEventId).select('id'));
+    if (!error && !data?.length) { toastErr('Salvataggio non riuscito: verifica di essere admin (is_admin).'); return; }
+  } else {
+    row.created_by = currentUser.id;
+    ({ data, error } = await sb.from('events').insert(row).select('id').single());
+  }
+  if (error) { toastErr('Errore salvataggio: ' + error.message); return; }
+  toast('✓ Evento salvato');
+  showEventDetail(currentEventId || data?.id);
+}
+
+async function deleteEvent() {
+  if (!currentUser?.isAdmin || !currentEventId) return;
+  if (!confirm('Eliminare questo evento? Non è reversibile.')) return;
+  const { data, error } = await sb.from('events').delete().eq('id', currentEventId).select('id');
+  if (error) { toastErr('Errore eliminazione: ' + error.message); return; }
+  if (!data?.length) { toastErr('Eliminazione non riuscita: verifica di essere admin (is_admin).'); return; }
+  toast('✓ Evento eliminato');
+  showEventsScreen();
 }
 
 /* ══ APP INIT ══ */
@@ -6443,7 +6605,8 @@ Object.assign(window, {
   showWineryDetail, saveWineryDetails, uploadWineryLogo, goBackFromWinery, showAdminWineriesScreen, deleteWinery,
   addWineryCatalogWine, removeWineryCatalogWine, useFaviconAsLogo,
   editWineryCatalogWine, cancelEditWineryCatalogWine, addWineryManually, importWineryCatalogFromShop,
-  linkProducerToWinery
+  linkProducerToWinery,
+  showEventsScreen, showAddEventForm, showEventDetail, saveEvent, deleteEvent
 });
 </script>
 </body>
