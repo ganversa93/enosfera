@@ -697,16 +697,23 @@
     /* ── EVENTI ── */
     .event-card {
       background: var(--bg); border: 0.5px solid var(--border); border-radius: 14px;
-      padding: 1rem 1.1rem; margin-bottom: 10px; cursor: pointer;
+      padding: 1rem 1.1rem; margin-bottom: 10px; cursor: pointer; position: relative;
       transition: transform .15s, border-color .15s;
     }
     .event-card:hover { border-color: var(--wine); transform: translateY(-2px); }
-    .event-card-name { font-family: 'Cormorant Garamond', serif; font-size: 18px; color: var(--ink); margin-bottom: 3px; }
+    .event-card-name { font-family: 'Cormorant Garamond', serif; font-size: 18px; color: var(--ink); margin-bottom: 3px; padding-right: 2rem; }
     .event-card-loc { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 4px; margin-bottom: 6px; }
     .event-card-desc {
       font-size: 12.5px; color: var(--ink); line-height: 1.5;
       display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
     }
+    .event-fav-btn {
+      position: absolute; top: .85rem; right: .85rem; background: none; border: 0; cursor: pointer;
+      font-size: 19px; color: var(--border); padding: 4px; line-height: 1; z-index: 1;
+    }
+    .event-fav-btn.active { color: var(--gold); }
+    .event-fav-section { margin-bottom: 1.25rem; }
+    .event-fav-section .stitle { margin-bottom: .6rem; }
 
     /* ── Desktop: immagini grandi a destra, info a sinistra ── */
     @media (min-width: 700px) {
@@ -1204,6 +1211,10 @@
           <option value="">Tutte</option>
         </select>
       </div>
+    </div>
+    <div id="events-fav-section" class="event-fav-section" style="display:none">
+      <div class="stitle"><i class="ti ti-star-filled" style="color:var(--gold)"></i>I tuoi prossimi eventi</div>
+      <div id="events-fav-list"></div>
     </div>
     <div id="events-list"></div>
   </div>
@@ -2738,6 +2749,7 @@ let currentEventId = null;          // evento aperto sulla schermata dettaglio (
 let eventProvinceSuggestions = [];  // autocomplete provincia nella scheda evento (admin), dipende dalla regione scelta
 let eventsCache = [];       // tutti gli eventi caricati una volta, filtrati/ordinati lato client
 let showPastEvents = false; // false = in programma (default), true = passati
+let favoriteEventIds = new Set(); // id degli eventi messi tra i preferiti dall'utente corrente
 let currentFilter    = 'all';
 let currentQtyFilter = 'all';
 let sortField = 'created'; // 'created' | 'vintage' | 'price' | 'type' — cantina
@@ -3882,6 +3894,66 @@ async function loadEvents() {
   return data || [];
 }
 
+async function loadFavoriteEventIds() {
+  if (!currentUser) return new Set();
+  const { data, error } = await sb.from('event_favorites').select('event_id').eq('user_id', currentUser.id);
+  if (error) { console.warn('loadFavoriteEventIds', error); return new Set(); }
+  return new Set((data || []).map(r => r.event_id));
+}
+
+// Aggiunge/rimuove un evento dai preferiti dell'utente corrente e aggiorna
+// subito sia la stellina cliccata sia — se aperta — la sezione "prossimi
+// eventi" in cima alla lista, senza dover ricaricare tutto da capo.
+async function toggleEventFavorite(id, domEvent) {
+  domEvent?.stopPropagation();
+  if (!currentUser) return;
+  const wasFav = favoriteEventIds.has(id);
+  if (wasFav) {
+    favoriteEventIds.delete(id);
+    const { error } = await sb.from('event_favorites').delete().eq('user_id', currentUser.id).eq('event_id', id);
+    if (error) { favoriteEventIds.add(id); toastErr('Errore: ' + error.message); return; }
+  } else {
+    favoriteEventIds.add(id);
+    const { error } = await sb.from('event_favorites').insert({ user_id: currentUser.id, event_id: id });
+    if (error) { favoriteEventIds.delete(id); toastErr('Errore: ' + error.message); return; }
+  }
+  document.querySelectorAll(`.event-fav-btn[data-id="${id}"]`).forEach(btn => {
+    btn.classList.toggle('active', !wasFav);
+    btn.innerHTML = `<i class="ti ${!wasFav ? 'ti-star-filled' : 'ti-star'}"></i>`;
+  });
+  if (document.getElementById('events-list')) renderEventsFavSection();
+}
+
+// Sezione fissa in cima alla schermata Eventi: i preferiti dell'utente
+// ancora in programma (o senza data), ordinati come la vista "in
+// programma" — indipendente dai filtri/dal toggle passati/in programma.
+function renderEventsFavSection() {
+  const section = document.getElementById('events-fav-section');
+  const list = document.getElementById('events-fav-list');
+  if (!section || !list) return;
+  const todayStr = new Date().toISOString().split('T')[0];
+  const favs = eventsCache
+    .filter(e => favoriteEventIds.has(e.id) && !(e.date_to && e.date_to < todayStr))
+    .sort((a, b) => (a.date_from || '9999-99-99').localeCompare(b.date_from || '9999-99-99'));
+  section.style.display = favs.length ? '' : 'none';
+  if (favs.length) list.innerHTML = favs.map(eventCardHtml).join('');
+}
+
+function eventCardHtml(e) {
+  const isFav = favoriteEventIds.has(e.id);
+  return `
+    <div class="event-card" onclick="showEventDetail('${e.id}')">
+      ${currentUser ? `<button class="event-fav-btn${isFav ? ' active' : ''}" data-id="${e.id}" onclick="toggleEventFavorite('${e.id}', event)"><i class="ti ${isFav ? 'ti-star-filled' : 'ti-star'}"></i></button>` : ''}
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:2px">
+        <div class="event-card-name" style="margin-bottom:0">${e.name}</div>
+        ${e.category ? `<span class="dchip">${e.category}</span>` : ''}
+      </div>
+      ${formatEventDateRange(e.date_from, e.date_to) ? `<div class="event-card-loc"><i class="ti ti-calendar-event"></i>${formatEventDateRange(e.date_from, e.date_to)}</div>` : ''}
+      ${(e.region || e.province) ? `<div class="event-card-loc"><i class="ti ti-map-pin"></i>${[e.region, e.province].filter(Boolean).join(', ')}</div>` : ''}
+      ${e.description ? `<div class="event-card-desc">${e.description}</div>` : ''}
+    </div>`;
+}
+
 // Le date arrivano come stringhe "YYYY-MM-DD" (colonna date): passarle
 // direttamente a new Date() le interpreta come UTC e può farle slittare
 // di un giorno nei fusi orari negativi — da qui il T00:00:00 esplicito.
@@ -3899,8 +3971,9 @@ async function showEventsScreen() {
   if (addBtn) addBtn.style.display = currentUser?.isAdmin ? '' : 'none';
   const list = document.getElementById('events-list');
   list.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted)">Caricamento…</div>';
-  eventsCache = await loadEvents();
+  [eventsCache, favoriteEventIds] = await Promise.all([loadEvents(), loadFavoriteEventIds()]);
   populateEventsFilterOptions();
+  renderEventsFavSection();
   renderEventsList();
 }
 
@@ -3964,16 +4037,7 @@ function renderEventsList() {
   });
 
   list.innerHTML = filtered.length
-    ? filtered.map(e => `
-      <div class="event-card" onclick="showEventDetail('${e.id}')">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:2px">
-          <div class="event-card-name" style="margin-bottom:0">${e.name}</div>
-          ${e.category ? `<span class="dchip">${e.category}</span>` : ''}
-        </div>
-        ${formatEventDateRange(e.date_from, e.date_to) ? `<div class="event-card-loc"><i class="ti ti-calendar-event"></i>${formatEventDateRange(e.date_from, e.date_to)}</div>` : ''}
-        ${(e.region || e.province) ? `<div class="event-card-loc"><i class="ti ti-map-pin"></i>${[e.region, e.province].filter(Boolean).join(', ')}</div>` : ''}
-        ${e.description ? `<div class="event-card-desc">${e.description}</div>` : ''}
-      </div>`).join('')
+    ? filtered.map(eventCardHtml).join('')
     : `<div class="empty"><i class="ti ti-calendar-event"></i><p>${showPastEvents ? 'Nessun evento passato.' : (currentUser?.isAdmin ? 'Nessun evento in programma — aggiungine uno.' : 'Nessun evento in programma al momento.')}</p></div>`;
 }
 
@@ -4001,7 +4065,8 @@ async function showEventDetail(id) {
   const mapQuery = ev ? [ev.location_name, ev.address, [ev.region, ev.province].filter(Boolean).join(' ')].filter(Boolean).join(', ') : '';
 
   const readView = ev ? `
-    <div class="winery-hero">
+    <div class="winery-hero" style="position:relative">
+      ${currentUser ? `<button class="event-fav-btn${favoriteEventIds.has(ev.id) ? ' active' : ''}" data-id="${ev.id}" onclick="toggleEventFavorite('${ev.id}', event)"><i class="ti ${favoriteEventIds.has(ev.id) ? 'ti-star-filled' : 'ti-star'}"></i></button>` : ''}
       <div>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:2px">
           <div class="winery-name">${ev.name}</div>
@@ -4010,6 +4075,8 @@ async function showEventDetail(id) {
         ${dateRange ? `<div style="font-size:12.5px;color:var(--muted)"><i class="ti ti-calendar-event" style="font-size:12px"></i> ${dateRange}</div>` : ''}
         ${(ev.location_name || ev.address || ev.region || ev.province) ? `<div style="font-size:12.5px;color:var(--muted)"><i class="ti ti-map-pin" style="font-size:12px"></i> ${[ev.location_name, ev.address, [ev.region, ev.province].filter(Boolean).join(', ')].filter(Boolean).join(' — ')}</div>` : ''}
         ${ev.website ? `<a href="${ev.website}" target="_blank" rel="noopener" class="winery-link" style="text-decoration:none"><i class="ti ti-world" style="font-size:12px"></i> ${ev.website.replace(/^https?:\/\//,'')}</a>` : ''}
+        ${ev.phone ? `<div style="font-size:12.5px;color:var(--muted)"><i class="ti ti-phone" style="font-size:12px"></i> <a href="tel:${ev.phone}" style="color:inherit;text-decoration:none">${ev.phone}</a></div>` : ''}
+        ${ev.email ? `<div style="font-size:12.5px;color:var(--muted)"><i class="ti ti-mail" style="font-size:12px"></i> <a href="mailto:${ev.email}" style="color:inherit;text-decoration:none">${ev.email}</a></div>` : ''}
       </div>
     </div>
     ${(ev.associations && ev.associations.length) ? `<div class="dchips" style="margin-top:.75rem">${ev.associations.map(a => `<span class="dchip">${a}</span>`).join('')}</div>` : ''}
@@ -4053,6 +4120,10 @@ async function showEventDetail(id) {
         <div class="fg" style="position:relative"><label>Provincia</label><input type="text" id="ev-province" value="${ev?.province || ''}" placeholder="es. Verona" autocomplete="off"></div>
       </div>
       <div class="fg"><label>Sito web</label><input type="text" id="ev-website" value="${ev?.website || ''}" placeholder="https://…"></div>
+      <div class="frow">
+        <div class="fg"><label>Telefono</label><input type="text" id="ev-phone" value="${ev?.phone || ''}" placeholder="es. +39 045 1234567"></div>
+        <div class="fg"><label>Email</label><input type="email" id="ev-email" value="${ev?.email || ''}" placeholder="es. info@evento.it"></div>
+      </div>
       <div class="fg">
         <label>Associazioni collegate</label>
         <div class="pairing-chips" id="ev-assoc-chips">
@@ -4094,6 +4165,7 @@ async function saveEvent() {
     date_from: g('ev-date-from'), date_to: g('ev-date-to'),
     location_name: g('ev-location-name'), address: g('ev-address'),
     region: g('ev-region'), province: g('ev-province'), website: g('ev-website'),
+    phone: g('ev-phone'), email: g('ev-email'),
     description: g('ev-description'), main_features: g('ev-features'),
     associations: getSelectedEventAssociations(),
   };
@@ -6886,7 +6958,7 @@ Object.assign(window, {
   editWineryCatalogWine, cancelEditWineryCatalogWine, addWineryManually, importWineryCatalogFromShop,
   linkProducerToWinery,
   showEventsScreen, showAddEventForm, showEventDetail, saveEvent, deleteEvent,
-  renderEventsList, updateEventsProvinceFilterOptions, toggleShowPastEvents,
+  renderEventsList, updateEventsProvinceFilterOptions, toggleShowPastEvents, toggleEventFavorite,
   showConfigListsScreen, selectConfigList, addConfigListValue, removeConfigListValue
 });
 </script>

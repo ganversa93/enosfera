@@ -1059,3 +1059,33 @@ insert into public.config_lists (list_key, value, sort_order) values
   ('event_association', 'Slow Wine', 4),
   ('event_association', 'ONAF', 5)
 on conflict (list_key, value) do nothing;
+
+-- ════════════════════════════════════════════════════════════════
+-- Recapiti dell'evento (telefono/email), per chi preferisce essere
+-- contattato invece di visitare il sito. Aggiunti con alter table
+-- per lo stesso motivo di date_from/category sopra: la tabella
+-- events esiste già dai lanci precedenti di questo script.
+-- ════════════════════════════════════════════════════════════════
+alter table public.events add column if not exists phone text;
+alter table public.events add column if not exists email text;
+
+-- ════════════════════════════════════════════════════════════════
+-- Eventi preferiti: un utente può segnare un evento come preferito
+-- per ritrovarlo subito nella sezione "I tuoi prossimi eventi" in
+-- cima alla schermata Eventi. Una riga per (utente, evento); niente
+-- colonne oltre alla chiave — nessun dato da aggiornare, solo
+-- presenza/assenza della riga.
+-- ════════════════════════════════════════════════════════════════
+create table if not exists public.event_favorites (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  event_id uuid not null references public.events(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (user_id, event_id)
+);
+
+alter table public.event_favorites enable row level security;
+
+drop policy if exists "event_favorites: solo le proprie righe" on public.event_favorites;
+create policy "event_favorites: solo le proprie righe"
+  on public.event_favorites for all to authenticated
+  using (auth.uid() = user_id) with check (auth.uid() = user_id);
