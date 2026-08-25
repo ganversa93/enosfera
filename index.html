@@ -1216,6 +1216,7 @@
       <div class="stitle"><i class="ti ti-star-filled" style="color:var(--gold)"></i>I tuoi prossimi eventi</div>
       <div id="events-fav-list"></div>
     </div>
+    <div class="stitle"><i class="ti ti-calendar-event"></i>Altri eventi</div>
     <div id="events-list"></div>
   </div>
 
@@ -3921,7 +3922,7 @@ async function toggleEventFavorite(id, domEvent) {
     btn.classList.toggle('active', !wasFav);
     btn.innerHTML = `<i class="ti ${!wasFav ? 'ti-star-filled' : 'ti-star'}"></i>`;
   });
-  if (document.getElementById('events-list')) renderEventsFavSection();
+  if (document.getElementById('events-list')) { renderEventsFavSection(); renderEventsList(); }
 }
 
 // Sezione fissa in cima alla schermata Eventi: i preferiti dell'utente
@@ -4019,6 +4020,11 @@ function renderEventsList() {
   const filtered = eventsCache.filter(e => {
     const isPast = !!e.date_to && e.date_to < todayStr;
     if (showPastEvents ? !isPast : isPast) return false;
+    // I preferiti in programma sono già mostrati sopra in "I tuoi prossimi
+    // eventi": qui restano solo gli altri, così il titolo "Altri eventi"
+    // è sempre corretto. I preferiti passati restano invece visibili
+    // (la sezione preferiti mostra solo quelli ancora in programma).
+    if (!showPastEvents && favoriteEventIds.has(e.id)) return false;
     if (q && !`${e.name} ${e.description || ''}`.toLowerCase().includes(q)) return false;
     if (catFilter && e.category !== catFilter) return false;
     if (assocFilter && !(e.associations || []).includes(assocFilter)) return false;
