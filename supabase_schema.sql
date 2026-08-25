@@ -970,28 +970,19 @@ grant execute on function public.link_producer_to_winery(text, uuid) to authenti
 -- main_features è testo libero, una riga per caratteristica (mostrata
 -- come elenco puntato in lettura) — non una tabella a parte, per non
 -- appesantire una prima versione pensata per essere semplice.
--- category è testo libero lato DB (come wines.type): l'elenco chiuso
--- di opzioni è solo nella <select> del form, stesso criterio già usato
--- altrove nell'app. associations è un array perché un evento può
--- coinvolgere più associazioni insieme (es. FISAR e Slow Food).
 -- ════════════════════════════════════════════════════════════════
 create table if not exists public.events (
   id uuid primary key default gen_random_uuid(),
   name text not null,
-  category text,
-  date_from date,
-  date_to date,
   region text,
   province text,
   website text,
   description text,
   main_features text,
-  associations text[] not null default '{}',
   created_by uuid references public.profiles(id),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
-create index if not exists events_date_from_idx on public.events(date_from);
 
 alter table public.events enable row level security;
 
@@ -1003,3 +994,19 @@ drop policy if exists "events: scrittura solo admin" on public.events;
 create policy "events: scrittura solo admin"
   on public.events for all to authenticated
   using (public.is_admin()) with check (public.is_admin());
+
+-- ════════════════════════════════════════════════════════════════
+-- Data, categoria e associazioni collegate, aggiunte con alter table
+-- (non nel create table sopra) perché la tabella potrebbe già esistere
+-- da un lancio precedente di questo stesso script — "create table if
+-- not exists" in quel caso non farebbe nulla e le nuove colonne non
+-- comparirebbero mai. category è testo libero lato DB (come
+-- wines.type): l'elenco chiuso di opzioni è solo nella <select> del
+-- form. associations è un array perché un evento può coinvolgere più
+-- associazioni insieme (es. FISAR e Slow Food).
+-- ════════════════════════════════════════════════════════════════
+alter table public.events add column if not exists category text;
+alter table public.events add column if not exists date_from date;
+alter table public.events add column if not exists date_to date;
+alter table public.events add column if not exists associations text[] not null default '{}';
+create index if not exists events_date_from_idx on public.events(date_from);

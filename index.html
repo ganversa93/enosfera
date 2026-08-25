@@ -1168,6 +1168,36 @@
       <span style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--ink)">Eventi</span>
       <button class="btn sm primary" id="events-add-btn" style="display:none" onclick="showAddEventForm()"><i class="ti ti-plus"></i>Aggiungi evento</button>
     </div>
+    <div class="filter-bar">
+      <input type="text" id="events-search" placeholder="Cerca per nome o descrizione…" oninput="renderEventsList()">
+      <button class="btn sm" id="events-past-toggle-btn" onclick="toggleShowPastEvents()">Eventi passati</button>
+    </div>
+    <div class="adv-filter-row" style="margin-bottom:1.1rem">
+      <div class="adv-filter-field">
+        <label>Categoria</label>
+        <select id="events-filter-category" onchange="renderEventsList()">
+          <option value="">Tutte</option>
+        </select>
+      </div>
+      <div class="adv-filter-field">
+        <label>Associazione</label>
+        <select id="events-filter-association" onchange="renderEventsList()">
+          <option value="">Tutte</option>
+        </select>
+      </div>
+      <div class="adv-filter-field">
+        <label>Regione</label>
+        <select id="events-filter-region" onchange="updateEventsProvinceFilterOptions();renderEventsList()">
+          <option value="">Tutte</option>
+        </select>
+      </div>
+      <div class="adv-filter-field">
+        <label>Provincia</label>
+        <select id="events-filter-province" onchange="renderEventsList()">
+          <option value="">Tutte</option>
+        </select>
+      </div>
+    </div>
     <div id="events-list"></div>
   </div>
 
@@ -2682,6 +2712,8 @@ let wineryProvinceSuggestions = []; // autocomplete provincia nella scheda-canti
 let editingWineryWineId = null; // id del vino-catalogo in modifica nella riga di aggiunta, null = si sta aggiungendo
 let currentEventId = null;          // evento aperto sulla schermata dettaglio (null = nuovo evento)
 let eventProvinceSuggestions = [];  // autocomplete provincia nella scheda evento (admin), dipende dalla regione scelta
+let eventsCache = [];       // tutti gli eventi caricati una volta, filtrati/ordinati lato client
+let showPastEvents = false; // false = in programma (default), true = passati
 let currentFilter    = 'all';
 let currentQtyFilter = 'all';
 let sortField = 'created'; // 'created' | 'vintage' | 'price' | 'type' — cantina
@@ -3733,8 +3765,7 @@ function getSelectedEventAssociations() {
 }
 async function loadEvents() {
   const { data, error } = await sb.from('events')
-    .select('id,name,category,date_from,date_to,region,province,description')
-    .order('date_from', { ascending: true, nullsFirst: false });
+    .select('id,name,category,date_from,date_to,region,province,description,associations');
   if (error) { console.warn('loadEvents', error); return []; }
   return data || [];
 }
@@ -3751,13 +3782,77 @@ function formatEventDateRange(dateFrom, dateTo) {
 
 async function showEventsScreen() {
   showScreen('screen-events');
+  showPastEvents = false;
   const addBtn = document.getElementById('events-add-btn');
   if (addBtn) addBtn.style.display = currentUser?.isAdmin ? '' : 'none';
   const list = document.getElementById('events-list');
   list.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted)">Caricamento…</div>';
-  const events = await loadEvents();
-  list.innerHTML = events.length
-    ? events.map(e => `
+  eventsCache = await loadEvents();
+  populateEventsFilterOptions();
+  renderEventsList();
+}
+
+function populateEventsFilterOptions() {
+  const catSel = document.getElementById('events-filter-category');
+  if (catSel) catSel.innerHTML = '<option value="">Tutte</option>' + EVENT_CATEGORIES.map(c => `<option>${c}</option>`).join('');
+  const assocSel = document.getElementById('events-filter-association');
+  if (assocSel) assocSel.innerHTML = '<option value="">Tutte</option>' + EVENT_ASSOCIATIONS.map(a => `<option>${a}</option>`).join('');
+  const regionSel = document.getElementById('events-filter-region');
+  if (regionSel) {
+    const regions = [...new Set(eventsCache.map(e => e.region).filter(Boolean))].sort();
+    regionSel.innerHTML = '<option value="">Tutte</option>' + regions.map(r => `<option>${r}</option>`).join('');
+  }
+  updateEventsProvinceFilterOptions();
+}
+
+function updateEventsProvinceFilterOptions() {
+  const region = document.getElementById('events-filter-region')?.value || '';
+  const provinceSel = document.getElementById('events-filter-province');
+  if (!provinceSel) return;
+  const provinces = [...new Set(eventsCache.filter(e => !region || e.region === region).map(e => e.province).filter(Boolean))].sort();
+  provinceSel.innerHTML = '<option value="">Tutte</option>' + provinces.map(p => `<option>${p}</option>`).join('');
+}
+
+function toggleShowPastEvents() {
+  showPastEvents = !showPastEvents;
+  renderEventsList();
+}
+
+function renderEventsList() {
+  const list = document.getElementById('events-list');
+  if (!list) return;
+  const q = (document.getElementById('events-search')?.value || '').trim().toLowerCase();
+  const catFilter = document.getElementById('events-filter-category')?.value || '';
+  const assocFilter = document.getElementById('events-filter-association')?.value || '';
+  const regionFilter = document.getElementById('events-filter-region')?.value || '';
+  const provinceFilter = document.getElementById('events-filter-province')?.value || '';
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  const toggleBtn = document.getElementById('events-past-toggle-btn');
+  if (toggleBtn) toggleBtn.textContent = showPastEvents ? 'Eventi in programma' : 'Eventi passati';
+
+  const filtered = eventsCache.filter(e => {
+    const isPast = !!e.date_to && e.date_to < todayStr;
+    if (showPastEvents ? !isPast : isPast) return false;
+    if (q && !`${e.name} ${e.description || ''}`.toLowerCase().includes(q)) return false;
+    if (catFilter && e.category !== catFilter) return false;
+    if (assocFilter && !(e.associations || []).includes(assocFilter)) return false;
+    if (regionFilter && e.region !== regionFilter) return false;
+    if (provinceFilter && e.province !== provinceFilter) return false;
+    return true;
+  });
+
+  // In programma: dal più vicino (senza data in fondo). Passati: dal più
+  // recente. Stesso criterio "valori mancanti sempre in fondo" già usato
+  // per gli altri ordinamenti dell'app (annata, prezzo, punteggio).
+  filtered.sort((a, b) => {
+    const av = showPastEvents ? (a.date_to || '') : (a.date_from || '9999-99-99');
+    const bv = showPastEvents ? (b.date_to || '') : (b.date_from || '9999-99-99');
+    return showPastEvents ? bv.localeCompare(av) : av.localeCompare(bv);
+  });
+
+  list.innerHTML = filtered.length
+    ? filtered.map(e => `
       <div class="event-card" onclick="showEventDetail('${e.id}')">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:2px">
           <div class="event-card-name" style="margin-bottom:0">${e.name}</div>
@@ -3767,7 +3862,7 @@ async function showEventsScreen() {
         ${(e.region || e.province) ? `<div class="event-card-loc"><i class="ti ti-map-pin"></i>${[e.region, e.province].filter(Boolean).join(', ')}</div>` : ''}
         ${e.description ? `<div class="event-card-desc">${e.description}</div>` : ''}
       </div>`).join('')
-    : `<div class="empty"><i class="ti ti-calendar-event"></i><p>${currentUser?.isAdmin ? 'Nessun evento ancora — aggiungine uno.' : 'Nessun evento al momento.'}</p></div>`;
+    : `<div class="empty"><i class="ti ti-calendar-event"></i><p>${showPastEvents ? 'Nessun evento passato.' : (currentUser?.isAdmin ? 'Nessun evento in programma — aggiungine uno.' : 'Nessun evento in programma al momento.')}</p></div>`;
 }
 
 function showAddEventForm() {
@@ -6663,7 +6758,8 @@ Object.assign(window, {
   addWineryCatalogWine, removeWineryCatalogWine, useFaviconAsLogo,
   editWineryCatalogWine, cancelEditWineryCatalogWine, addWineryManually, importWineryCatalogFromShop,
   linkProducerToWinery,
-  showEventsScreen, showAddEventForm, showEventDetail, saveEvent, deleteEvent
+  showEventsScreen, showAddEventForm, showEventDetail, saveEvent, deleteEvent,
+  renderEventsList, updateEventsProvinceFilterOptions, toggleShowPastEvents
 });
 </script>
 </body>
