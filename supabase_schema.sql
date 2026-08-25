@@ -1010,3 +1010,52 @@ alter table public.events add column if not exists date_from date;
 alter table public.events add column if not exists date_to date;
 alter table public.events add column if not exists associations text[] not null default '{}';
 create index if not exists events_date_from_idx on public.events(date_from);
+
+-- Indirizzo e nome della location (es. "Villa Reale", distinto dalla via)
+-- dell'evento, oltre a regione e provincia.
+alter table public.events add column if not exists address text;
+alter table public.events add column if not exists location_name text;
+
+-- ════════════════════════════════════════════════════════════════
+-- Tabella generica per le opzioni a scelta chiusa usate nei form
+-- (categorie eventi, associazioni collegate, e altre liste future) —
+-- invece di elenchi fissi nel codice, modificabili dall'admin dalla
+-- schermata "Configurazione liste" senza bisogno di un deploy. Una
+-- riga per (list_key, valore); sort_order determina l'ordine di
+-- comparsa nei form (nuovi valori aggiunti in coda).
+-- ════════════════════════════════════════════════════════════════
+create table if not exists public.config_lists (
+  id uuid primary key default gen_random_uuid(),
+  list_key text not null,
+  value text not null,
+  sort_order integer not null default 0,
+  created_at timestamptz not null default now()
+);
+create unique index if not exists config_lists_key_value_key on public.config_lists (list_key, value);
+create index if not exists config_lists_key_idx on public.config_lists (list_key);
+
+alter table public.config_lists enable row level security;
+
+drop policy if exists "config_lists: lettura per chiunque autenticato" on public.config_lists;
+create policy "config_lists: lettura per chiunque autenticato"
+  on public.config_lists for select to authenticated using (true);
+
+drop policy if exists "config_lists: scrittura solo admin" on public.config_lists;
+create policy "config_lists: scrittura solo admin"
+  on public.config_lists for all to authenticated
+  using (public.is_admin()) with check (public.is_admin());
+
+-- Popola le due liste con gli stessi valori finora fissi nel codice, così
+-- il passaggio alla tabella non cambia nulla per chi già usa l'app.
+insert into public.config_lists (list_key, value, sort_order) values
+  ('event_category', 'Vino', 0),
+  ('event_category', 'Food', 1),
+  ('event_category', 'Enogastronomia', 2),
+  ('event_category', 'Sagra Paesana', 3),
+  ('event_association', 'FISAR', 0),
+  ('event_association', 'AIS', 1),
+  ('event_association', 'ONAV', 2),
+  ('event_association', 'Slow Food', 3),
+  ('event_association', 'Slow Wine', 4),
+  ('event_association', 'ONAF', 5)
+on conflict (list_key, value) do nothing;

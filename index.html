@@ -1017,6 +1017,13 @@
         </div>
         <span class="home-admin-badge" id="home-admin-badge" style="display:none">0</span>
       </div>
+      <div class="home-card home-card-wide" id="home-config-card" onclick="showConfigListsScreen()" style="display:none">
+        <i class="ti ti-adjustments"></i>
+        <div style="flex:1">
+          <div class="home-card-title">Configurazione liste</div>
+          <div class="home-card-sub">Categorie, associazioni e altre opzioni a scelta chiusa</div>
+        </div>
+      </div>
       <div class="home-card" onclick="showScreen('screen-list')">
         <i class="ti ti-bottle"></i>
         <div class="home-card-title">Cantina e Degustazioni</div>
@@ -1207,6 +1214,23 @@
       <button class="btn sm" onclick="showEventsScreen()"><i class="ti ti-arrow-left"></i>Eventi</button>
     </div>
     <div id="event-detail-body"></div>
+  </div>
+
+  <!-- ══ ADMIN: CONFIGURAZIONE LISTE ══ -->
+  <div id="screen-config-lists" class="screen">
+    <div class="nav" style="margin-bottom:1.1rem">
+      <button class="btn sm" onclick="showScreen('screen-home')"><i class="ti ti-arrow-left"></i>Home</button>
+      <span style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--ink)">Configurazione liste</span>
+    </div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:1rem">Le opzioni a scelta chiusa usate nei form (es. categorie e associazioni degli eventi) — modificabili qui senza bisogno di un aggiornamento dell'app.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1.25rem" id="config-list-tabs"></div>
+    <div class="fsec">
+      <div id="config-list-values"></div>
+      <div class="pos-add-row" style="margin-top:8px">
+        <input type="text" id="config-list-add-input" placeholder="Aggiungi un valore…" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();addConfigListValue();}">
+        <button class="btn sm" onclick="addConfigListValue()"><i class="ti ti-plus"></i></button>
+      </div>
+    </div>
   </div>
 
   <!-- ══ GUIDA ══ -->
@@ -3753,8 +3777,96 @@ async function linkProducerToWinery(producer) {
    events, RLS identica a wineries — lettura per tutti, scrittura solo
    admin), visibili a chiunque. Il reperimento automatico dal web è
    volutamente rimandato: per ora è solo inserimento manuale. */
-const EVENT_CATEGORIES = ['Vino', 'Food', 'Enogastronomia', 'Sagra Paesana'];
-const EVENT_ASSOCIATIONS = ['FISAR', 'AIS', 'ONAV', 'Slow Food', 'Slow Wine', 'ONAF'];
+// Caricate da config_lists (vedi loadEventOptionLists) invece che fisse nel
+// codice, così l'admin può aggiungerne/toglierne dalla Configurazione liste
+// senza bisogno di un aggiornamento dell'app.
+let EVENT_CATEGORIES = [];
+let EVENT_ASSOCIATIONS = [];
+
+async function loadEventOptionLists() {
+  const [cats, assocs] = await Promise.all([loadConfigList('event_category'), loadConfigList('event_association')]);
+  EVENT_CATEGORIES = cats.map(c => c.value);
+  EVENT_ASSOCIATIONS = assocs.map(a => a.value);
+}
+
+/* ══ CONFIGURAZIONE LISTE (admin) ══
+   Tabella generica config_lists (list_key, value, sort_order): invece di
+   liste fisse nel codice (com'erano prima EVENT_CATEGORIES/ASSOCIATIONS),
+   le opzioni a scelta chiusa usate nei form vengono lette da qui — l'admin
+   le gestisce da una schermata dedicata senza bisogno di un deploy.
+   CONFIG_LIST_LABELS è il registro delle liste che l'app sa effettivamente
+   usare da qualche parte in un form; aggiungerne una qui non basta da sola
+   a farla comparire in un form — va anche agganciata dove serve, come per
+   event_category/event_association. */
+const CONFIG_LIST_LABELS = {
+  event_category: 'Categoria eventi',
+  event_association: 'Associazioni collegate',
+};
+let currentConfigListKey = Object.keys(CONFIG_LIST_LABELS)[0];
+
+async function loadConfigList(key) {
+  const { data, error } = await sb.from('config_lists').select('id,value,sort_order').eq('list_key', key).order('sort_order');
+  if (error) { console.warn('loadConfigList', error); return []; }
+  return data || [];
+}
+
+async function showConfigListsScreen() {
+  if (!currentUser?.isAdmin) return;
+  showScreen('screen-config-lists');
+  renderConfigListTabs();
+  await renderConfigListValues();
+}
+
+function renderConfigListTabs() {
+  const box = document.getElementById('config-list-tabs');
+  if (!box) return;
+  box.innerHTML = Object.entries(CONFIG_LIST_LABELS).map(([key, label]) =>
+    `<div class="chip${key === currentConfigListKey ? ' active' : ''}" onclick="selectConfigList('${key}')">${label}</div>`
+  ).join('');
+}
+
+function selectConfigList(key) {
+  currentConfigListKey = key;
+  renderConfigListTabs();
+  renderConfigListValues();
+}
+
+async function renderConfigListValues() {
+  const list = document.getElementById('config-list-values');
+  if (!list) return;
+  list.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--muted)">Caricamento…</div>';
+  const values = await loadConfigList(currentConfigListKey);
+  list.innerHTML = values.length
+    ? values.map(v => `
+      <div class="winery-catalog-row">
+        <div style="flex:1">${v.value}</div>
+        <span class="rm-btn" onclick="removeConfigListValue('${v.id}')">×</span>
+      </div>`).join('')
+    : '<div style="text-align:center;padding:1.5rem;color:var(--muted)">Nessun valore ancora — aggiungine uno qui sotto.</div>';
+}
+
+async function addConfigListValue() {
+  if (!currentUser?.isAdmin) return;
+  const input = document.getElementById('config-list-add-input');
+  const value = (input?.value || '').trim();
+  if (!value) return;
+  const existing = await loadConfigList(currentConfigListKey);
+  if (existing.some(v => v.value.toLowerCase() === value.toLowerCase())) { toastErr('C\'è già un valore uguale in questa lista'); return; }
+  const nextOrder = existing.reduce((m, v) => Math.max(m, v.sort_order ?? 0), -1) + 1;
+  const { error } = await sb.from('config_lists').insert({ list_key: currentConfigListKey, value, sort_order: nextOrder });
+  if (error) { toastErr('Errore aggiunta: ' + error.message); return; }
+  if (input) input.value = '';
+  await renderConfigListValues();
+  await loadEventOptionLists();
+}
+
+async function removeConfigListValue(id) {
+  if (!currentUser?.isAdmin) return;
+  const { error } = await sb.from('config_lists').delete().eq('id', id);
+  if (error) { toastErr('Errore eliminazione: ' + error.message); return; }
+  await renderConfigListValues();
+  await loadEventOptionLists();
+}
 
 // Query mirata a #ev-assoc-chips: i chip di selezione abbinamento del form
 // vino (.p-chip, riusati qui per lo stesso comportamento) restano sempre
@@ -3895,7 +4007,7 @@ async function showEventDetail(id) {
           ${ev.category ? `<span class="dchip">${ev.category}</span>` : ''}
         </div>
         ${dateRange ? `<div style="font-size:12.5px;color:var(--muted)"><i class="ti ti-calendar-event" style="font-size:12px"></i> ${dateRange}</div>` : ''}
-        ${(ev.region || ev.province) ? `<div style="font-size:12.5px;color:var(--muted)"><i class="ti ti-map-pin" style="font-size:12px"></i> ${[ev.region, ev.province].filter(Boolean).join(', ')}</div>` : ''}
+        ${(ev.location_name || ev.address || ev.region || ev.province) ? `<div style="font-size:12.5px;color:var(--muted)"><i class="ti ti-map-pin" style="font-size:12px"></i> ${[ev.location_name, ev.address, [ev.region, ev.province].filter(Boolean).join(', ')].filter(Boolean).join(' — ')}</div>` : ''}
         ${ev.website ? `<a href="${ev.website}" target="_blank" rel="noopener" class="winery-link" style="text-decoration:none"><i class="ti ti-world" style="font-size:12px"></i> ${ev.website.replace(/^https?:\/\//,'')}</a>` : ''}
       </div>
     </div>
@@ -3924,6 +4036,10 @@ async function showEventDetail(id) {
       <div class="frow">
         <div class="fg"><label>Data inizio</label><input type="date" id="ev-date-from" value="${ev?.date_from || ''}"></div>
         <div class="fg"><label>Data fine</label><input type="date" id="ev-date-to" value="${ev?.date_to || ''}"></div>
+      </div>
+      <div class="frow">
+        <div class="fg"><label>Nome location</label><input type="text" id="ev-location-name" value="${ev?.location_name || ''}" placeholder="es. Villa Reale"></div>
+        <div class="fg"><label>Indirizzo</label><input type="text" id="ev-address" value="${ev?.address || ''}" placeholder="es. Via Roma 1"></div>
       </div>
       <div class="frow">
         <div class="fg" style="position:relative"><label>Regione</label><input type="text" id="ev-region" value="${ev?.region || ''}" placeholder="es. Veneto" autocomplete="off"></div>
@@ -3969,6 +4085,7 @@ async function saveEvent() {
   const row = {
     name, category: g('ev-category'),
     date_from: g('ev-date-from'), date_to: g('ev-date-to'),
+    location_name: g('ev-location-name'), address: g('ev-address'),
     region: g('ev-region'), province: g('ev-province'), website: g('ev-website'),
     description: g('ev-description'), main_features: g('ev-features'),
     associations: getSelectedEventAssociations(),
@@ -4013,6 +4130,7 @@ async function initApp() {
   await loadSharedCellars();
   await loadOwnerCellarPositionLabels();
   loadWineriesCache();
+  loadEventOptionLists();
   // Carica vini dal DB
   showLoadingOverlay(true);
   winesCache = await loadWines();
@@ -4127,6 +4245,8 @@ async function updateNotificationBadge() {
 async function updateAdminWineriesBadge() {
   const card = document.getElementById('home-admin-card');
   if (card) card.style.display = '';
+  const configCard = document.getElementById('home-config-card');
+  if (configCard) configCard.style.display = '';
   const { count } = await sb.from('wineries').select('*', { count: 'exact', head: true })
     .is('country', null).is('region', null).is('province', null).is('website', null).is('description', null).is('logo_url', null);
   const n = count || 0;
@@ -6759,7 +6879,8 @@ Object.assign(window, {
   editWineryCatalogWine, cancelEditWineryCatalogWine, addWineryManually, importWineryCatalogFromShop,
   linkProducerToWinery,
   showEventsScreen, showAddEventForm, showEventDetail, saveEvent, deleteEvent,
-  renderEventsList, updateEventsProvinceFilterOptions, toggleShowPastEvents
+  renderEventsList, updateEventsProvinceFilterOptions, toggleShowPastEvents,
+  showConfigListsScreen, selectConfigList, addConfigListValue, removeConfigListValue
 });
 </script>
 </body>
