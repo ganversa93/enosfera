@@ -2480,8 +2480,9 @@
   <div id="screen-detail" class="screen">
     <div class="nav" style="margin-bottom:.9rem">
       <button class="btn sm" onclick="showScreen('screen-list')"><i class="ti ti-arrow-left"></i>Cantina</button>
-      <div style="display:flex;gap:8px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn sm" onclick="editWine()"><i class="ti ti-edit"></i>Modifica</button>
+        <button class="btn sm" onclick="duplicateWine()"><i class="ti ti-copy"></i>Duplica</button>
         <button class="btn sm danger" onclick="deleteWine()"><i class="ti ti-trash"></i>Elimina</button>
       </div>
     </div>
@@ -5748,6 +5749,19 @@ function editWine() {
   showScreen('screen-add');
 }
 
+// Riusa interamente il precompilamento di editWine() (stessi campi, stessa
+// foto, stessa scheda di degustazione) ma senza f-edit-id: il salvataggio
+// successivo fa quindi un inserimento invece di un aggiornamento, lasciando
+// il vino di partenza intatto. Comodo per chi compra una nuova annata di un
+// vino già in cantina — basta aggiornare annata/quantità/prezzo e salvare.
+function duplicateWine() {
+  editWine();
+  document.getElementById('f-edit-id').value = '';
+  document.getElementById('form-title').textContent = 'Nuovo vino (duplicato)';
+  document.getElementById('form-save-label').textContent = 'Salva in cantina';
+  toast('Vino duplicato: aggiorna annata/quantità e salva');
+}
+
 function cancelForm() {
   document.getElementById('f-edit-id').value = '';
   document.getElementById('form-title').textContent = 'Aggiungi vino';
@@ -7076,7 +7090,7 @@ Object.assign(window, {
   adjustQty, calcAIS, calcFISAR, cancelForm, closeNavMenu, deleteWine, doLogin, doLogout, doRegister, doGoogleAuth,
   showForgotPasswordForm, doForgotPassword,
   startTastingWizard, exitWizardMode, wizardBack, wizardNext,
-  editWine, exportCSV, exportInventory, exportJSON, exportTasting, inviteToShareCellar, onAdvCountryChange, previewAvatar, previewImg,
+  editWine, duplicateWine, exportCSV, exportInventory, exportJSON, exportTasting, inviteToShareCellar, onAdvCountryChange, previewAvatar, previewImg,
   removeCellarShareMember, removeGrapeTag, renderGrid, resendConfirmation, resendConfirmationFromProfile, resetAdvFilters, respondCellarShareInvite, respondFollowRequest, saveProfile, saveWine,
   goBackFromProfile, searchUsersToShareCellar, switchCellarOwner,
   scanBothLabels, searchNetworkUsers, sendFollowRequest, setFilter, setQtyFilter, showAdd, showComingSoon, showDetail,
