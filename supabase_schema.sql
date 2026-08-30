@@ -1135,3 +1135,204 @@ begin
   return new;
 end;
 $$;
+
+-- ════════════════════════════════════════════════════════════════
+-- CANTINE CHE SI AUTOGESTISCONO — una cantina può richiedere di
+-- collegarsi alla propria scheda in anagrafica (o proporne una nuova se
+-- non esiste ancora) e, una volta approvata da un admin, gestire da sola
+-- i propri dati, il proprio catalogo vini e i propri eventi (questi
+-- ultimi pubblicati solo dopo approvazione admin — vedi più sotto).
+-- ════════════════════════════════════════════════════════════════
+
+-- owner_user_id: chi gestisce questa scheda oltre all'admin. Nullo finché
+-- nessuna richiesta di collegamento è stata approvata.
+alter table public.wineries add column if not exists owner_user_id uuid references auth.users(id) on delete set null;
+
+-- La modifica (non l'eliminazione, che resta solo admin) è ora permessa
+-- anche al proprietario collegato, non solo all'admin.
+drop policy if exists "wineries: modifica solo admin" on public.wineries;
+create policy "wineries: modifica admin o proprietario collegato"
+  on public.wineries for update to authenticated
+  using (public.is_admin() or owner_user_id = auth.uid())
+  with check (public.is_admin() or owner_user_id = auth.uid());
+
+-- Stesso discorso per il catalogo vini prodotti: lo gestisce anche il
+-- proprietario della cantina a cui appartiene, non solo l'admin.
+drop policy if exists "winery_wines: scrittura solo admin" on public.winery_wines;
+create policy "winery_wines: scrittura admin o proprietario cantina"
+  on public.winery_wines for all to authenticated
+  using (
+    public.is_admin()
+    or winery_id in (select id from public.wineries where owner_user_id = auth.uid())
+  )
+  with check (
+    public.is_admin()
+    or winery_id in (select id from public.wineries where owner_user_id = auth.uid())
+  );
+
+-- Il logo si carica nello storage con le stesse regole: admin o
+-- proprietario della cantina a cui appartiene il file (path
+-- wineries/<winery_id>-....jpg, il primo pezzo dopo il prefisso).
+drop policy if exists "wine-labels: admin scrive i loghi cantina" on storage.objects;
+create policy "wine-labels: admin o proprietario scrive i loghi cantina"
+  on storage.objects for insert to authenticated
+  with check (
+    bucket_id = 'wine-labels' and (storage.foldername(name))[1] = 'wineries'
+    and (
+      public.is_admin()
+      or (substring(name from '^wineries/([0-9a-fA-F-]{36})-'))::uuid in (select id from public.wineries where owner_user_id = auth.uid())
+    )
+  );
+
+drop policy if exists "wine-labels: admin aggiorna i loghi cantina" on storage.objects;
+create policy "wine-labels: admin o proprietario aggiorna i loghi cantina"
+  on storage.objects for update to authenticated
+  using (
+    bucket_id = 'wine-labels' and (storage.foldername(name))[1] = 'wineries'
+    and (
+      public.is_admin()
+      or (substring(name from '^wineries/([0-9a-fA-F-]{36})-'))::uuid in (select id from public.wineries where owner_user_id = auth.uid())
+    )
+  )
+  with check (
+    bucket_id = 'wine-labels' and (storage.foldername(name))[1] = 'wineries'
+    and (
+      public.is_admin()
+      or (substring(name from '^wineries/([0-9a-fA-F-]{36})-'))::uuid in (select id from public.wineries where owner_user_id = auth.uid())
+    )
+  );
+
+-- Richieste di collegamento cantina-utente. winery_id valorizzato se
+-- l'utente ha scelto una cantina già in anagrafica; null + proposed_name
+-- se ne propone una nuova (che l'admin crea contestualmente
+-- all'approvazione). Una per utente per volta: non se ne può aprire una
+-- seconda finché la prima è ancora "pending".
+create table if not exists public.winery_claims (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  winery_id uuid references public.wineries(id) on delete cascade,
+  proposed_name text,
+  status text not null default 'pending' check (status in ('pending','accepted','rejected')),
+  note text,
+  created_at timestamptz not null default now(),
+  reviewed_at timestamptz,
+  reviewed_by uuid references public.profiles(id)
+);
+create unique index if not exists winery_claims_one_pending_per_user
+  on public.winery_claims (user_id) where (status = 'pending');
+
+alter table public.winery_claims enable row level security;
+
+drop policy if exists "winery_claims: lettura proprie richieste o admin" on public.winery_claims;
+create policy "winery_claims: lettura proprie richieste o admin"
+  on public.winery_claims for select to authenticated
+  using (user_id = auth.uid() or public.is_admin());
+
+drop policy if exists "winery_claims: crea la propria richiesta" on public.winery_claims;
+create policy "winery_claims: crea la propria richiesta"
+  on public.winery_claims for insert to authenticated
+  with check (user_id = auth.uid() and status = 'pending');
+
+drop policy if exists "winery_claims: solo admin approva o rifiuta" on public.winery_claims;
+create policy "winery_claims: solo admin approva o rifiuta"
+  on public.winery_claims for update to authenticated
+  using (public.is_admin()) with check (public.is_admin());
+
+drop policy if exists "winery_claims: elimina la propria richiesta in attesa o admin" on public.winery_claims;
+create policy "winery_claims: elimina la propria richiesta in attesa o admin"
+  on public.winery_claims for delete to authenticated
+  using (public.is_admin() or (user_id = auth.uid() and status = 'pending'));
+
+-- ════════════════════════════════════════════════════════════════
+-- EVENTI — una cantina collegata (owner_user_id) può inserire i propri
+-- eventi, ma restano "in attesa" (status pending, invisibili a tutti
+-- tranne admin e alla cantina stessa) finché un admin non li approva.
+-- Gli eventi già esistenti e quelli creati da un admin restano invece
+-- 'approved' di default, come già si comportavano prima di questa
+-- colonna — nessun cambiamento visibile per loro.
+-- ════════════════════════════════════════════════════════════════
+alter table public.events add column if not exists status text not null default 'approved' check (status in ('pending','approved','rejected'));
+alter table public.events add column if not exists winery_id uuid references public.wineries(id) on delete set null;
+create index if not exists events_winery_id_idx on public.events(winery_id);
+
+drop policy if exists "events: lettura per chiunque autenticato" on public.events;
+create policy "events: lettura"
+  on public.events for select to authenticated
+  using (
+    status = 'approved'
+    or public.is_admin()
+    or (winery_id is not null and winery_id in (select id from public.wineries where owner_user_id = auth.uid()))
+  );
+
+drop policy if exists "events: scrittura solo admin" on public.events;
+drop policy if exists "events: inserimento" on public.events;
+create policy "events: inserimento"
+  on public.events for insert to authenticated
+  with check (
+    public.is_admin()
+    or (status = 'pending' and winery_id in (select id from public.wineries where owner_user_id = auth.uid()))
+  );
+
+drop policy if exists "events: modifica" on public.events;
+create policy "events: modifica"
+  on public.events for update to authenticated
+  using (
+    public.is_admin()
+    or (winery_id is not null and winery_id in (select id from public.wineries where owner_user_id = auth.uid()))
+  )
+  with check (
+    public.is_admin()
+    or (status = 'pending' and winery_id in (select id from public.wineries where owner_user_id = auth.uid()))
+  );
+
+drop policy if exists "events: eliminazione" on public.events;
+create policy "events: eliminazione"
+  on public.events for delete to authenticated
+  using (
+    public.is_admin()
+    or (winery_id is not null and winery_id in (select id from public.wineries where owner_user_id = auth.uid()))
+  );
+
+-- Chiude una falla: senza questo, chiunque potrebbe auto-assegnarsi la
+-- proprietà di una cantina nuova con un insert diretto (lasciando gli
+-- altri campi vuoti per restare nel caso "stub" consentito a tutti),
+-- scavalcando del tutto la richiesta di collegamento sopra.
+drop policy if exists "wineries: stub per tutti, completa solo admin" on public.wineries;
+create policy "wineries: stub per tutti, completa solo admin"
+  on public.wineries for insert to authenticated
+  with check (
+    public.is_admin()
+    or (country is null and region is null and province is null and website is null and description is null and logo_url is null and owner_user_id is null)
+  );
+
+-- Le richieste di collegamento cantina vanno mostrate all'admin col nome
+-- di chi le ha fatte: profiles/auth.users non sono leggibili in RLS per
+-- un utente arbitrario (solo per sé stessi o in contesti specifici, es.
+-- cantina condivisa), quindi serve una funzione SECURITY DEFINER come già
+-- fatto per get_unlinked_producers().
+create or replace function public.get_pending_winery_claims()
+returns table (
+  id uuid, user_id uuid, winery_id uuid, proposed_name text,
+  note text, created_at timestamptz,
+  requester_name text, requester_email text, existing_winery_name text
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_admin() then
+    raise exception 'not authorized';
+  end if;
+  return query
+    select c.id, c.user_id, c.winery_id, c.proposed_name, c.note, c.created_at,
+           p.full_name, u.email, w.name
+    from public.winery_claims c
+    left join public.profiles p on p.id = c.user_id
+    left join auth.users u on u.id = c.user_id
+    left join public.wineries w on w.id = c.winery_id
+    where c.status = 'pending'
+    order by c.created_at;
+end;
+$$;
+grant execute on function public.get_pending_winery_claims() to authenticated;

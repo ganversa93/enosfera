@@ -1037,7 +1037,7 @@
         <i class="ti ti-building-warehouse"></i>
         <div style="flex:1">
           <div class="home-card-title">Amministrazione</div>
-          <div class="home-card-sub">Cantine da completare</div>
+          <div class="home-card-sub">Cantine, richieste ed eventi in sospeso</div>
         </div>
         <span class="home-admin-badge" id="home-admin-badge" style="display:none">0</span>
       </div>
@@ -2511,6 +2511,18 @@
       <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Vini (di qualunque utente) il cui produttore non è ancora agganciato a nessuna scheda in anagrafica — capita per i vini inseriti prima che esistesse l'anagrafica cantine.</p>
       <div id="admin-unlinked-producers-list"></div>
     </div>
+
+    <div class="fsec" style="margin-top:1.5rem">
+      <div class="stitle"><i class="ti ti-user-check"></i>Richieste di collegamento cantina (<span id="admin-winery-claims-count">0</span>)</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Utenti che hanno chiesto di gestire una cantina in prima persona (dati, catalogo vini, eventi propri).</p>
+      <div id="admin-winery-claims-list"></div>
+    </div>
+
+    <div class="fsec" style="margin-top:1.5rem">
+      <div class="stitle"><i class="ti ti-calendar-event"></i>Eventi in attesa di approvazione (<span id="admin-pending-events-count">0</span>)</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Eventi inseriti da una cantina, non ancora visibili a tutti — apri per approvare o rifiutare.</p>
+      <div id="admin-pending-events-list"></div>
+    </div>
   </div>
 
   <!-- ══ PROFILE ══ -->
@@ -2630,6 +2642,24 @@
           <label>Delegazione</label>
           <input type="text" id="p-delegazione" placeholder="Scrivi per cercare o inserisci liberamente…" autocomplete="off">
           <div style="font-size:11px;color:var(--muted);margin-top:5px">Suggerisce le delegazioni della tua associazione mentre scrivi — se non trovi la tua, scrivila comunque: viene salvata lo stesso.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sei una cantina? — richiesta di collegamento alla propria scheda anagrafica -->
+    <div class="fsec collapsible collapsed" id="fsec-winery-claim">
+      <div class="stitle fsec-header" onclick="toggleSection('fsec-winery-claim')"><i class="ti ti-building-warehouse"></i>Sei una cantina?<i class="ti ti-chevron-down fsec-chevron"></i></div>
+      <div class="fsec-body">
+        <div id="winery-claim-status" style="display:none;font-size:12.5px;color:var(--muted);margin-bottom:1rem;line-height:1.5"></div>
+        <div id="winery-claim-owned" style="display:none">
+          <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Sei collegato alla tua cantina: puoi gestirne la scheda, il catalogo vini e i tuoi eventi (questi ultimi pubblicati dopo l'approvazione di un admin).</p>
+          <button class="btn sm primary" onclick="showWineryDetail(myWineryIds()[0])"><i class="ti ti-building-warehouse"></i>Gestisci la tua cantina</button>
+        </div>
+        <div id="winery-claim-form">
+          <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Richiedi di collegarti alla tua cantina per gestirne tu la scheda, il catalogo vini e i tuoi eventi — un admin dovrà approvare la richiesta.</p>
+          <div class="fg" style="position:relative"><label>Cerca la tua cantina</label><input type="text" id="wc-winery-name" placeholder="Scrivi il nome… se non la trovi, proponila come nuova" autocomplete="off"></div>
+          <div class="fg"><label>Messaggio per l'admin <span style="font-weight:400;color:var(--muted)">(facoltativo)</span></label><textarea id="wc-note" rows="2" placeholder="es. Sono il titolare/referente di questa cantina"></textarea></div>
+          <button class="btn sm primary" onclick="submitWineryClaim()"><i class="ti ti-send"></i>Invia richiesta</button>
         </div>
       </div>
     </div>
@@ -2786,7 +2816,9 @@ let ownerCellarPosTree = []; // albero posizioni-cantina [{name,children:[{name,
 let winesCache   = [];     // array locale per render veloce
 let wineriesCache = [];    // [{id,name,region}] anagrafica cantine/produttori, per autocomplete e aggancio
 let selectedWineryId = null; // cantina scelta esplicitamente nel form vino (autocomplete "Produttore"), null = risolvi per nome al salvataggio
+let selectedClaimWineryId = null; // cantina scelta esplicitamente nella richiesta di collegamento (Profilo), null = propone una cantina nuova con quel nome
 let currentWineryId = null;  // cantina aperta sulla schermata scheda-cantina
+let currentWineryOwnerId = null; // owner_user_id della cantina aperta, per i permessi di modifica
 let wineryReturnScreen = 'screen-list'; // schermata da cui si è aperta la scheda-cantina
 let wineryRegionSuggestions = [];   // autocomplete regione nella scheda-cantina (admin), dipende dal paese scelto
 let wineryProvinceSuggestions = []; // autocomplete provincia nella scheda-cantina (admin), dipende dalla regione scelta
@@ -3474,7 +3506,7 @@ function normalizeWineryName(s) {
 
 async function loadWineriesCache() {
   try {
-    const { data, error } = await sb.from('wineries').select('id,name,region,province').order('name');
+    const { data, error } = await sb.from('wineries').select('id,name,region,province,owner_user_id').order('name');
     if (error) throw error;
     wineriesCache = data || [];
   } catch (err) {
@@ -3485,6 +3517,88 @@ async function loadWineriesCache() {
 function wineryLabel(w) {
   const loc = [w.region, w.province].filter(Boolean).join(', ');
   return loc ? `${w.name} — ${loc}` : w.name;
+}
+
+// Una cantina collegata (owner_user_id, dopo una richiesta approvata) può
+// gestire la propria scheda/catalogo/eventi come farebbe l'admin, ma solo
+// per sé stessa — usato al posto di un controllo diretto su isAdmin in
+// tutte le funzioni di scrittura di cantine/catalogo/eventi.
+function canManageWinery(ownerUserId) {
+  return !!currentUser?.isAdmin || (!!ownerUserId && ownerUserId === currentUser?.id);
+}
+// Cantine di cui l'utente corrente è proprietario collegato (di norma al
+// più una, ma non è imposto un vincolo di unicità lato DB).
+function myWineryIds() {
+  return wineriesCache.filter(w => w.owner_user_id === currentUser?.id).map(w => w.id);
+}
+
+// Popola la card "Sei una cantina?" del profilo in uno dei tre stati
+// possibili: già collegato (mostra il link alla gestione), richiesta
+// ancora in attesa (mostra a chi/quale cantina e permette di annullarla),
+// o nessuna richiesta (mostra il form per farne una).
+async function loadWineryClaimSection() {
+  const statusEl = document.getElementById('winery-claim-status');
+  const formEl = document.getElementById('winery-claim-form');
+  const ownedEl = document.getElementById('winery-claim-owned');
+  if (!statusEl || !formEl || !ownedEl || !currentUser) return;
+
+  if (myWineryIds().length) {
+    statusEl.style.display = 'none';
+    formEl.style.display = 'none';
+    ownedEl.style.display = '';
+    document.getElementById('fsec-winery-claim')?.classList.remove('collapsed');
+    return;
+  }
+  ownedEl.style.display = 'none';
+
+  const { data, error } = await sb.from('winery_claims').select('id,proposed_name,winery_id').eq('user_id', currentUser.id).eq('status', 'pending').maybeSingle();
+  if (error) console.warn('loadWineryClaimSection', error);
+  if (data) {
+    const wineryName = data.winery_id ? (wineriesCache.find(w => w.id === data.winery_id)?.name || 'la cantina scelta') : data.proposed_name;
+    statusEl.innerHTML = `La tua richiesta per «${escapeAttr(wineryName)}» è in attesa di approvazione. <a href="#" onclick="cancelWineryClaim();return false;" style="color:var(--wine);text-decoration:underline">Annulla richiesta</a>`;
+    statusEl.style.display = '';
+    formEl.style.display = 'none';
+    document.getElementById('fsec-winery-claim')?.classList.remove('collapsed');
+  } else {
+    statusEl.style.display = 'none';
+    formEl.style.display = '';
+  }
+}
+
+async function submitWineryClaim() {
+  const typed = (document.getElementById('wc-winery-name')?.value || '').trim();
+  if (!typed) { toastErr('Scrivi il nome della tua cantina'); return; }
+  const note = document.getElementById('wc-note')?.value.trim() || null;
+  const row = selectedClaimWineryId
+    ? { user_id: currentUser.id, winery_id: selectedClaimWineryId, note }
+    : { user_id: currentUser.id, proposed_name: typed, note };
+  const { error } = await sb.from('winery_claims').insert(row);
+  if (error) {
+    toastErr(error.code === '23505' ? 'Hai già una richiesta in attesa.' : 'Errore invio richiesta: ' + error.message);
+    return;
+  }
+  toast('✓ Richiesta inviata: riceverai accesso una volta approvata');
+  loadWineryClaimSection();
+}
+
+async function cancelWineryClaim() {
+  const { error } = await sb.from('winery_claims').delete().eq('user_id', currentUser.id).eq('status', 'pending');
+  if (error) { toastErr('Errore: ' + error.message); return; }
+  toast('Richiesta annullata');
+  loadWineryClaimSection();
+}
+
+// Chi può vedere il form di modifica di un evento: l'admin per qualunque
+// evento, una cantina collegata solo per i propri (creazione compresa,
+// da qui ev=null quando si sta ancora scegliendo). A differenza della
+// semplice lettura (filtrata già dalle RLS), qui serve sapere DI CHI è
+// l'evento per non offrire il form di modifica su un evento approvato
+// di un'altra cantina che l'utente può comunque vedere nella lista.
+function canManageEvent(ev) {
+  if (currentUser?.isAdmin) return true;
+  const mine = myWineryIds();
+  if (!mine.length) return false;
+  return !ev || (ev.winery_id && mine.includes(ev.winery_id));
 }
 
 // Mostra/nasconde il link "Scopri di più" accanto al campo Produttore nel
@@ -3525,6 +3639,8 @@ async function showWineryDetail(id) {
   const { data: w, error } = await sb.from('wineries').select('*').eq('id', id).maybeSingle();
   if (error || !w) { body.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted)">Cantina non trovata.</div>'; return; }
   currentWineryId = w.id;
+  currentWineryOwnerId = w.owner_user_id || null;
+  const manage = canManageWinery(currentWineryOwnerId);
 
   const { data: wines } = await sb.from('wines')
     .select('id,name,vintage,type,score,front_img')
@@ -3552,17 +3668,17 @@ async function showWineryDetail(id) {
           ${c.grapes ? `<div style="font-size:11px;color:var(--muted)">${c.grapes}</div>` : ''}
         </div>
         ${c.link ? `<a href="${c.link}" target="_blank" rel="noopener" class="winery-link" style="text-decoration:none" title="Apri il link"><i class="ti ti-external-link"></i></a>` : ''}
-        ${currentUser?.isAdmin ? `<span class="edit-btn" onclick="editWineryCatalogWine('${c.id}')" title="Modifica"><i class="ti ti-edit"></i></span>` : ''}
-        ${currentUser?.isAdmin ? `<span class="rm-btn" onclick="removeWineryCatalogWine('${c.id}')">×</span>` : ''}
+        ${manage ? `<span class="edit-btn" onclick="editWineryCatalogWine('${c.id}')" title="Modifica"><i class="ti ti-edit"></i></span>` : ''}
+        ${manage ? `<span class="rm-btn" onclick="removeWineryCatalogWine('${c.id}')">×</span>` : ''}
       </div>`).join('')
     : '';
   const catalogSection = `
     <div class="fsec" style="margin-top:1.25rem">
       <div class="stitle"><i class="ti ti-bottle-filled"></i>Vini prodotti da questa cantina</div>
-      ${currentUser?.isAdmin ? `<button class="btn sm" style="margin-bottom:10px" onclick="importWineryCatalogFromShop()"><i class="ti ti-download"></i>Importa dal sito</button>` : ''}
+      ${manage ? `<button class="btn sm" style="margin-bottom:10px" onclick="importWineryCatalogFromShop()"><i class="ti ti-download"></i>Importa dal sito</button>` : ''}
       <div class="winery-catalog-list">${catalogRowsHtml}</div>
-      ${!catalog?.length && !currentUser?.isAdmin ? `<div style="font-size:12px;color:var(--muted);padding:.5rem 0">Nessun vino ancora catalogato per questa cantina.</div>` : ''}
-      ${currentUser?.isAdmin ? `
+      ${!catalog?.length && !manage ? `<div style="font-size:12px;color:var(--muted);padding:.5rem 0">Nessun vino ancora catalogato per questa cantina.</div>` : ''}
+      ${manage ? `
         <div class="pos-add-row" style="margin-top:8px">
           <input type="text" id="wy-catalog-name" placeholder="Nome del vino" autocomplete="off">
           <input type="text" id="wy-catalog-grapes" placeholder="Uvaggio" autocomplete="off">
@@ -3572,9 +3688,9 @@ async function showWineryDetail(id) {
         </div>` : ''}
     </div>`;
 
-  const adminForm = currentUser?.isAdmin ? `
+  const adminForm = manage ? `
     <div class="fsec" style="margin-top:1.25rem">
-      <div class="stitle"><i class="ti ti-edit"></i>Modifica scheda (admin)</div>
+      <div class="stitle"><i class="ti ti-edit"></i>${currentUser?.isAdmin ? 'Modifica scheda (admin)' : 'Modifica scheda'}</div>
       <div class="frow">
         <div class="fg">
           <label>Paese</label>
@@ -3599,7 +3715,7 @@ async function showWineryDetail(id) {
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn primary sm" onclick="saveWineryDetails()"><i class="ti ti-device-floppy"></i>Salva scheda</button>
-        <button class="btn sm danger" onclick="deleteWinery()"><i class="ti ti-trash"></i>Elimina cantina</button>
+        ${currentUser?.isAdmin ? `<button class="btn sm danger" onclick="deleteWinery()"><i class="ti ti-trash"></i>Elimina cantina</button>` : ''}
       </div>
     </div>` : '';
 
@@ -3612,7 +3728,7 @@ async function showWineryDetail(id) {
         ${w.website ? `<a href="${w.website}" target="_blank" rel="noopener" style="font-size:12.5px;color:var(--wine)"><i class="ti ti-world" style="font-size:12px"></i> ${w.website.replace(/^https?:\/\//,'')}</a>` : ''}
       </div>
     </div>
-    ${w.description ? `<p style="font-size:13px;color:var(--ink);line-height:1.6;margin-top:1rem">${w.description}</p>` : (!currentUser?.isAdmin ? `<p style="font-size:12.5px;color:var(--muted);margin-top:1rem">Non ci sono ancora informazioni su questa cantina.</p>` : '')}
+    ${w.description ? `<p style="font-size:13px;color:var(--ink);line-height:1.6;margin-top:1rem">${w.description}</p>` : (!manage ? `<p style="font-size:12.5px;color:var(--muted);margin-top:1rem">Non ci sono ancora informazioni su questa cantina.</p>` : '')}
     ${catalogSection}
     <div class="fsec" style="margin-top:1.25rem">
       <div class="stitle"><i class="ti ti-bottle"></i>Vini degli utenti di questa cantina</div>
@@ -3626,7 +3742,7 @@ async function showWineryDetail(id) {
   // ricreati a ogni render (l'HTML è rigenerato), quindi vanno riagganciati
   // ogni volta — stessa cascata Paese → Regione → Provincia del form vino
   // (province suggerite/visibili solo per l'Italia).
-  if (currentUser?.isAdmin) {
+  if (manage) {
     const countryEl = document.getElementById('wy-country');
     if (countryEl) countryEl.value = w.country || '';
     const onRegionChange = () => {
@@ -3656,7 +3772,7 @@ async function showWineryDetail(id) {
 // Elenco dei vini prodotti dalla cantina (catalogo curato dall'admin),
 // distinto dai vini che gli utenti hanno effettivamente in cantina.
 async function addWineryCatalogWine() {
-  if (!currentUser?.isAdmin || !currentWineryId) return;
+  if (!canManageWinery(currentWineryOwnerId) || !currentWineryId) return;
   const g = id => document.getElementById(id)?.value.trim() || null;
   const name = g('wy-catalog-name');
   if (!name) return;
@@ -3673,7 +3789,7 @@ async function addWineryCatalogWine() {
 // così "salva modifica" (vedi addWineryCatalogWine) finché non si annulla
 // o si salva — evita di dover cancellare e ricreare una voce per correggerla.
 async function editWineryCatalogWine(wineryWineId) {
-  if (!currentUser?.isAdmin) return;
+  if (!canManageWinery(currentWineryOwnerId)) return;
   const { data, error } = await sb.from('winery_wines').select('id,name,grapes,link').eq('id', wineryWineId).maybeSingle();
   if (error || !data) { toastErr('Impossibile caricare il vino'); return; }
   editingWineryWineId = data.id;
@@ -3703,7 +3819,7 @@ function cancelEditWineryCatalogWine() {
 // senza uvaggio: quello si aggiunge dopo con l'icona di modifica sul
 // catalogo, vino per vino.
 async function importWineryCatalogFromShop() {
-  if (!currentUser?.isAdmin || !currentWineryId) return;
+  if (!canManageWinery(currentWineryOwnerId) || !currentWineryId) return;
   const defaultUrl = document.getElementById('wy-website')?.value.trim() || '';
   const shopUrl = (prompt('Link alla pagina del negozio/catalogo vini:', defaultUrl) || '').trim();
   if (!shopUrl) return;
@@ -3727,7 +3843,7 @@ async function importWineryCatalogFromShop() {
 }
 
 async function removeWineryCatalogWine(wineryWineId) {
-  if (!currentUser?.isAdmin) return;
+  if (!canManageWinery(currentWineryOwnerId)) return;
   const { error } = await sb.from('winery_wines').delete().eq('id', wineryWineId);
   if (error) { toastErr('Errore eliminazione: ' + error.message); return; }
   showWineryDetail(currentWineryId);
@@ -3739,12 +3855,12 @@ async function removeWineryCatalogWine(wineryWineId) {
 // caso passerebbe per un salvataggio riuscito quando in realtà non ha
 // scritto nulla: controlliamo esplicitamente che una riga sia tornata.
 async function saveWineryDetails() {
-  if (!currentUser?.isAdmin || !currentWineryId) return;
+  if (!canManageWinery(currentWineryOwnerId) || !currentWineryId) return;
   const g = id => document.getElementById(id)?.value.trim() || null;
   const row = { country: g('wy-country'), region: g('wy-region'), province: g('wy-province'), website: g('wy-website'), description: g('wy-description'), updated_at: new Date().toISOString() };
   const { data, error } = await sb.from('wineries').update(row).eq('id', currentWineryId).select('id');
   if (error) { toastErr('Errore salvataggio: ' + error.message); return; }
-  if (!data?.length) { toastErr('Salvataggio non riuscito: verifica di essere admin (is_admin) e di aver eseguito tutta la migrazione SQL delle cantine.'); return; }
+  if (!data?.length) { toastErr('Salvataggio non riuscito: verifica di avere i permessi per modificare questa cantina.'); return; }
   toast('✓ Scheda cantina aggiornata');
   loadWineriesCache();
   showWineryDetail(currentWineryId);
@@ -3776,7 +3892,7 @@ async function deleteWinery() {
 }
 
 async function uploadWineryLogo(input) {
-  const file = input.files[0]; if (!file || !currentUser?.isAdmin || !currentWineryId) return;
+  const file = input.files[0]; if (!file || !canManageWinery(currentWineryOwnerId) || !currentWineryId) return;
   let toUpload = file;
   try { toUpload = await compressImage(file, 400, 0.85); } catch (e) { console.warn('compressImage logo fallita', e); }
   const path = `wineries/${currentWineryId}-${Date.now()}.jpg`;
@@ -3792,7 +3908,7 @@ async function uploadWineryLogo(input) {
 // meglio di niente. Se il risultato non convince resta comunque possibile
 // caricare un logo vero a mano, che sovrascrive questo.
 function useFaviconAsLogo() {
-  if (!currentUser?.isAdmin || !currentWineryId) return;
+  if (!canManageWinery(currentWineryOwnerId) || !currentWineryId) return;
   const website = document.getElementById('wy-website')?.value.trim();
   let host;
   try { host = new URL(website).hostname; } catch { toastErr('Imposta prima un sito web valido'); return; }
@@ -3802,7 +3918,7 @@ function useFaviconAsLogo() {
 async function updateWineryLogoUrl(logoUrl, successMsg) {
   const { data, error } = await sb.from('wineries').update({ logo_url: logoUrl }).eq('id', currentWineryId).select('id');
   if (error) { toastErr('Errore salvataggio: ' + error.message); return; }
-  if (!data?.length) { toastErr('Salvataggio non riuscito: verifica di essere admin (is_admin) e di aver eseguito tutta la migrazione SQL delle cantine.'); return; }
+  if (!data?.length) { toastErr('Salvataggio non riuscito: verifica di avere i permessi per modificare questa cantina.'); return; }
   toast(successMsg);
   loadWineriesCache();
   showWineryDetail(currentWineryId);
@@ -3842,6 +3958,10 @@ async function showAdminWineriesScreen() {
   list.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted)">Caricamento…</div>';
   const unlinkedList = document.getElementById('admin-unlinked-producers-list');
   unlinkedList.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--muted)">Caricamento…</div>';
+  const claimsList = document.getElementById('admin-winery-claims-list');
+  claimsList.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--muted)">Caricamento…</div>';
+  const pendingEventsList = document.getElementById('admin-pending-events-list');
+  pendingEventsList.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--muted)">Caricamento…</div>';
 
   const wineries = await loadWineriesToComplete();
   document.getElementById('admin-wineries-count').textContent = wineries.length;
@@ -3861,6 +3981,75 @@ async function showAdminWineriesScreen() {
         <button class="btn sm" data-producer="${escapeAttr(p.producer)}" onclick="linkProducerToWinery(this.dataset.producer)"><i class="ti ti-link"></i>Collega</button>
       </div>`).join('')
     : '<div style="text-align:center;padding:1.5rem;color:var(--muted)">Nessun produttore scollegato 🎉</div>';
+
+  const claims = await loadWineryClaims();
+  document.getElementById('admin-winery-claims-count').textContent = claims.length;
+  claimsList.innerHTML = claims.length
+    ? claims.map(c => `
+      <div class="winery-row" style="align-items:flex-start">
+        <div style="flex:1;min-width:0">
+          <div class="winery-row-name"><i class="ti ti-user-check"></i>${escapeAttr(c.requester_name || c.requester_email || 'Utente')} <span style="font-size:11px;color:var(--muted);font-weight:400">→ ${c.existing_winery_name ? escapeAttr(c.existing_winery_name) : `"${escapeAttr(c.proposed_name || '')}" (nuova)`}</span></div>
+          ${c.note ? `<div style="font-size:11.5px;color:var(--muted);margin-top:4px;padding-left:22px">"${escapeAttr(c.note)}"</div>` : ''}
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0">
+          <button class="btn sm" data-claim="${c.id}" data-winery="${c.winery_id || ''}" data-name="${escapeAttr(c.proposed_name || '')}" data-user="${c.user_id}" onclick="approveWineryClaim(this.dataset.claim, this.dataset.winery, this.dataset.name, this.dataset.user)"><i class="ti ti-check"></i></button>
+          <button class="btn sm danger" data-claim="${c.id}" onclick="rejectWineryClaim(this.dataset.claim)"><i class="ti ti-x"></i></button>
+        </div>
+      </div>`).join('')
+    : '<div style="text-align:center;padding:1.5rem;color:var(--muted)">Nessuna richiesta in attesa 🎉</div>';
+
+  const pendingEvents = await loadPendingEventsForAdmin();
+  document.getElementById('admin-pending-events-count').textContent = pendingEvents.length;
+  pendingEventsList.innerHTML = pendingEvents.length
+    ? pendingEvents.map(e => `
+      <div class="winery-row" onclick="showEventDetail('${e.id}')">
+        <div class="winery-row-name"><i class="ti ti-calendar-event"></i>${e.name}</div>
+        <i class="ti ti-chevron-right"></i>
+      </div>`).join('')
+    : '<div style="text-align:center;padding:1.5rem;color:var(--muted)">Nessun evento in attesa 🎉</div>';
+}
+
+async function loadWineryClaims() {
+  const { data, error } = await sb.rpc('get_pending_winery_claims');
+  if (error) { console.warn('loadWineryClaims', error); return []; }
+  return data || [];
+}
+
+// Se la richiesta indicava una cantina già in anagrafica la collega
+// direttamente; se ne proponeva una nuova la crea (riusando
+// findOrCreateWinery per evitare doppioni su un nome già esistente) e poi
+// la collega — in entrambi i casi imposta owner_user_id e marca la
+// richiesta come accettata.
+async function approveWineryClaim(claimId, wineryId, proposedName, userId) {
+  if (!currentUser?.isAdmin) return;
+  let targetWineryId = wineryId || null;
+  if (!targetWineryId) {
+    if (!proposedName) { toastErr('Nome cantina mancante nella richiesta'); return; }
+    targetWineryId = await findOrCreateWinery(proposedName);
+    if (!targetWineryId) { toastErr('Errore creazione cantina'); return; }
+  }
+  const { data: wData, error: wErr } = await sb.from('wineries').update({ owner_user_id: userId }).eq('id', targetWineryId).select('id');
+  if (wErr) { toastErr('Errore collegamento: ' + wErr.message); return; }
+  if (!wData?.length) { toastErr('Collegamento non riuscito.'); return; }
+  const { error: cErr } = await sb.from('winery_claims').update({ status: 'accepted', reviewed_at: new Date().toISOString(), reviewed_by: currentUser.id }).eq('id', claimId);
+  if (cErr) { toastErr('Cantina collegata ma errore aggiornando la richiesta: ' + cErr.message); return; }
+  toast('✓ Cantina collegata');
+  loadWineriesCache();
+  showAdminWineriesScreen();
+}
+
+async function rejectWineryClaim(claimId) {
+  if (!currentUser?.isAdmin) return;
+  const { error } = await sb.from('winery_claims').update({ status: 'rejected', reviewed_at: new Date().toISOString(), reviewed_by: currentUser.id }).eq('id', claimId);
+  if (error) { toastErr('Errore: ' + error.message); return; }
+  toast('Richiesta rifiutata');
+  showAdminWineriesScreen();
+}
+
+async function loadPendingEventsForAdmin() {
+  const { data, error } = await sb.from('events').select('id,name').eq('status', 'pending').order('created_at', { ascending: false });
+  if (error) { console.warn('loadPendingEventsForAdmin', error); return []; }
+  return data || [];
 }
 
 function escapeAttr(s) {
@@ -3994,9 +4183,20 @@ function getSelectedEventAssociations() {
 }
 async function loadEvents() {
   const { data, error } = await sb.from('events')
-    .select('id,name,category,date_from,date_to,region,province,description,associations');
+    .select('id,name,category,date_from,date_to,region,province,description,associations,status,winery_id');
   if (error) { console.warn('loadEvents', error); return []; }
   return data || [];
+}
+
+// Badge di stato moderazione: la riga arriva dal DB solo se le RLS la
+// rendono visibile a chi guarda (admin o cantina proprietaria per i
+// pending/rejected, chiunque per gli approved) — se lo status non è
+// 'approved' chi lo vede può quindi sempre agire, non serve un controllo
+// separato qui.
+function eventStatusBadgeHtml(status) {
+  if (status === 'pending')  return `<span class="dchip" style="background:var(--gold);color:#fff">In attesa di approvazione</span>`;
+  if (status === 'rejected') return `<span class="dchip" style="background:#c0392b;color:#fff">Rifiutato</span>`;
+  return '';
 }
 
 async function loadFavoriteEventIds() {
@@ -4051,6 +4251,7 @@ function eventCardHtml(e) {
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:2px">
         <div class="event-card-name" style="margin-bottom:0">${e.name}</div>
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end;flex-shrink:0">
+          ${eventStatusBadgeHtml(e.status)}
           ${e.category ? `<span class="dchip">${e.category}</span>` : ''}
           ${(e.associations || []).map(a => `<span class="dchip">${a}</span>`).join('')}
           ${currentUser ? `<button class="event-fav-btn${isFav ? ' active' : ''}" data-id="${e.id}" style="position:static" onclick="toggleEventFavorite('${e.id}', event)"><i class="ti ${isFav ? 'ti-star-filled' : 'ti-star'}"></i></button>` : ''}
@@ -4076,7 +4277,7 @@ async function showEventsScreen() {
   showScreen('screen-events');
   showPastEvents = false;
   const addBtn = document.getElementById('events-add-btn');
-  if (addBtn) addBtn.style.display = currentUser?.isAdmin ? '' : 'none';
+  if (addBtn) addBtn.style.display = (currentUser?.isAdmin || myWineryIds().length) ? '' : 'none';
   const list = document.getElementById('events-list');
   list.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted)">Caricamento…</div>';
   [eventsCache, favoriteEventIds] = await Promise.all([loadEvents(), loadFavoriteEventIds()]);
@@ -4151,16 +4352,16 @@ function renderEventsList() {
 
   list.innerHTML = filtered.length
     ? filtered.map(eventCardHtml).join('')
-    : `<div class="empty"><i class="ti ti-calendar-event"></i><p>${showPastEvents ? 'Nessun evento passato.' : (currentUser?.isAdmin ? 'Nessun evento in programma — aggiungine uno.' : 'Nessun evento in programma al momento.')}</p></div>`;
+    : `<div class="empty"><i class="ti ti-calendar-event"></i><p>${showPastEvents ? 'Nessun evento passato.' : (canManageEvent(null) ? 'Nessun evento in programma — aggiungine uno.' : 'Nessun evento in programma al momento.')}</p></div>`;
 }
 
 function showAddEventForm() {
-  if (!currentUser?.isAdmin) return;
+  if (!canManageEvent(null)) return;
   showEventDetail(null);
 }
 
 async function showEventDetail(id, prefill) {
-  if (!id && !currentUser?.isAdmin) return;
+  if (!id && !canManageEvent(null)) return;
   showScreen('screen-event-detail');
   currentEventId = id;
   currentEventData = null;
@@ -4174,6 +4375,7 @@ async function showEventDetail(id, prefill) {
     ev = data;
     currentEventData = data;
   }
+  const manageEv = canManageEvent(ev);
 
   const featuresList = ev ? (ev.main_features || '').split('\n').map(f => f.trim()).filter(Boolean) : [];
   const dateRange = ev ? formatEventDateRange(ev.date_from, ev.date_to) : '';
@@ -4189,6 +4391,7 @@ async function showEventDetail(id, prefill) {
       <div>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:2px">
           <div class="winery-name">${ev.name}</div>
+          ${eventStatusBadgeHtml(ev.status)}
           ${ev.category ? `<span class="dchip">${ev.category}</span>` : ''}
         </div>
         ${dateRange ? `<div style="font-size:12.5px;color:var(--muted)"><i class="ti ti-calendar-event" style="font-size:12px"></i> ${dateRange}</div>` : ''}
@@ -4213,9 +4416,15 @@ async function showEventDetail(id, prefill) {
       </div>` : ''}
   ` : '';
 
-  const adminForm = currentUser?.isAdmin ? `
+  const adminForm = manageEv ? `
     <div class="fsec" style="margin-top:1.25rem">
       <div class="stitle"><i class="ti ti-edit"></i>${id ? 'Modifica evento' : 'Nuovo evento'}</div>
+      ${(!currentUser?.isAdmin && !id) ? `<p style="font-size:12px;color:var(--muted);margin:-4px 0 1rem">L'evento sarà visibile a tutti solo dopo l'approvazione di un admin.</p>` : ''}
+      ${(currentUser?.isAdmin && ev && ev.status !== 'approved') ? `
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem">
+          <button class="btn sm primary" onclick="setEventStatus('approved')"><i class="ti ti-check"></i>Approva</button>
+          ${ev.status !== 'rejected' ? `<button class="btn sm danger" onclick="setEventStatus('rejected')"><i class="ti ti-x"></i>Rifiuta</button>` : ''}
+        </div>` : ''}
       <div class="fg"><label>Nome evento *</label><input type="text" id="ev-name" value="${ev?.name || ''}" placeholder="es. Vinitaly"></div>
       <div class="frow">
         <div class="fg">
@@ -4262,7 +4471,7 @@ Area food">${ev?.main_features || ''}</textarea></div>
 
   body.innerHTML = readView + adminForm;
 
-  if (currentUser?.isAdmin) {
+  if (manageEv) {
     eventProvinceSuggestions = GEO_PROVINCES_ITALIA[ev?.region || ''] || [];
     attachAutocomplete('ev-region', () => GEO_REGIONS['Italia'] || [], sel => {
       document.getElementById('ev-region').value = sel;
@@ -4276,7 +4485,7 @@ Area food">${ev?.main_features || ''}</textarea></div>
 }
 
 async function saveEvent() {
-  if (!currentUser?.isAdmin) return;
+  if (!canManageEvent(currentEventData)) return;
   const g = id => document.getElementById(id)?.value.trim() || null;
   const name = g('ev-name');
   if (!name) { toastErr('Il nome evento è obbligatorio'); return; }
@@ -4289,27 +4498,45 @@ async function saveEvent() {
     description: g('ev-description'), main_features: g('ev-features'),
     associations: getSelectedEventAssociations(),
   };
+  // Una cantina (non admin) pubblica sempre in moderazione, mai
+  // direttamente: qualunque modifica successiva la rimanda "in attesa"
+  // finché un admin non la riapprova — le RLS impongono comunque questi
+  // due campi così, questo è solo per farlo coerente lato UI.
+  if (!currentUser?.isAdmin) {
+    row.status = 'pending';
+    row.winery_id = myWineryIds()[0];
+  }
   let data, error;
   if (currentEventId) {
     ({ data, error } = await sb.from('events').update(row).eq('id', currentEventId).select('id'));
-    if (!error && !data?.length) { toastErr('Salvataggio non riuscito: verifica di essere admin (is_admin).'); return; }
+    if (!error && !data?.length) { toastErr('Salvataggio non riuscito: verifica di avere i permessi per modificare questo evento.'); return; }
   } else {
     row.created_by = currentUser.id;
     ({ data, error } = await sb.from('events').insert(row).select('id').single());
   }
   if (error) { toastErr('Errore salvataggio: ' + error.message); return; }
-  toast('✓ Evento salvato');
+  toast(currentUser?.isAdmin ? '✓ Evento salvato' : '✓ Evento inviato: sarà visibile a tutti dopo l\'approvazione');
   showEventDetail(currentEventId || data?.id);
 }
 
 async function deleteEvent() {
-  if (!currentUser?.isAdmin || !currentEventId) return;
+  if (!canManageEvent(currentEventData) || !currentEventId) return;
   if (!confirm('Eliminare questo evento? Non è reversibile.')) return;
   const { data, error } = await sb.from('events').delete().eq('id', currentEventId).select('id');
   if (error) { toastErr('Errore eliminazione: ' + error.message); return; }
-  if (!data?.length) { toastErr('Eliminazione non riuscita: verifica di essere admin (is_admin).'); return; }
+  if (!data?.length) { toastErr('Eliminazione non riuscita: verifica di avere i permessi per eliminare questo evento.'); return; }
   toast('✓ Evento eliminato');
   showEventsScreen();
+}
+
+// Solo admin: approva o rifiuta un evento inserito da una cantina.
+async function setEventStatus(status) {
+  if (!currentUser?.isAdmin || !currentEventId) return;
+  const { data, error } = await sb.from('events').update({ status }).eq('id', currentEventId).select('id');
+  if (error) { toastErr('Errore: ' + error.message); return; }
+  if (!data?.length) { toastErr('Operazione non riuscita.'); return; }
+  toast(status === 'approved' ? '✓ Evento approvato' : 'Evento rifiutato');
+  showEventDetail(currentEventId);
 }
 
 // Riapre la scheda evento in modalità "nuovo" (niente id, quindi il
@@ -4318,8 +4545,8 @@ async function deleteEvent() {
 // che si ripetono ogni anno, così basta aggiornare le date invece di
 // reinserire tutto da capo.
 function duplicateEvent() {
-  if (!currentUser?.isAdmin || !currentEventData) return;
-  const { id, created_at, updated_at, created_by, ...rest } = currentEventData;
+  if (!canManageEvent(currentEventData) || !currentEventData) return;
+  const { id, created_at, updated_at, created_by, status, ...rest } = currentEventData;
   showEventDetail(null, rest);
   toast('Evento duplicato: aggiorna le date e salva');
 }
@@ -4465,9 +4692,16 @@ async function updateAdminWineriesBadge() {
   if (card) card.style.display = '';
   const configCard = document.getElementById('home-config-card');
   if (configCard) configCard.style.display = '';
-  const { count } = await sb.from('wineries').select('*', { count: 'exact', head: true })
-    .is('country', null).is('region', null).is('province', null).is('website', null).is('description', null).is('logo_url', null);
-  const n = count || 0;
+  // Un unico numero riassume tutto ciò che aspetta l'admin nella schermata
+  // Amministrazione: cantine da completare, richieste di collegamento
+  // cantina ed eventi in attesa di approvazione.
+  const [{ count: incompleteCount }, { count: claimsCount }, { count: pendingEventsCount }] = await Promise.all([
+    sb.from('wineries').select('*', { count: 'exact', head: true })
+      .is('country', null).is('region', null).is('province', null).is('website', null).is('description', null).is('logo_url', null),
+    sb.from('winery_claims').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+    sb.from('events').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+  ]);
+  const n = (incompleteCount || 0) + (claimsCount || 0) + (pendingEventsCount || 0);
   const badge = document.getElementById('home-admin-badge');
   if (badge) {
     if (n > 0) { badge.textContent = n > 99 ? '99+' : n; badge.style.display = 'flex'; }
@@ -6432,6 +6666,8 @@ function showProfileScreen() {
   // già qualcosa di configurato, altrimenti restano chiuse di default
   document.getElementById('fsec-assoc')?.classList.toggle('collapsed', !u.assoc);
   document.getElementById('fsec-cellar-mgmt')?.classList.toggle('collapsed', !(u.cellarPosTree && u.cellarPosTree.length));
+  document.getElementById('fsec-winery-claim')?.classList.add('collapsed');
+  loadWineryClaimSection();
 
   // Immagine profilo
   pendingAvatarBase64 = null;
@@ -7094,6 +7330,17 @@ attachAutocomplete('f-producer', () => wineriesCache.map(wineryLabel), sel => {
 });
 document.getElementById('f-producer')?.addEventListener('input', () => { selectedWineryId = null; updateWineryLinkVisibility(); });
 
+// Stessa logica dell'autocomplete "Produttore" qui sopra: selezionando un
+// suggerimento la richiesta si aggancia a quella cantina esatta (winery_id),
+// continuando a scrivere liberamente propone invece una cantina nuova con
+// quel nome (proposed_name) — vedi submitWineryClaim().
+attachAutocomplete('wc-winery-name', () => wineriesCache.map(wineryLabel), sel => {
+  const w = wineriesCache.find(x => wineryLabel(x) === sel);
+  document.getElementById('wc-winery-name').value = w ? w.name : sel;
+  selectedClaimWineryId = w ? w.id : null;
+});
+document.getElementById('wc-winery-name')?.addEventListener('input', () => { selectedClaimWineryId = null; });
+
 /* ── INIT ── */
 calcAIS(); calcFISAR();
 
@@ -7123,8 +7370,8 @@ Object.assign(window, {
   showWineryDetail, saveWineryDetails, uploadWineryLogo, goBackFromWinery, showAdminWineriesScreen, deleteWinery,
   addWineryCatalogWine, removeWineryCatalogWine, useFaviconAsLogo,
   editWineryCatalogWine, cancelEditWineryCatalogWine, addWineryManually, importWineryCatalogFromShop,
-  linkProducerToWinery,
-  showEventsScreen, showAddEventForm, showEventDetail, saveEvent, deleteEvent, duplicateEvent,
+  linkProducerToWinery, approveWineryClaim, rejectWineryClaim, submitWineryClaim, cancelWineryClaim, myWineryIds,
+  showEventsScreen, showAddEventForm, showEventDetail, saveEvent, deleteEvent, duplicateEvent, setEventStatus,
   renderEventsList, updateEventsProvinceFilterOptions, toggleShowPastEvents, toggleEventFavorite,
   showConfigListsScreen, selectConfigList, addConfigListValue, removeConfigListValue
 });

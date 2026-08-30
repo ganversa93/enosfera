@@ -151,9 +151,6 @@ Deno.serve(async (req) => {
     const { data: userData, error: userErr } = await sbAdmin.auth.getUser(token);
     if (userErr || !userData?.user) return json({ error: 'Sessione non valida' }, 401);
 
-    const { data: profile } = await sbAdmin.from('profiles').select('is_admin').eq('id', userData.user.id).maybeSingle();
-    if (!profile?.is_admin) return json({ error: 'Solo l\'admin può farlo' }, 403);
-
     const body = await req.json().catch(() => ({}));
     const wineryId = typeof body?.wineryId === 'string' ? body.wineryId : '';
     const shopUrl = typeof body?.shopUrl === 'string' ? body.shopUrl.trim() : '';
@@ -163,8 +160,15 @@ Deno.serve(async (req) => {
     try { parsed = new URL(shopUrl); } catch { return json({ error: 'Link non valido' }, 400); }
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return json({ error: 'Link non valido' }, 400);
 
-    const { data: winery } = await sbAdmin.from('wineries').select('id').eq('id', wineryId).maybeSingle();
+    const { data: winery } = await sbAdmin.from('wineries').select('id,owner_user_id').eq('id', wineryId).maybeSingle();
     if (!winery) return json({ error: 'Cantina non trovata' }, 404);
+
+    // Ammesso anche il proprietario collegato della cantina stessa, non
+    // solo l'admin — stesso permesso che ha già lato client su scheda e
+    // catalogo (vedi canManageWinery() in index.html).
+    const { data: profile } = await sbAdmin.from('profiles').select('is_admin').eq('id', userData.user.id).maybeSingle();
+    const isOwner = winery.owner_user_id && winery.owner_user_id === userData.user.id;
+    if (!profile?.is_admin && !isOwner) return json({ error: 'Non hai i permessi per farlo' }, 403);
 
     const pageResp = await fetchWithTimeout(parsed.toString());
     if (!pageResp.ok) return json({ error: `Impossibile raggiungere la pagina (${pageResp.status})` }, 502);
