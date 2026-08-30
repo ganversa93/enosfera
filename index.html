@@ -217,12 +217,13 @@
     .lfield { margin-bottom: 1rem; }
     .lfield:last-of-type { margin-bottom: 0; }
     .lfield label { display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin-bottom: 5px; }
-    .lfield input, .lfield select {
+    .lfield input, .lfield select, .lfield textarea {
       width: 100%; font-family: 'Inter', sans-serif; font-size: 13px;
       padding: 9px 12px; border-radius: 8px;
       border: 0.5px solid var(--border); background: var(--bg); color: var(--ink);
     }
-    .lfield input:focus, .lfield select:focus { outline: none; border-color: var(--wine); }
+    .lfield input:focus, .lfield select:focus, .lfield textarea:focus { outline: none; border-color: var(--wine); }
+    .lfield textarea { resize: vertical; }
     .lbtn {
       width: 100%; padding: 10px; font-size: 14px; font-weight: 500;
       font-family: 'Inter', sans-serif; background: var(--wine);
@@ -986,9 +987,21 @@
           <a href="#" class="lforgot-link" style="text-align:center;margin-top:1rem" onclick="switchLTab('login');return false;">← Torna al login</a>
         </div>
         <div id="lform-reg" style="display:none">
+          <div class="lfield">
+            <label>Mi registro come</label>
+            <div class="ltabs" style="margin-bottom:0">
+              <div class="ltab active" id="rtype-person" onclick="switchRegType('person')">Persona</div>
+              <div class="ltab" id="rtype-winery" onclick="switchRegType('winery')">Cantina</div>
+            </div>
+          </div>
           <div class="lfield"><label>Nome e cognome *</label><input type="text" id="r-name" placeholder="Mario Rossi"></div>
           <div class="lfield"><label>Email *</label><input type="email" id="r-email" placeholder="nome@email.it"></div>
           <div class="lfield"><label>Password * (min. 6 caratteri)</label><input type="password" id="r-pwd" placeholder="••••••••"></div>
+          <div id="lreg-winery-fields" style="display:none">
+            <div class="lfield"><label>Nome della tua cantina *</label><input type="text" id="r-winery-name" placeholder="Scrivi il nome esatto — se è già in anagrafica ti colleghiamo lì, altrimenti la proponiamo come nuova" autocomplete="off"></div>
+            <div class="lfield"><label>Messaggio per l'admin <span style="font-weight:400;color:var(--muted)">(facoltativo)</span></label><textarea id="r-winery-note" rows="2" placeholder="es. Sono il titolare/referente di questa cantina"></textarea></div>
+            <p style="font-size:11px;color:var(--muted);margin:-6px 0 1rem">Un admin dovrà approvare la richiesta prima che tu possa gestire la scheda della cantina — l'account intanto funziona normalmente come per chiunque altro.</p>
+          </div>
           <div class="lfield">
             <label>Associazione di appartenenza</label>
             <select id="r-assoc">
@@ -2817,6 +2830,7 @@ let winesCache   = [];     // array locale per render veloce
 let wineriesCache = [];    // [{id,name,region}] anagrafica cantine/produttori, per autocomplete e aggancio
 let selectedWineryId = null; // cantina scelta esplicitamente nel form vino (autocomplete "Produttore"), null = risolvi per nome al salvataggio
 let selectedClaimWineryId = null; // cantina scelta esplicitamente nella richiesta di collegamento (Profilo), null = propone una cantina nuova con quel nome
+let regType = 'person'; // 'person' | 'winery' — scelta nel form di registrazione
 let currentWineryId = null;  // cantina aperta sulla schermata scheda-cantina
 let currentWineryOwnerId = null; // owner_user_id della cantina aperta, per i permessi di modifica
 let wineryReturnScreen = 'screen-list'; // schermata da cui si è aperta la scheda-cantina
@@ -2867,6 +2881,15 @@ function switchLTab(t) {
   document.getElementById('lform-reg').style.display   = t === 'reg'   ? '' : 'none';
   document.getElementById('lform-forgot').style.display = 'none';
   document.getElementById('lform-oauth').style.display = '';
+  if (t === 'reg') switchRegType('person');
+}
+
+function switchRegType(t) {
+  regType = t;
+  document.getElementById('rtype-person')?.classList.toggle('active', t === 'person');
+  document.getElementById('rtype-winery')?.classList.toggle('active', t === 'winery');
+  const wineryFields = document.getElementById('lreg-winery-fields');
+  if (wineryFields) wineryFields.style.display = t === 'winery' ? '' : 'none';
 }
 
 function showForgotPasswordForm() {
@@ -2989,6 +3012,11 @@ async function doRegister() {
     err.textContent = 'Compila tutti i campi (password min. 6 caratteri)';
     err.style.display = 'block'; return;
   }
+  const wineryName = regType === 'winery' ? (document.getElementById('r-winery-name')?.value || '').trim() : '';
+  if (regType === 'winery' && !wineryName) {
+    err.textContent = 'Scrivi il nome della tua cantina';
+    err.style.display = 'block'; return;
+  }
   const btn = document.querySelector('#lform-reg .lbtn');
   btn.textContent = 'Creazione account…'; btn.disabled = true;
   let data, error;
@@ -3041,10 +3069,32 @@ async function doRegister() {
     return;
   }
   await loadProfile(data.user);
+  if (regType === 'winery' && wineryName) await submitRegistrationWineryClaim(wineryName);
   // Login immediato per scelta (nessuna conferma email bloccante): inviamo
   // comunque una email di verifica tramite Resend, puramente informativa.
   sb.functions.invoke('send-confirmation-email', { body: {} }).catch(() => {});
-  setTimeout(() => toast('Account creato! Ti abbiamo inviato una email di conferma — la trovi anche nel tuo profilo 📧'), 600);
+  const doneMsg = regType === 'winery'
+    ? 'Account creato! Ti abbiamo inviato una email di conferma e inoltrato la richiesta di collegamento per la tua cantina 🍷'
+    : 'Account creato! Ti abbiamo inviato una email di conferma — la trovi anche nel tuo profilo 📧';
+  setTimeout(() => toast(doneMsg), 600);
+}
+
+// Invia la stessa richiesta di collegamento cantina della card "Sei una
+// cantina?" nel profilo (vedi submitWineryClaim), solo innescata qui
+// subito dopo la registrazione invece che in un secondo momento. Niente
+// autocomplete sul nome come nel profilo: prima di questo punto non c'è
+// ancora una sessione autenticata per leggere l'anagrafica cantine (RLS
+// "to authenticated"), quindi il match con una cantina già esistente si
+// fa qui, ora che la sessione c'è, cercando una corrispondenza esatta sul
+// nome normalizzato — se non c'è, si propone come cantina nuova.
+async function submitRegistrationWineryClaim(wineryName) {
+  const note = document.getElementById('r-winery-note')?.value.trim() || null;
+  const { data: existing } = await sb.from('wineries').select('id').eq('name_normalized', normalizeWineryName(wineryName)).maybeSingle();
+  const row = existing
+    ? { user_id: currentUser.id, winery_id: existing.id, note }
+    : { user_id: currentUser.id, proposed_name: wineryName, note };
+  const { error } = await sb.from('winery_claims').insert(row);
+  if (error) console.warn('submitRegistrationWineryClaim', error);
 }
 
 async function doLogout() {
@@ -7357,7 +7407,7 @@ Object.assign(window, {
   goBackFromProfile, searchUsersToShareCellar, switchCellarOwner,
   scanBothLabels, searchNetworkUsers, sendFollowRequest, setFilter, setQtyFilter, showAdd, showComingSoon, showDetail,
   setSortField, toggleSortDir, setNetworkSortField, toggleNetworkSortDir,
-  showNetworkScreen, showNetworkWinePreview, showProfileScreen, showScreen, startPremiumCheckout, stepQty, switchDeg, switchLTab, toast,
+  showNetworkScreen, showNetworkWinePreview, showProfileScreen, showScreen, startPremiumCheckout, stepQty, switchDeg, switchLTab, switchRegType, toast,
   showGuideScreen,
   toggleAdvFilters, toggleFisarMethodField, toggleNavMenu, togglePairing, toggleSection, updateGrapePct, updateTonalitaColore, updateAisColore,
   updateRegionOptions, updateProvinceOptions, dismissInstallBanner, triggerInstallPrompt, resetInstallBanner,
