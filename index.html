@@ -1309,7 +1309,7 @@
         <ul class="guide-list">
           <li>La ricerca in alto trova per nome, produttore, regione e abbinamento contemporaneamente.</li>
           <li>Il pulsante <b>Filtri</b> apre un pannello con Paese, Regione, Abbinamento e Vitigno — le opzioni mostrano solo i valori che hai davvero usato, mai filtri che darebbero zero risultati.</li>
-          <li>Le chip <b>Tutte / In cantina / Solo degustati</b> filtrano per quantità posseduta.</li>
+          <li>Le chip <b>Tutte / In cantina / Solo degustati</b> filtrano per quantità posseduta: "In cantina" mostra i vini con almeno una bottiglia, "Solo degustati" quelli senza bottiglie e — anche se ne restano ancora — quelli con una data di degustazione, così un vino "in cantina" può comparire in entrambi.</li>
         </ul>
       </div>
     </div>
@@ -4603,9 +4603,12 @@ function degSchemaTag(w) {
 }
 function wineQtyBadge(w) {
   const qty = w.qty ?? 1;
-  return qty > 0
-    ? `<span class="wqty-badge"><i class="ti ti-bottle" style="font-size:11px"></i>${qty}</span>`
-    : `<span class="wqty-badge tasted-only"><i class="ti ti-glass-full" style="font-size:11px"></i>Degustato</span>`;
+  if (qty <= 0) return `<span class="wqty-badge tasted-only"><i class="ti ti-glass-full" style="font-size:11px"></i>Degustato</span>`;
+  // Bottiglie ancora in cantina ma già degustata (una delle tante aperta):
+  // stesso badge del conteggio bottiglie, con in più l'icona del bicchiere
+  // a segnalarlo, invece di sostituirlo del tutto come per qty=0.
+  const tastedMark = w.tastingDate ? ` <i class="ti ti-glass-full" style="font-size:10px" title="Degustato"></i>` : '';
+  return `<span class="wqty-badge"><i class="ti ti-bottle" style="font-size:11px"></i>${qty}${tastedMark}</span>`;
 }
 
 // Ricerca per parole (non per frase intera): ogni parola della query deve
@@ -4688,7 +4691,11 @@ function renderGrid() {
     if (currentFilter !== 'all' && w.type !== currentFilter) return false;
     const qty = w.qty ?? 1;
     if (currentQtyFilter === 'owned'  && qty <= 0) return false;
-    if (currentQtyFilter === 'tasted' && qty > 0)  return false;
+    // "Degustato" non è più solo qty=0 (bottiglia finita/mai posseduta):
+    // conta come degustato anche un vino con bottiglie ancora in cantina
+    // se ha una data di degustazione — capita spesso di assaggiarne una
+    // e tenere le altre.
+    if (currentQtyFilter === 'tasted' && qty > 0 && !w.tastingDate) return false;
     if (afCountry && w.country !== afCountry) return false;
     if (afRegion  && w.region  !== afRegion)  return false;
     if (afPairing) {
@@ -5821,6 +5828,14 @@ function startTastingWizard(id) {
   const w = myWines().find(x => x.id === id); if (!w) return;
   currentDetailId = id;
   editWine();
+  // La degustazione guidata è il "processo di valutazione" vero e proprio:
+  // se il vino non aveva ancora una data di degustazione la impostiamo a
+  // oggi di default — resta comunque un campo normale, modificabile poi
+  // dall'utente come qualsiasi altro (es. da "Modifica").
+  if (!w.tastingDate) {
+    const dateInput = document.getElementById('f-tastingdate');
+    if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
+  }
   enterWizardMode();
 }
 
