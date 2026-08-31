@@ -1336,3 +1336,17 @@ begin
 end;
 $$;
 grant execute on function public.get_pending_winery_claims() to authenticated;
+
+-- ════════════════════════════════════════════════════════════════
+-- Tutorial (panoramica guidata a step): una tantum al primo accesso,
+-- sempre richiamabile da Profilo → Tutorial. Il default è false così i
+-- nuovi account lo vedono al primo accesso; per chi è già registrato da
+-- prima di questa colonna va invece marcato "già visto" con l'update qui
+-- sotto — da lanciare UNA SOLA VOLTA subito dopo la alter table, non ad
+-- ogni ri-esecuzione dello script (altrimenti azzererebbe tutorial_seen
+-- anche per chi nel frattempo l'ha già visto).
+-- ════════════════════════════════════════════════════════════════
+alter table public.profiles add column if not exists tutorial_seen boolean not null default false;
+
+-- Da lanciare una volta sola, subito dopo la riga sopra:
+-- update public.profiles set tutorial_seen = true;

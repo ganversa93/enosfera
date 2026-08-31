@@ -870,6 +870,8 @@
     .public-prompt-card p { font-size: 13px; color: var(--muted); line-height: 1.55; margin-bottom: 1.2rem; }
     .public-prompt-actions { display: flex; flex-direction: column; gap: 8px; }
     .public-prompt-actions .btn { justify-content: center; width: 100%; }
+    .tutorial-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--border); transition: background .15s; }
+    .tutorial-dot.active { background: var(--wine); }
 
     /* ── RESPONSIVE ── */
     @media (max-width: 520px) {
@@ -2677,6 +2679,13 @@
       </div>
     </div>
 
+    <!-- Tutorial -->
+    <div class="fsec">
+      <div class="stitle"><i class="ti ti-help-circle"></i>Tutorial</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Rivedi la breve panoramica su profilo pubblico, cantina condivisa, inserimento vini e degustazione.</p>
+      <button class="btn sm" onclick="openTutorial()"><i class="ti ti-player-play"></i>Avvia il tutorial</button>
+    </div>
+
     <!-- App sulla home del telefono -->
     <div class="fsec">
       <div class="stitle"><i class="ti ti-device-mobile"></i>App sulla home del telefono</div>
@@ -2797,6 +2806,21 @@
       <button class="btn primary" onclick="confirmSumDuplicateQty()"><i class="ti ti-plus"></i>Somma la quantità</button>
       <button class="btn sm" onclick="confirmSaveDuplicateAsNew()">Salva come vino separato</button>
       <a href="#" onclick="closeDuplicateWinePrompt();return false;" style="font-size:11px;color:var(--muted);text-decoration:underline;margin-top:2px">Annulla, torna al modulo</a>
+    </div>
+  </div>
+</div>
+
+<!-- TUTORIAL — panoramica guidata dell'app, al primo accesso e su richiesta dal profilo -->
+<div class="public-prompt-overlay" id="tutorial-overlay">
+  <div class="public-prompt-card" style="max-width:420px">
+    <div id="tutorial-step-body"></div>
+    <div id="tutorial-dots" style="display:flex;justify-content:center;gap:6px;margin:1.1rem 0"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+      <a href="#" onclick="skipTutorial();return false;" style="font-size:12px;color:var(--muted);text-decoration:underline">Salta</a>
+      <div style="display:flex;gap:8px">
+        <button class="btn sm" id="tutorial-back-btn" onclick="tutorialStep(-1)">Indietro</button>
+        <button class="btn sm primary" id="tutorial-next-btn" onclick="tutorialStep(1)">Avanti</button>
+      </div>
     </div>
   </div>
 </div>
@@ -3130,7 +3154,8 @@ async function loadProfile(authUser) {
     emailConfirmed:    !!authUser.email_confirmed_at,
     cellarPosTree:     profile?.cellar_positions_tree || [],
     isAdmin:           profile?.is_admin || false,
-    assocPromptPending: profile?.assoc_prompt_pending || false
+    assocPromptPending: profile?.assoc_prompt_pending || false,
+    tutorialSeen: profile?.tutorial_seen || false
   };
   // Se non esiste ancora un profilo (caso raro, es. trigger non installato),
   // lo creiamo ora che l'utente è sicuramente autenticato — solo se online,
@@ -3190,10 +3215,16 @@ async function saveAssocPrompt() {
 /* ── POP-UP PROFILO PUBBLICO (primo accesso) ──
    Il funzionamento del Network dipende interamente da profiles.is_public,
    un'impostazione sepolta nella schermata Profilo: mostriamo un pop-up
-   una tantum (tracciato da public_prompt_seen) per farla notare subito. */
+   una tantum (tracciato da public_prompt_seen) per farla notare subito.
+   Si incatena al tutorial subito dopo (vedi più sotto), così i due
+   pop-up non compaiono mai insieme — stesso schema già usato per
+   maybeShowAssocPrompt() → maybeShowPublicPrompt(). */
 function maybeShowPublicPrompt() {
-  if (!currentUser || currentUser.isPublic || currentUser.publicPromptSeen || !navigator.onLine) return;
-  setTimeout(() => document.getElementById('public-prompt-overlay')?.classList.add('open'), 600);
+  if (currentUser && !currentUser.isPublic && !currentUser.publicPromptSeen && navigator.onLine) {
+    setTimeout(() => document.getElementById('public-prompt-overlay')?.classList.add('open'), 600);
+  } else {
+    maybeShowTutorial();
+  }
 }
 async function markPublicPromptSeen() {
   if (!currentUser) return;
@@ -3203,6 +3234,7 @@ async function markPublicPromptSeen() {
 function dismissPublicPrompt() {
   document.getElementById('public-prompt-overlay')?.classList.remove('open');
   markPublicPromptSeen();
+  maybeShowTutorial();
 }
 async function acceptPublicPrompt() {
   document.getElementById('public-prompt-overlay')?.classList.remove('open');
@@ -3214,6 +3246,94 @@ async function acceptPublicPrompt() {
   } catch (e) {
     toastErr('Errore nell\'aggiornamento del profilo: ' + e.message);
   }
+  maybeShowTutorial();
+}
+
+/* ── TUTORIAL (primo accesso, o su richiesta da Profilo) ──
+   Panoramica a step su profilo pubblico/cantina condivisa, inserimento
+   vino e degustazione — un carosello di slide esplicative (non un tour
+   dal vivo sulle schermate reali: più semplice da mantenere e non
+   dipende dalla struttura esatta di ogni schermata). Una tantum al primo
+   accesso (tracciato da tutorial_seen), sempre richiamabile da Profilo. */
+const TUTORIAL_STEPS = [
+  {
+    icon: 'ti-sparkles',
+    title: 'Benvenuto in Enoscrigno',
+    body: `<p>Una breve panoramica per orientarti: profilo pubblico e cantina condivisa, come inserire un vino, come funziona la degustazione. Richiede un minuto — puoi rivederla quando vuoi da <b>Profilo → Tutorial</b>.</p>`
+  },
+  {
+    icon: 'ti-users',
+    title: 'Profilo pubblico e cantina condivisa',
+    body: `<p>Il <b>Network</b> — dove segui altri appassionati e sommelier e vedi i loro vini — funziona solo se il tuo profilo è impostato come <b>pubblico</b>: altrimenti nessuno può trovarti né inviarti richieste di follow.</p>
+      <p>La <b>cantina condivisa</b> ti permette invece di invitare altre persone (es. un socio, un familiare) a vedere e gestire la tua cantina insieme a te. Configuri entrambe da <b>Profilo</b>.</p>`
+  },
+  {
+    icon: 'ti-bottle',
+    title: 'Inserire un vino',
+    body: `<p>Da <b>Cantina → Aggiungi vino</b> puoi scansionare l'etichetta (se hai la scansione AI attiva) oppure compilare i campi a mano: identità, provenienza, dati tecnici, posizione in cantina.</p>
+      <p>I campi sono raggruppati in sezioni che puoi aprire e chiudere — non serve compilarli tutti, solo il nome è obbligatorio.</p>`
+  },
+  {
+    icon: 'ti-clipboard-list',
+    title: 'Degustazione',
+    body: `<p>Puoi degustare un vino in due modi: con <b>"Degustazione guidata"</b> (l'icona a clipboard sulla card del vino), che ti accompagna passo passo nella scheda AIS/FISAR, oppure assegnando un punteggio libero da "Modifica".</p>
+      <p>Un vino risulta "degustato" quando ha una <b>Data degustazione</b> compilata — anche se restano ancora bottiglie in cantina.</p>`
+  },
+  {
+    icon: 'ti-check',
+    title: 'Tutto pronto',
+    body: `<p>Questo è tutto per iniziare. Puoi rivedere questa guida in qualsiasi momento da <b>Profilo → Tutorial</b>.</p>`
+  }
+];
+let tutorialStepIndex = 0;
+
+function maybeShowTutorial() {
+  if (!currentUser || currentUser.tutorialSeen || !navigator.onLine) return;
+  setTimeout(() => openTutorial(), 600);
+}
+
+function openTutorial() {
+  tutorialStepIndex = 0;
+  renderTutorialStep();
+  document.getElementById('tutorial-overlay')?.classList.add('open');
+}
+
+function renderTutorialStep() {
+  const step = TUTORIAL_STEPS[tutorialStepIndex];
+  const body = document.getElementById('tutorial-step-body');
+  if (body) body.innerHTML = `
+    <i class="ti ${step.icon}" style="font-size:34px;color:var(--wine);margin-bottom:10px;display:block;text-align:center"></i>
+    <h3 style="font-family:'Cormorant Garamond',serif;font-size:20px;color:var(--ink);margin-bottom:8px;text-align:center">${step.title}</h3>
+    <div style="font-size:13px;color:var(--muted);line-height:1.6;text-align:left">${step.body}</div>`;
+  const dots = document.getElementById('tutorial-dots');
+  if (dots) dots.innerHTML = TUTORIAL_STEPS.map((_, i) => `<span class="tutorial-dot${i === tutorialStepIndex ? ' active' : ''}"></span>`).join('');
+  const backBtn = document.getElementById('tutorial-back-btn');
+  if (backBtn) backBtn.style.visibility = tutorialStepIndex === 0 ? 'hidden' : 'visible';
+  const nextBtn = document.getElementById('tutorial-next-btn');
+  if (nextBtn) nextBtn.innerHTML = tutorialStepIndex === TUTORIAL_STEPS.length - 1
+    ? 'Inizia<i class="ti ti-check" style="margin-left:4px"></i>'
+    : 'Avanti<i class="ti ti-chevron-right" style="margin-left:4px"></i>';
+}
+
+function tutorialStep(delta) {
+  const next = tutorialStepIndex + delta;
+  if (next < 0) return;
+  if (next >= TUTORIAL_STEPS.length) { closeTutorial(); return; }
+  tutorialStepIndex = next;
+  renderTutorialStep();
+}
+
+function skipTutorial() { closeTutorial(); }
+
+function closeTutorial() {
+  document.getElementById('tutorial-overlay')?.classList.remove('open');
+  markTutorialSeen();
+}
+
+async function markTutorialSeen() {
+  if (!currentUser || currentUser.tutorialSeen) return;
+  currentUser.tutorialSeen = true;
+  try { await sb.from('profiles').update({ tutorial_seen: true }).eq('id', currentUser.id); } catch {}
 }
 
 /* ══ WINES — DB layer ══ */
@@ -7414,6 +7534,7 @@ Object.assign(window, {
   dismissUpdateBanner, reloadApp,
   setNetworkFilter, toggleNetworkAdvFilters, onNetworkCountryChange, resetNetworkFilters, renderNetworkFeed,
   dismissPublicPrompt, acceptPublicPrompt, markFScoreManual, dismissAssocPrompt, saveAssocPrompt,
+  openTutorial, tutorialStep, skipTutorial,
   confirmSumDuplicateQty, confirmSaveDuplicateAsNew, closeDuplicateWinePrompt,
   addPosNode, removePosNode, addWinePosition, removeWinePosition, onPosL1Change, onPosL2Change, onPosL3Change,
   addDetailPosition, removeDetailPosition, onDetailPosL1Change, onDetailPosL2Change, onDetailPosL3Change,
