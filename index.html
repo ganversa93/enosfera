@@ -4829,6 +4829,12 @@ function showLoadingOverlay(show) {
     await loadProfile(session.user);
   } else {
     showScreen('screen-login');
+    // Arrivo dalla landing page (link "Registrati gratis" con ?register=1):
+    // apre subito la scheda di registrazione invece di quella di accesso.
+    if (new URLSearchParams(window.location.search).get('register')) {
+      switchLTab('reg');
+      history.replaceState(null, '', window.location.pathname);
+    }
   }
 })();
 
