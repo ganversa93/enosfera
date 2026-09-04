@@ -1350,3 +1350,35 @@ alter table public.profiles add column if not exists tutorial_seen boolean not n
 
 -- Da lanciare una volta sola, subito dopo la riga sopra:
 -- update public.profiles set tutorial_seen = true;
+
+-- ════════════════════════════════════════════════════════════════
+-- FIX: le registrazioni fallivano con "Database error saving new user"
+-- perché handle_new_user() scrive ancora su public.cellars/cellar_members
+-- (il vecchio modello v1 di multi-cantina, superato da cellar_shares —
+-- vedi CLAUDE.md), tabelle che su questo database non sono mai state
+-- create. Il frontend non le legge mai (nessun riferimento in index.html
+-- o nelle Edge Function): non serve crearle, la dipendenza si può
+-- rimuovere del tutto dal trigger, così la registrazione non dipende più
+-- da tabelle ormai morte.
+-- ════════════════════════════════════════════════════════════════
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.profiles (id, full_name, assoc, card, delegazione, delegazione_custom, assoc_prompt_pending)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)),
+    coalesce(new.raw_user_meta_data->>'assoc', ''),
+    coalesce(new.raw_user_meta_data->>'card', ''),
+    '', '',
+    (new.raw_app_meta_data->>'provider') = 'google'
+  )
+  on conflict (id) do nothing;
+
+  return new;
+end;
+$$;
