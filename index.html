@@ -400,14 +400,6 @@
     }
     .cellar-chip.active { background: var(--wine); color: #fff; border-color: var(--wine); font-weight: 500; }
 
-    .migration-notice {
-      background: rgba(184,137,42,.12); border: 0.5px solid rgba(184,137,42,.35);
-      color: var(--gold); font-size: 12px; line-height: 1.5; border-radius: 10px;
-      padding: 10px 14px; margin-bottom: 1.25rem; display: flex; gap: 8px; align-items: flex-start;
-    }
-    .migration-notice i { flex-shrink: 0; margin-top: 1px; }
-    .migration-notice b { color: var(--gold); }
-
     /* ── HOME ── */
     .home-welcome { font-family: 'Cormorant Garamond', serif; font-size: 22px; color: var(--ink); margin: 1.5rem 0 1.25rem; text-align: center; }
     .home-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
@@ -956,10 +948,6 @@
         <div class="brand-logo-plate">
           <img src="assets/enoscrigno-logo-v2.png" alt="Enoscrigno" class="brand-logo-img">
         </div>
-      </div>
-      <div class="migration-notice">
-        <i class="ti ti-info-circle"></i>
-        <span>Abbiamo aggiornato il sistema alla base — se avevi già un account, i tuoi dati sono al sicuro ma serve <b>registrarti di nuovo</b> con la stessa email.</span>
       </div>
       <div class="ltabs">
         <div class="ltab active" id="ltab-login" onclick="switchLTab('login')">Accedi</div>
@@ -2776,6 +2764,18 @@
   </div>
 </div>
 
+<!-- POP-UP ACCETTAZIONE PRIVACY POLICY (chi si era già registrato prima che esistesse) -->
+<div class="public-prompt-overlay" id="privacy-prompt-overlay">
+  <div class="public-prompt-card">
+    <i class="ti ti-shield-check"></i>
+    <h3>Abbiamo aggiornato la Privacy Policy</h3>
+    <p>Per continuare a usare Enoscrigno ti chiediamo di leggere e accettare la nostra <a href="privacy.html" target="_blank" rel="noopener" style="color:var(--wine);text-decoration:underline;font-weight:500">Privacy Policy</a>.</p>
+    <div class="public-prompt-actions">
+      <button class="btn primary" onclick="acceptPrivacyPrompt()"><i class="ti ti-check"></i>Ho letto e accetto</button>
+    </div>
+  </div>
+</div>
+
 <!-- POP-UP ASSOCIAZIONE/TESSERA (primo accesso via Google, mai chiesto in fase di registrazione) -->
 <div class="public-prompt-overlay" id="assoc-prompt-overlay">
   <div class="public-prompt-card">
@@ -3180,7 +3180,8 @@ async function loadProfile(authUser) {
     cellarPosTree:     profile?.cellar_positions_tree || [],
     isAdmin:           profile?.is_admin || false,
     assocPromptPending: profile?.assoc_prompt_pending || false,
-    tutorialSeen: profile?.tutorial_seen || false
+    tutorialSeen: profile?.tutorial_seen || false,
+    privacyAcceptedAt: profile?.privacy_accepted_at || null
   };
   // Se non esiste ancora un profilo (caso raro, es. trigger non installato),
   // lo creiamo ora che l'utente è sicuramente autenticato — solo se online,
@@ -3202,10 +3203,40 @@ async function loadProfile(authUser) {
   if (sessionStorage.getItem('enoscrigno_privacy_pending')) {
     sessionStorage.removeItem('enoscrigno_privacy_pending');
     if (!profile?.privacy_accepted_at) {
-      try { await sb.from('profiles').update({ privacy_accepted_at: new Date().toISOString() }).eq('id', authUser.id).is('privacy_accepted_at', null); } catch {}
+      const acceptedAt = new Date().toISOString();
+      try {
+        await sb.from('profiles').update({ privacy_accepted_at: acceptedAt }).eq('id', authUser.id).is('privacy_accepted_at', null);
+        currentUser.privacyAcceptedAt = acceptedAt;
+      } catch {}
     }
   }
   await initApp();
+  maybeShowPrivacyPrompt();
+}
+
+/* ── POP-UP ACCETTAZIONE PRIVACY POLICY ──
+   Per chi si era registrato prima che esistesse la Privacy Policy (vedi
+   privacy_accepted_at, nullo per gli account creati prima di questa
+   colonna): va accettata per poter continuare a usare l'app, quindi a
+   differenza degli altri pop-up qui sotto non ha un tasto "più tardi" —
+   si incatena comunque alla stessa catena (assoc → profilo pubblico →
+   tutorial) una volta accettata, così non si accavallano mai. */
+function maybeShowPrivacyPrompt() {
+  if (currentUser && !currentUser.privacyAcceptedAt && navigator.onLine) {
+    setTimeout(() => document.getElementById('privacy-prompt-overlay')?.classList.add('open'), 400);
+  } else {
+    maybeShowAssocPrompt();
+  }
+}
+async function acceptPrivacyPrompt() {
+  document.getElementById('privacy-prompt-overlay')?.classList.remove('open');
+  const acceptedAt = new Date().toISOString();
+  try {
+    await sb.from('profiles').update({ privacy_accepted_at: acceptedAt }).eq('id', currentUser.id);
+    currentUser.privacyAcceptedAt = acceptedAt;
+  } catch (e) {
+    toastErr('Errore: ' + e.message);
+  }
   maybeShowAssocPrompt();
 }
 
@@ -7576,7 +7607,7 @@ Object.assign(window, {
   updateRegionOptions, updateProvinceOptions, dismissInstallBanner, triggerInstallPrompt, resetInstallBanner,
   dismissUpdateBanner, reloadApp,
   setNetworkFilter, toggleNetworkAdvFilters, onNetworkCountryChange, resetNetworkFilters, renderNetworkFeed,
-  dismissPublicPrompt, acceptPublicPrompt, markFScoreManual, dismissAssocPrompt, saveAssocPrompt,
+  dismissPublicPrompt, acceptPublicPrompt, markFScoreManual, dismissAssocPrompt, saveAssocPrompt, acceptPrivacyPrompt,
   openTutorial, tutorialStep, skipTutorial,
   confirmSumDuplicateQty, confirmSaveDuplicateAsNew, closeDuplicateWinePrompt,
   addPosNode, removePosNode, addWinePosition, removeWinePosition, onPosL1Change, onPosL2Change, onPosL3Change,
