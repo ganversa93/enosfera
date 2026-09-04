@@ -1382,3 +1382,41 @@ begin
   return new;
 end;
 $$;
+
+-- ════════════════════════════════════════════════════════════════
+-- PRIVACY POLICY — spunta obbligatoria in registrazione (email/password
+-- e Google), con timestamp di quando è stata accettata. Nullo per gli
+-- account già esistenti prima di questa colonna (non richiesta
+-- retroattivamente) e per un eventuale account creato senza passare da
+-- qui (caso limite non previsto dal flusso attuale).
+-- ════════════════════════════════════════════════════════════════
+alter table public.profiles add column if not exists privacy_accepted_at timestamptz;
+
+-- Ridefinizione di handle_new_user() che imposta privacy_accepted_at a
+-- ora se il form di registrazione (email/password) ha passato
+-- privacy_accepted:true nei metadati di signUp() — vedi doRegister() in
+-- index.html. Per la registrazione via Google, che non passa metadati
+-- personalizzati, il client imposta privacy_accepted_at con un update
+-- separato subito dopo il redirect (vedi doGoogleAuth()/loadProfile()).
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.profiles (id, full_name, assoc, card, delegazione, delegazione_custom, assoc_prompt_pending, privacy_accepted_at)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)),
+    coalesce(new.raw_user_meta_data->>'assoc', ''),
+    coalesce(new.raw_user_meta_data->>'card', ''),
+    '', '',
+    (new.raw_app_meta_data->>'provider') = 'google',
+    case when (new.raw_user_meta_data->>'privacy_accepted')::boolean then now() else null end
+  )
+  on conflict (id) do nothing;
+
+  return new;
+end;
+$$;

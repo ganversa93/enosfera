@@ -1015,6 +1015,10 @@
             </select>
           </div>
           <div class="lfield"><label>Numero tessera (opzionale)</label><input type="text" id="r-card" placeholder="es. AIS-2024-00123"></div>
+          <div class="lfield" style="display:flex;align-items:flex-start;gap:9px">
+            <input type="checkbox" id="r-privacy-accept" style="margin-top:3px;width:auto;flex-shrink:0">
+            <label for="r-privacy-accept" style="font-size:12px;color:var(--muted);font-weight:400;cursor:pointer">Ho letto e accetto la <a href="privacy.html" target="_blank" rel="noopener" style="color:var(--wine);text-decoration:underline">Privacy Policy</a> *</label>
+          </div>
           <button class="lbtn" onclick="doRegister()">Crea account</button>
           <div class="lerr" id="rerr">Compila tutti i campi obbligatori</div>
         </div>
@@ -2700,6 +2704,9 @@
     <div style="text-align:center;margin-top:1rem">
       <button class="btn sm danger" onclick="doLogout()"><i class="ti ti-logout"></i>Esci dall'account</button>
     </div>
+    <div style="text-align:center;margin-top:1rem">
+      <a href="privacy.html" target="_blank" rel="noopener" style="font-size:11.5px;color:var(--muted);text-decoration:underline">Privacy Policy</a>
+    </div>
   </div>
 
   <!-- ══ EXPORT ══ -->
@@ -2959,6 +2966,19 @@ async function doForgotPassword() {
 // il resto (creazione sessione, caricamento profilo) lo gestisce già
 // il codice di ripristino sessione più sotto.
 async function doGoogleAuth() {
+  // Il tasto Google è condiviso tra Accedi e Registrati (login/registrazione
+  // unificati): la spunta privacy si vede e va richiesta solo quando si sta
+  // registrando (tab Registrati attivo), non per chi ha già un account e sta
+  // solo accedendo di nuovo.
+  const isRegisterTab = document.getElementById('lform-reg')?.style.display !== 'none';
+  if (isRegisterTab && !document.getElementById('r-privacy-accept')?.checked) {
+    toastErr('Devi accettare la Privacy Policy per registrarti');
+    return;
+  }
+  // Il redirect verso Google ricarica la pagina da zero: salviamo qui
+  // l'intenzione di registrare l'accettazione della privacy, per leggerla
+  // al ritorno (vedi loadProfile()) quando la sessione è di nuovo disponibile.
+  if (isRegisterTab) sessionStorage.setItem('enoscrigno_privacy_pending', '1');
   const { error } = await sb.auth.signInWithOAuth({
     provider: 'google',
     options: { redirectTo: window.location.origin + window.location.pathname }
@@ -3041,6 +3061,11 @@ async function doRegister() {
     err.textContent = 'Scrivi il nome della tua cantina';
     err.style.display = 'block'; return;
   }
+  const privacyAccepted = document.getElementById('r-privacy-accept')?.checked;
+  if (!privacyAccepted) {
+    err.textContent = 'Devi accettare la Privacy Policy per registrarti';
+    err.style.display = 'block'; return;
+  }
   const btn = document.querySelector('#lform-reg .lbtn');
   btn.textContent = 'Creazione account…'; btn.disabled = true;
   let data, error;
@@ -3048,7 +3073,7 @@ async function doRegister() {
     ({ data, error } = await sb.auth.signUp({
       email, password: pwd,
       options: {
-        data: { full_name: firstname, assoc, card },
+        data: { full_name: firstname, assoc, card, privacy_accepted: true },
         emailRedirectTo: window.location.origin + window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1) + 'confirmed.html'
       }
     }));
@@ -3076,7 +3101,7 @@ async function doRegister() {
   try {
     await sb.from('profiles').upsert({
       id: data.user.id, full_name: firstname,
-      assoc, card, delegazione: ''
+      assoc, card, delegazione: '', privacy_accepted_at: new Date().toISOString()
     });
   } catch(_) { /* ignorato: il trigger DB copre già questo caso */ }
 
@@ -3167,6 +3192,18 @@ async function loadProfile(authUser) {
         assoc: '', card: '', delegazione: ''
       });
     } catch {}
+  }
+  // Ritorno dal redirect Google dopo aver spuntato la Privacy Policy in
+  // fase di registrazione (vedi doGoogleAuth()): a differenza del form
+  // email/password, qui non possiamo passare metadati custom a
+  // signInWithOAuth(), quindi registriamo l'accettazione solo ora che la
+  // sessione è di nuovo disponibile — una volta sola, e solo se non
+  // risulta già accettata (nel dubbio non sovrascriviamo un valore reale).
+  if (sessionStorage.getItem('enoscrigno_privacy_pending')) {
+    sessionStorage.removeItem('enoscrigno_privacy_pending');
+    if (!profile?.privacy_accepted_at) {
+      try { await sb.from('profiles').update({ privacy_accepted_at: new Date().toISOString() }).eq('id', authUser.id).is('privacy_accepted_at', null); } catch {}
+    }
   }
   await initApp();
   maybeShowAssocPrompt();

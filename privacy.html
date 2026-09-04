@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#6B1839">
+  <title>Enoscrigno — Privacy Policy</title>
+  <meta name="description" content="Informativa sul trattamento dei dati personali di Enoscrigno.">
+  <meta name="robots" content="noindex">
+
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="192x192" href="assets/favicon-192.png">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,400&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --wine: #6B1839;
+      --wine-l: #8A2A4E;
+      --wine-pale: #F5E9EE;
+      --gold: #B7924A;
+      --ink: #2F3133;
+      --muted: #6B6E72;
+      --border: rgba(107,24,57,0.15);
+      --bg: #FFFFFF;
+      --surf: #F8F5F1;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --ink: #F0EEEC;
+        --muted: #A8ABAE;
+        --border: rgba(215,190,200,0.15);
+        --bg: #201519;
+        --surf: #2A1B21;
+        --wine-pale: #3A1826;
+      }
+    }
+
+    body { font-family: 'Inter', sans-serif; background: var(--surf); color: var(--ink); line-height: 1.6; }
+    a { color: var(--wine); }
+    .wrap { max-width: 760px; margin: 0 auto; padding: 0 1.25rem 5rem; }
+
+    .top { padding: 1.4rem 1.25rem; border-bottom: 0.5px solid var(--border); background: var(--bg); }
+    .top-inner { max-width: 760px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; }
+    .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; font-family: 'Cormorant Garamond', serif; font-size: 19px; font-weight: 600; color: var(--wine); }
+    .brand img { width: 26px; height: 26px; border-radius: 6px; }
+    .back { font-size: 13px; color: var(--muted); text-decoration: none; }
+    .back:hover { color: var(--ink); }
+
+    header.hero { padding: 3rem 0 1.5rem; }
+    h1 { font-family: 'Cormorant Garamond', serif; font-weight: 600; font-size: 38px; color: var(--ink); margin-bottom: .5rem; }
+    .updated { font-size: 12.5px; color: var(--muted); }
+
+    .fill {
+      background: var(--wine-pale); border: 1px solid var(--border); border-radius: 12px;
+      padding: 1rem 1.2rem; margin: 1.5rem 0; font-size: 13px; color: var(--ink);
+    }
+    .fill b { color: var(--wine); }
+
+    nav.toc {
+      background: var(--bg); border: 0.5px solid var(--border); border-radius: 14px;
+      padding: 1.2rem 1.4rem; margin: 1.5rem 0 2.5rem;
+    }
+    nav.toc div.t { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: .7rem; }
+    nav.toc ol { list-style: none; counter-reset: toc; display: grid; gap: 6px; }
+    nav.toc li { counter-increment: toc; font-size: 13.5px; }
+    nav.toc li::before { content: counter(toc) ". "; color: var(--gold); font-weight: 600; }
+    nav.toc a { text-decoration: none; color: var(--ink); }
+    nav.toc a:hover { color: var(--wine); }
+
+    section { margin-bottom: 2.4rem; }
+    h2 {
+      font-family: 'Cormorant Garamond', serif; font-weight: 600; font-size: 24px;
+      color: var(--ink); margin-bottom: .8rem; scroll-margin-top: 1.5rem;
+    }
+    h3 { font-size: 14.5px; font-weight: 600; color: var(--ink); margin: 1.1rem 0 .4rem; }
+    p { font-size: 14px; color: var(--ink); margin-bottom: .8rem; }
+    p.muted, li.muted { color: var(--muted); }
+    ul, ol.plain { padding-left: 1.3rem; margin-bottom: .8rem; }
+    ul li, ol.plain li { font-size: 14px; margin-bottom: .4rem; }
+
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 13px; }
+    th, td { text-align: left; padding: 10px 12px; border: 0.5px solid var(--border); vertical-align: top; }
+    th { background: var(--bg); font-weight: 600; }
+    td { background: var(--bg); }
+
+    .contact-box {
+      background: var(--bg); border: 0.5px solid var(--border); border-radius: 14px;
+      padding: 1.4rem; margin-top: .5rem;
+    }
+    .contact-box p { margin-bottom: .4rem; }
+
+    footer.page-footer { text-align: center; padding: 2rem 0; font-size: 12px; color: var(--muted); }
+  </style>
+</head>
+<body>
+
+  <div class="top">
+    <div class="top-inner">
+      <a class="brand" href="landing.html"><img src="assets/favicon-48.png" alt="">Enoscrigno</a>
+      <a class="back" href="index.html">← Torna all'app</a>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <header class="hero">
+      <h1>Privacy Policy</h1>
+      <p class="updated">Ultimo aggiornamento: 4 settembre 2026</p>
+    </header>
+
+    <div class="fill">
+      <b>Nota per chi pubblica questa pagina:</b> i campi tra parentesi quadre (titolare del trattamento, indirizzo, email dedicata) vanno compilati con i tuoi dati reali prima di rendere la pagina definitiva. Questo testo è una bozza redatta sulla base di come l'app tratta effettivamente i dati; è consigliata una revisione legale prima della pubblicazione ufficiale.
+    </div>
+
+    <nav class="toc" aria-label="Indice">
+      <div class="t">Indice</div>
+      <ol>
+        <li><a href="#titolare">Titolare del trattamento</a></li>
+        <li><a href="#dati">Quali dati raccogliamo</a></li>
+        <li><a href="#finalita">Perché li raccogliamo e su quale base giuridica</a></li>
+        <li><a href="#terze-parti">Fornitori terzi e trasferimento dati</a></li>
+        <li><a href="#condivisione">Cosa vedono gli altri utenti</a></li>
+        <li><a href="#conservazione">Per quanto tempo conserviamo i dati</a></li>
+        <li><a href="#sicurezza">Sicurezza</a></li>
+        <li><a href="#cookie">Cookie e tecnologie simili</a></li>
+        <li><a href="#diritti">I tuoi diritti</a></li>
+        <li><a href="#minori">Minori</a></li>
+        <li><a href="#modifiche">Modifiche a questa informativa</a></li>
+        <li><a href="#contatti">Contatti</a></li>
+      </ol>
+    </nav>
+
+    <section id="titolare">
+      <h2>1. Titolare del trattamento</h2>
+      <p>Il titolare del trattamento dei dati raccolti tramite Enoscrigno (il "Servizio", accessibile da <a href="https://www.enoscrigno.it">www.enoscrigno.it</a> e dall'app collegata) è:</p>
+      <div class="contact-box">
+        <p><b>[Nome e cognome / Ragione sociale del titolare]</b></p>
+        <p>[Indirizzo completo]</p>
+        <p>[Partita IVA / Codice Fiscale, se applicabile]</p>
+        <p>Email per richieste privacy: <a href="mailto:privacy@enoscrigno.it">[privacy@enoscrigno.it]</a></p>
+      </div>
+    </section>
+
+    <section id="dati">
+      <h2>2. Quali dati raccogliamo</h2>
+      <p>Raccogliamo solo i dati necessari a far funzionare il Servizio. Nello specifico:</p>
+
+      <h3>Dati di account</h3>
+      <ul>
+        <li>Nome e cognome, indirizzo email, password (quest'ultima non è mai visibile a noi: viene gestita in forma cifrata dal nostro fornitore di autenticazione, Supabase).</li>
+        <li>Se scegli di accedere con Google: nome, email e immagine del profilo forniti da Google al momento dell'autorizzazione.</li>
+        <li>Associazione di appartenenza (AIS, FISAR, ONAV, FIS) e numero tessera, se li indichi — facoltativi.</li>
+        <li>Fotografia del profilo, se la carichi — facoltativa.</li>
+      </ul>
+
+      <h3>Dati inseriti nella tua cantina digitale</h3>
+      <ul>
+        <li>Informazioni sui vini che aggiungi: nome, produttore, annata, provenienza, dati tecnici, prezzo, quantità, posizione in cantina.</li>
+        <li>Fotografie delle etichette che carichi (fronte/retro bottiglia).</li>
+        <li>Schede e note di degustazione, punteggi (metodo AIS, FISAR o libero).</li>
+      </ul>
+
+      <h3>Dati di pagamento (solo per l'upgrade Premium)</h3>
+      <p>Se attivi l'abbonamento Premium, il pagamento è gestito interamente da <b>Stripe</b>: i dati della tua carta non transitano né vengono conservati sui nostri sistemi. Riceviamo da Stripe solo la conferma dell'attivazione/rinnovo/cancellazione dell'abbonamento.</p>
+
+      <h3>Dati tecnici</h3>
+      <ul class="muted">
+        <li>Dati di funzionamento minimi necessari per mantenere la sessione attiva e far funzionare l'app offline (salvati localmente sul tuo dispositivo, non su server esterni salvo sincronizzazione).</li>
+      </ul>
+    </section>
+
+    <section id="finalita">
+      <h2>3. Perché li raccogliamo e su quale base giuridica</h2>
+      <table>
+        <tr><th>Finalità</th><th>Base giuridica</th></tr>
+        <tr><td>Creare e gestire il tuo account, farti accedere al Servizio</td><td>Esecuzione di un contratto (i Termini del Servizio)</td></tr>
+        <tr><td>Farti gestire la tua cantina, le degustazioni, le foto delle etichette</td><td>Esecuzione di un contratto</td></tr>
+        <tr><td>Scansione dell'etichetta tramite intelligenza artificiale (funzione Premium)</td><td>Consenso — attivi tu la funzione, in qualsiasi momento disattivabile</td></tr>
+        <tr><td>Gestire l'abbonamento Premium e il relativo pagamento</td><td>Esecuzione di un contratto</td></tr>
+        <tr><td>Inviarti l'email di conferma dell'account</td><td>Esecuzione di un contratto / obbligo informativo verso l'utente</td></tr>
+        <tr><td>Mostrare il tuo profilo e i tuoi vini ad altri utenti (Network)</td><td>Consenso — solo se attivi tu il "profilo pubblico", disattivabile in ogni momento</td></tr>
+        <tr><td>Condividere la cantina con altri utenti da te invitati</td><td>Consenso — solo su tua azione esplicita</td></tr>
+        <tr><td>Sicurezza, prevenzione abusi, rispetto di obblighi di legge</td><td>Legittimo interesse / obbligo legale</td></tr>
+      </table>
+    </section>
+
+    <section id="terze-parti">
+      <h2>4. Fornitori terzi e trasferimento dati</h2>
+      <p>Per far funzionare Enoscrigno ci appoggiamo ad alcuni fornitori specializzati, ognuno dei quali tratta i dati solo per la finalità specifica indicata e secondo la propria informativa privacy:</p>
+      <table>
+        <tr><th>Fornitore</th><th>Cosa fa</th></tr>
+        <tr><td><b>Supabase</b></td><td>Ospita il database, l'autenticazione e gli archivi (incluse le foto delle etichette caricate).</td></tr>
+        <tr><td><b>Anthropic</b></td><td>Elabora la fotografia dell'etichetta per estrarne automaticamente i dati, solo se usi la scansione AI (funzione Premium).</td></tr>
+        <tr><td><b>Stripe</b></td><td>Gestisce il pagamento dell'abbonamento Premium.</td></tr>
+        <tr><td><b>Resend</b></td><td>Invia le email transazionali (conferma account, reset password).</td></tr>
+        <tr><td><b>Google</b></td><td>Se scegli di accedere con Google, gestisce l'autenticazione tramite il tuo account Google.</td></tr>
+      </table>
+      <p>Alcuni di questi fornitori hanno sede o infrastrutture anche fuori dall'Unione Europea (in particolare negli Stati Uniti). In questi casi il trasferimento avviene sulla base di garanzie adeguate previste dal GDPR (es. clausole contrattuali standard della Commissione Europea). Non vendiamo né cediamo i tuoi dati a scopo pubblicitario a nessuno.</p>
+    </section>
+
+    <section id="condivisione">
+      <h2>5. Cosa vedono gli altri utenti</h2>
+      <p>Per impostazione predefinita il tuo profilo e la tua cantina sono <b>privati</b>: nessun altro utente può vederli. Diventano visibili solo se attivi tu, esplicitamente e in qualsiasi momento revocabile, una di queste funzioni:</p>
+      <ul>
+        <li><b>Profilo pubblico</b> (sezione Network): il tuo nome, l'avatar e i vini che scegli di rendere visibili diventano ricercabili dagli altri utenti, che possono seguirti.</li>
+        <li><b>Cantina condivisa</b>: inviti tu, per nome/email, le persone specifiche a cui vuoi dare accesso alla tua cantina.</li>
+      </ul>
+    </section>
+
+    <section id="conservazione">
+      <h2>6. Per quanto tempo conserviamo i dati</h2>
+      <p>Conserviamo i tuoi dati per tutto il tempo in cui il tuo account resta attivo. Se richiedi la cancellazione dell'account, i dati personali e i contenuti della cantina vengono eliminati dai nostri sistemi, salvo quanto siamo tenuti a conservare per obblighi di legge (es. dati di fatturazione per gli abbonamenti Premium, per i termini previsti dalla normativa fiscale).</p>
+    </section>
+
+    <section id="sicurezza">
+      <h2>7. Sicurezza</h2>
+      <p>Adottiamo misure tecniche e organizzative adeguate a proteggere i tuoi dati (accesso ai dati regolato da permessi a livello di database — Row Level Security — password mai conservate in chiaro, connessioni cifrate). Nessun sistema è sicuro al 100%: se dovessimo venire a conoscenza di una violazione che comporta un rischio per i tuoi dati, ti informeremo secondo quanto previsto dalla normativa.</p>
+    </section>
+
+    <section id="cookie">
+      <h2>8. Cookie e tecnologie simili</h2>
+      <p>Enoscrigno non utilizza cookie di profilazione o pubblicitari di terze parti. Usiamo esclusivamente:</p>
+      <ul>
+        <li>Tecnologie di archiviazione locale (localStorage) necessarie a mantenere la sessione attiva e a far funzionare l'app anche offline, salvando temporaneamente sul tuo dispositivo i vini aggiunti senza connessione.</li>
+      </ul>
+      <p class="muted">Se in futuro dovessimo introdurre strumenti di analisi statistica o marketing, questa informativa (e un eventuale banner cookie) verrà aggiornata di conseguenza prima di attivarli.</p>
+    </section>
+
+    <section id="diritti">
+      <h2>9. I tuoi diritti</h2>
+      <p>In quanto interessato al trattamento, in ogni momento puoi richiedere:</p>
+      <ul>
+        <li><b>Accesso</b> ai tuoi dati personali e a una copia degli stessi.</li>
+        <li><b>Rettifica</b> di dati inesatti o incompleti (molti campi li puoi correggere tu stesso dal tuo Profilo).</li>
+        <li><b>Cancellazione</b> del tuo account e dei dati collegati.</li>
+        <li><b>Limitazione</b> o <b>opposizione</b> al trattamento in specifiche circostanze.</li>
+        <li><b>Portabilità</b> dei dati in un formato strutturato — Enoscrigno offre già l'esportazione autonoma di cantina e schede di degustazione dalla sezione Export dell'app.</li>
+        <li>Revocare in ogni momento un consenso dato in precedenza (es. disattivare il profilo pubblico o la scansione AI), senza pregiudicare la liceità del trattamento già effettuato.</li>
+      </ul>
+      <p>Per esercitare questi diritti scrivi all'indirizzo indicato nella sezione <a href="#contatti">Contatti</a>. Hai inoltre sempre diritto di proporre reclamo al <a href="https://www.garanteprivacy.it" target="_blank" rel="noopener">Garante per la protezione dei dati personali</a>.</p>
+    </section>
+
+    <section id="minori">
+      <h2>10. Minori</h2>
+      <p>Il Servizio non è destinato a persone di età inferiore ai 18 anni, in ragione dei contenuti legati al consumo di bevande alcoliche. Non raccogliamo consapevolmente dati di minori.</p>
+    </section>
+
+    <section id="modifiche">
+      <h2>11. Modifiche a questa informativa</h2>
+      <p>Potremmo aggiornare periodicamente questa informativa, ad esempio quando introduciamo nuove funzionalità che trattano dati personali. La data di "ultimo aggiornamento" in cima alla pagina indica sempre la versione più recente. In caso di modifiche sostanziali, te lo segnaleremo con un avviso in app.</p>
+    </section>
+
+    <section id="contatti">
+      <h2>12. Contatti</h2>
+      <div class="contact-box">
+        <p>Per qualsiasi domanda su questa informativa o sul trattamento dei tuoi dati, scrivi a:</p>
+        <p><a href="mailto:privacy@enoscrigno.it">[privacy@enoscrigno.it]</a></p>
+      </div>
+    </section>
+  </div>
+
+  <footer class="page-footer">
+    <p>© <span id="fyear"></span> Enoscrigno</p>
+  </footer>
+
+  <script>document.getElementById('fyear').textContent = new Date().getFullYear();</script>
+</body>
+</html>
