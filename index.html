@@ -18,6 +18,16 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <script>
+    // Applica subito il tema scelto manualmente (se presente) per evitare
+    // un flash del tema di sistema prima che carichi lo script del modulo.
+    try {
+      var savedTheme = localStorage.getItem('enoscrigno_theme');
+      if (savedTheme === 'dark' || savedTheme === 'light') {
+        document.documentElement.setAttribute('data-theme', savedTheme);
+      }
+    } catch (e) {}
+  </script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -42,7 +52,7 @@
     }
 
     @media (prefers-color-scheme: dark) {
-      :root {
+      :root:not([data-theme="light"]) {
         --ink: #F0EEEC;
         --muted: #A8ABAE;
         --border: rgba(215,190,200,0.15);
@@ -54,6 +64,21 @@
         --ais-pale: #0A1528;
         --fisar-pale: #0A1F14;
       }
+    }
+    /* Tema scuro scelto manualmente dal profilo (indipendente dal tema di
+       sistema) — stessi valori del blocco sopra, applicati via attributo
+       invece che via media query. */
+    :root[data-theme="dark"] {
+      --ink: #F0EEEC;
+      --muted: #A8ABAE;
+      --border: rgba(215,190,200,0.15);
+      --border2: rgba(215,190,200,0.3);
+      --bg: #201519;
+      --surf: #2A1B21;
+      --cream: #2A1B21;
+      --wine-pale: #3A1826;
+      --ais-pale: #0A1528;
+      --fisar-pale: #0A1F14;
     }
 
     html { font-size: 16px; }
@@ -666,8 +691,11 @@
        dichiarata nel foglio di stile, non basta che sia dentro la media
        query) altrimenti in scuro resterebbe comunque il bordeaux. */
     @media (prefers-color-scheme: dark) {
-      .stat-n, .winery-link, .dscore-num { color: #fff; }
+      :root:not([data-theme="light"]) .stat-n,
+      :root:not([data-theme="light"]) .winery-link,
+      :root:not([data-theme="light"]) .dscore-num { color: #fff; }
     }
+    [data-theme="dark"] .stat-n, [data-theme="dark"] .winery-link, [data-theme="dark"] .dscore-num { color: #fff; }
 
     /* ── SCHEDA CANTINA (produttore) ── */
     .winery-hero { display: flex; align-items: center; gap: 14px; }
@@ -2678,6 +2706,17 @@
       <button class="btn sm" onclick="openTutorial()"><i class="ti ti-player-play"></i>Avvia il tutorial</button>
     </div>
 
+    <!-- Tema -->
+    <div class="fsec">
+      <div class="stitle"><i class="ti ti-sun-moon"></i>Tema</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Scegli l'aspetto dell'app, oppure lascia che segua automaticamente il tema del tuo dispositivo.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap" id="theme-chip-group">
+        <button type="button" class="p-chip" id="theme-chip-system" onclick="setTheme('system')"><i class="ti ti-device-desktop" style="font-size:13px;vertical-align:-2px;margin-right:4px"></i>Sistema</button>
+        <button type="button" class="p-chip" id="theme-chip-light" onclick="setTheme('light')"><i class="ti ti-sun" style="font-size:13px;vertical-align:-2px;margin-right:4px"></i>Chiaro</button>
+        <button type="button" class="p-chip" id="theme-chip-dark" onclick="setTheme('dark')"><i class="ti ti-moon" style="font-size:13px;vertical-align:-2px;margin-right:4px"></i>Scuro</button>
+      </div>
+    </div>
+
     <!-- App sulla home del telefono -->
     <div class="fsec">
       <div class="stitle"><i class="ti ti-device-mobile"></i>App sulla home del telefono</div>
@@ -3658,6 +3697,27 @@ function resetInstallBanner() {
   if (isIosDevice()) { showInstallBanner('ios'); toast('Ecco come installarla'); }
   else if (deferredInstallPrompt) { showInstallBanner('android'); }
   else { toast('Il tuo browser non supporta l\'installazione automatica'); }
+}
+
+// ── Tema (chiaro/scuro/sistema) ──
+function getStoredTheme() {
+  try { return localStorage.getItem('enoscrigno_theme') || 'system'; } catch { return 'system'; }
+}
+function setTheme(theme) {
+  if (theme === 'dark' || theme === 'light') {
+    document.documentElement.setAttribute('data-theme', theme);
+    try { localStorage.setItem('enoscrigno_theme', theme); } catch {}
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+    try { localStorage.removeItem('enoscrigno_theme'); } catch {}
+  }
+  updateThemeChipsUI();
+}
+function updateThemeChipsUI() {
+  const current = getStoredTheme();
+  ['system', 'light', 'dark'].forEach(t => {
+    document.getElementById('theme-chip-' + t)?.classList.toggle('active', t === current);
+  });
 }
 
 async function dbSaveWine(wine) {
@@ -6912,6 +6972,7 @@ function showProfileScreen() {
   document.getElementById('fsec-cellar-mgmt')?.classList.toggle('collapsed', !(u.cellarPosTree && u.cellarPosTree.length));
   document.getElementById('fsec-winery-claim')?.classList.add('collapsed');
   loadWineryClaimSection();
+  updateThemeChipsUI();
 
   // Immagine profilo
   pendingAvatarBase64 = null;
@@ -7605,7 +7666,7 @@ Object.assign(window, {
   showGuideScreen,
   toggleAdvFilters, toggleFisarMethodField, toggleNavMenu, togglePairing, toggleSection, updateGrapePct, updateTonalitaColore, updateAisColore,
   updateRegionOptions, updateProvinceOptions, dismissInstallBanner, triggerInstallPrompt, resetInstallBanner,
-  dismissUpdateBanner, reloadApp,
+  dismissUpdateBanner, reloadApp, setTheme,
   setNetworkFilter, toggleNetworkAdvFilters, onNetworkCountryChange, resetNetworkFilters, renderNetworkFeed,
   dismissPublicPrompt, acceptPublicPrompt, markFScoreManual, dismissAssocPrompt, saveAssocPrompt, acceptPrivacyPrompt,
   openTutorial, tutorialStep, skipTutorial,
