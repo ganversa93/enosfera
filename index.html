@@ -4354,6 +4354,15 @@ function escapeAttr(s) {
   return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 }
 
+// Link di sola consultazione verso Wine-Searcher per farsi un'idea del
+// prezzo di mercato di un vino e confrontarlo con quello pagato — non è
+// una ricerca in stile marketplace integrata nell'app: apre una ricerca
+// esterna già pronta, senza che Enoscrigno raccolga o mostri prezzi propri.
+function marketPriceSearchUrl(w) {
+  const q = [w.producer, w.name, w.vintage].filter(Boolean).join(' ');
+  return 'https://www.wine-searcher.com/find/' + encodeURIComponent(q).replace(/%20/g, '+');
+}
+
 async function loadUnlinkedProducers() {
   const { data, error } = await sb.rpc('get_unlinked_producers');
   if (error) { console.warn('loadUnlinkedProducers', error); return []; }
@@ -6057,7 +6066,11 @@ function showDetail(id) {
           <button onclick="adjustQty('${w.id}',+1)" style="width:36px;height:36px;border-radius:50%;border:0.5px solid var(--border);background:var(--surf);cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;color:var(--ink)">+</button>
         </div>
       </div>
-      <div class="dfield"><div class="fl">Prezzo pagato</div><div class="fv">${w.price ? '€' + w.price.toFixed(2) : '—'}</div></div>
+      <div class="dfield">
+        <div class="fl">Prezzo pagato</div>
+        <div class="fv">${w.price ? '€' + w.price.toFixed(2) : '—'}</div>
+        <a href="${marketPriceSearchUrl(w)}" target="_blank" rel="noopener" style="font-size:11px;color:var(--wine);text-decoration:underline;display:inline-flex;align-items:center;gap:3px;margin-top:4px"><i class="ti ti-external-link" style="font-size:11px"></i>Confronta prezzo di mercato</a>
+      </div>
       <div class="dfield"><div class="fl">Acquistato il</div><div class="fv">${fmtDate(w.date)}</div></div>
       <div class="dfield"><div class="fl">Luogo acquisto</div><div class="fv">${[w.shopCategory, w.shop].filter(Boolean).join(' — ') || '—'}</div></div>
       <div class="dfield"><div class="fl">Da bere</div><div class="fv">${w.drink || '—'}</div></div>
