@@ -18,6 +18,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
   <script>
     // Applica subito il tema scelto manualmente (se presente) per evitare
     // un flash del tema di sistema prima che carichi lo script del modulo.
@@ -149,6 +150,9 @@
     .stat { background: var(--bg); border: 0.5px solid var(--border); border-radius: 10px; padding: 10px 13px; }
     .stat-n { font-size: 22px; font-weight: 500; font-family: 'Cormorant Garamond', serif; color: var(--wine); }
     .stat-l { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+    /* ── HIGHLIGHTS ── */
+    .hl-chart-box { position: relative; height: 220px; }
 
     /* ── FILTERS ── */
     .filter-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1.25rem; align-items: center; }
@@ -1088,10 +1092,10 @@
         <div class="home-card-title">Cantina e Degustazioni</div>
         <div class="home-card-sub">Il tuo archivio vini</div>
       </div>
-      <div class="home-card" onclick="showComingSoon('Highlights')">
+      <div class="home-card" onclick="showHighlightsScreen()">
         <i class="ti ti-sparkles"></i>
         <div class="home-card-title">Highlights</div>
-        <div class="home-card-sub">In arrivo</div>
+        <div class="home-card-sub">Il tuo profilo da sommelier</div>
       </div>
       <div class="home-card" onclick="showComingSoon('Approfondimenti')">
         <i class="ti ti-news"></i>
@@ -1129,7 +1133,7 @@
   <div class="nav-menu" id="nav-menu">
     <div class="nav-menu-item" onclick="closeNavMenu();showScreen('screen-home')"><i class="ti ti-home"></i>Home</div>
     <div class="nav-menu-item" onclick="closeNavMenu();showScreen('screen-list')"><i class="ti ti-bottle"></i>Cantina e Degustazioni</div>
-    <div class="nav-menu-item" onclick="closeNavMenu();showComingSoon('Highlights')"><i class="ti ti-sparkles"></i>Highlights</div>
+    <div class="nav-menu-item" onclick="closeNavMenu();showHighlightsScreen()"><i class="ti ti-sparkles"></i>Highlights</div>
     <div class="nav-menu-item" onclick="closeNavMenu();showComingSoon('Approfondimenti')"><i class="ti ti-news"></i>Approfondimenti</div>
     <div class="nav-menu-item" onclick="closeNavMenu();showEventsScreen()"><i class="ti ti-calendar-event"></i>Eventi</div>
     <div class="nav-menu-item" onclick="closeNavMenu();showNetworkScreen()"><i class="ti ti-users"></i>Network</div>
@@ -1424,6 +1428,53 @@
           <li>Su Android/Chrome basta toccare <b>Installa</b> nell'avviso. Su iPhone (Safari o Chrome) non c'è un pulsante automatico: si tocca l'icona <b>Condividi</b> del browser e poi <b>"Aggiungi a Home"</b>.</li>
           <li>Se hai chiuso l'avviso toccando <b>"Non mi interessa"</b> e vuoi rivederlo, vai su <b>Profilo → App sulla home del telefono</b> e tocca "Mostra di nuovo l'avviso di installazione".</li>
         </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ HIGHLIGHTS ══ -->
+  <div id="screen-highlights" class="screen">
+    <div class="nav" style="margin-bottom:1.1rem">
+      <button class="btn sm" onclick="showScreen('screen-home')"><i class="ti ti-arrow-left"></i>Home</button>
+      <span style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--ink)">Highlights</span>
+    </div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:1rem">Il tuo profilo da sommelier: cosa assaggi e cosa compri non sempre coincidono, per questo li mostriamo separati.</p>
+
+    <div style="display:flex;gap:8px;margin-bottom:1rem">
+      <button type="button" class="p-chip" id="hl-chip-tasted" onclick="setHighlightsView('tasted')"><i class="ti ti-glass-full" style="font-size:13px;vertical-align:-2px;margin-right:4px"></i>Assaggiato</button>
+      <button type="button" class="p-chip" id="hl-chip-owned" onclick="setHighlightsView('owned')"><i class="ti ti-building-warehouse" style="font-size:13px;vertical-align:-2px;margin-right:4px"></i>Comprato</button>
+    </div>
+
+    <div id="hl-empty" style="display:none;text-align:center;color:var(--muted);font-size:13px;padding:2.5rem 1rem">
+      <i class="ti ti-chart-donut-2" style="font-size:32px;display:block;margin-bottom:10px;opacity:.5"></i>
+      <span id="hl-empty-text">Non hai ancora vini in questa vista.</span>
+    </div>
+
+    <div id="hl-body">
+      <div class="stat-row">
+        <div class="stat"><div class="stat-n" id="hl-stat-total">0</div><div class="stat-l">Etichette</div></div>
+        <div class="stat"><div class="stat-n" id="hl-stat-regions">0</div><div class="stat-l">Zone</div></div>
+        <div class="stat"><div class="stat-n" id="hl-stat-grapes">0</div><div class="stat-l">Vitigni</div></div>
+      </div>
+
+      <div class="fsec">
+        <div class="stitle"><i class="ti ti-bottle"></i>Per tipologia</div>
+        <div class="hl-chart-box"><canvas id="hl-chart-type"></canvas></div>
+      </div>
+
+      <div class="fsec">
+        <div class="stitle"><i class="ti ti-leaf"></i>Per vitigno</div>
+        <div class="hl-chart-box"><canvas id="hl-chart-grape"></canvas></div>
+      </div>
+
+      <div class="fsec">
+        <div class="stitle"><i class="ti ti-map-pin"></i>Per zona</div>
+        <div class="hl-chart-box"><canvas id="hl-chart-region"></canvas></div>
+      </div>
+
+      <div class="fsec">
+        <div class="stitle"><i class="ti ti-shopping-cart"></i>Dove acquisti</div>
+        <div class="hl-chart-box"><canvas id="hl-chart-shop"></canvas></div>
       </div>
     </div>
   </div>
@@ -7215,6 +7266,124 @@ function showGuideScreen() {
   showScreen('screen-guide');
 }
 
+// ── Highlights — profilo del sommelier (assaggiato vs comprato) ──
+let highlightsView = 'tasted'; // default: Assaggiato
+let hlCharts = {};             // { canvasId: Chart instance }, per destroy/recreate pulito
+
+// Stessa logica già usata altrove nell'app per distinguere un vino
+// "degustato" (renderGrid()/wineQtyBadge()): qty<=0 (finito o mai posseduto)
+// oppure una data di degustazione impostata anche con bottiglie residue.
+// Le due categorie si sovrappongono volutamente: un vino aperto con altre
+// bottiglie ancora in cantina è sia "comprato" sia "assaggiato".
+function isWineTasted(w) { return (w.qty ?? 1) <= 0 || !!w.tastingDate; }
+function isWineOwned(w)  { return (w.qty ?? 1) > 0; }
+
+function wineGrapeNames(w) {
+  return (w.grapes || '').split(',').map(g => g.trim().replace(/\s+\d{1,3}\s*%$/, '')).filter(Boolean);
+}
+
+function tallyTopN(values, n = 7) {
+  const counts = new Map();
+  values.forEach(v => { if (!v) return; counts.set(v, (counts.get(v) || 0) + 1); });
+  const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  const top = sorted.slice(0, n);
+  const restCount = sorted.slice(n).reduce((s, [, c]) => s + c, 0);
+  if (restCount > 0) top.push(['Altro', restCount]);
+  return top;
+}
+
+function computeHighlights(wines) {
+  return {
+    total: wines.length,
+    byType:   tallyTopN(wines.map(w => w.type)),
+    byGrape:  tallyTopN(wines.flatMap(wineGrapeNames)),
+    byRegion: tallyTopN(wines.map(w => w.region)),
+    byShop:   tallyTopN(wines.map(w => w.shopCategory)),
+  };
+}
+
+const HL_TYPE_COLORS = {
+  Rosso: '#6B1E2E', Bianco: '#B8892A', Rosato: '#C86478', Spumante: '#3C64B4',
+  Dolce: '#8A2A4E', Passito: '#93712F', Altro: '#6B6E72',
+};
+const HL_SHOP_PALETTE = ['#6B1839', '#B7924A', '#1A3A6B', '#1A5C3A', '#C86478', '#93712F', '#6B6E72'];
+
+function hlCssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+function hlDrawDonut(id, entries, colorFor) {
+  hlCharts[id]?.destroy();
+  const ink = hlCssVar('--ink');
+  hlCharts[id] = new Chart(document.getElementById(id), {
+    type: 'doughnut',
+    data: {
+      labels: entries.map(([label]) => label),
+      datasets: [{ data: entries.map(([, count]) => count), backgroundColor: entries.map(([label], i) => colorFor(label, i)), borderWidth: 0 }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { color: ink, boxWidth: 11, font: { size: 11 } } } },
+    },
+  });
+}
+
+function hlDrawBars(id, entries) {
+  hlCharts[id]?.destroy();
+  const ink = hlCssVar('--ink');
+  const border = hlCssVar('--border');
+  const wine = hlCssVar('--wine');
+  hlCharts[id] = new Chart(document.getElementById(id), {
+    type: 'bar',
+    data: { labels: entries.map(([label]) => label), datasets: [{ data: entries.map(([, count]) => count), backgroundColor: wine, borderRadius: 4 }] },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: ink, precision: 0 }, grid: { color: border } },
+        y: { ticks: { color: ink, font: { size: 11 } }, grid: { display: false } },
+      },
+    },
+  });
+}
+
+function renderHighlights() {
+  document.getElementById('hl-chip-tasted')?.classList.toggle('active', highlightsView === 'tasted');
+  document.getElementById('hl-chip-owned')?.classList.toggle('active', highlightsView === 'owned');
+
+  const wines = myWines().filter(highlightsView === 'tasted' ? isWineTasted : isWineOwned);
+  const empty = document.getElementById('hl-empty');
+  const body = document.getElementById('hl-body');
+  if (!wines.length) {
+    document.getElementById('hl-empty-text').textContent = highlightsView === 'tasted'
+      ? 'Non hai ancora vini degustati. Registra una data di degustazione per vederli qui.'
+      : 'Non hai ancora vini in cantina.';
+    empty.style.display = 'block';
+    body.style.display = 'none';
+    return;
+  }
+  empty.style.display = 'none';
+  body.style.display = 'block';
+
+  const stats = computeHighlights(wines);
+  document.getElementById('hl-stat-total').textContent = stats.total;
+  document.getElementById('hl-stat-regions').textContent = new Set(wines.map(w => w.region).filter(Boolean)).size;
+  document.getElementById('hl-stat-grapes').textContent = new Set(wines.flatMap(wineGrapeNames)).size;
+
+  hlDrawDonut('hl-chart-type', stats.byType, label => HL_TYPE_COLORS[label] || HL_TYPE_COLORS.Altro);
+  hlDrawBars('hl-chart-grape', stats.byGrape);
+  hlDrawBars('hl-chart-region', stats.byRegion);
+  hlDrawDonut('hl-chart-shop', stats.byShop, (label, i) => HL_SHOP_PALETTE[i % HL_SHOP_PALETTE.length]);
+}
+
+function showHighlightsScreen() {
+  showScreen('screen-highlights');
+  renderHighlights();
+}
+
+function setHighlightsView(view) {
+  highlightsView = view;
+  renderHighlights();
+}
+
 function searchNetworkUsers() {
   clearTimeout(networkSearchTimer);
   const q = document.getElementById('network-search-input').value.trim();
@@ -7677,6 +7846,7 @@ Object.assign(window, {
   setSortField, toggleSortDir, setNetworkSortField, toggleNetworkSortDir,
   showNetworkScreen, showNetworkWinePreview, showProfileScreen, showScreen, startPremiumCheckout, stepQty, switchDeg, switchLTab, switchRegType, toast,
   showGuideScreen,
+  showHighlightsScreen, setHighlightsView,
   toggleAdvFilters, toggleFisarMethodField, toggleNavMenu, togglePairing, toggleSection, updateGrapePct, updateTonalitaColore, updateAisColore,
   updateRegionOptions, updateProvinceOptions, dismissInstallBanner, triggerInstallPrompt, resetInstallBanner,
   dismissUpdateBanner, reloadApp, setTheme,
