@@ -576,6 +576,12 @@
       color: var(--muted); cursor: pointer; transition: all .15s; white-space: nowrap;
     }
     .p-chip.active { background: var(--wine); color: #fff; border-color: var(--wine); font-weight: 500; }
+    .hl-chip {
+      font-size: 12px; padding: 6px 12px; border-radius: 20px;
+      border: 0.5px solid var(--border); background: var(--bg);
+      color: var(--muted); cursor: pointer; transition: all .15s; white-space: nowrap;
+    }
+    .hl-chip.active { background: var(--wine); color: #fff; border-color: var(--wine); font-weight: 500; }
 
     .upload-z {
       border: 1.5px dashed var(--border); border-radius: 10px;
@@ -1441,8 +1447,8 @@
     <p style="font-size:12px;color:var(--muted);margin-bottom:1rem">Il tuo profilo da sommelier: cosa assaggi e cosa compri non sempre coincidono, per questo li mostriamo separati.</p>
 
     <div style="display:flex;gap:8px;margin-bottom:1rem">
-      <button type="button" class="p-chip" id="hl-chip-tasted" onclick="setHighlightsView('tasted')"><i class="ti ti-glass-full" style="font-size:13px;vertical-align:-2px;margin-right:4px"></i>Assaggiato</button>
-      <button type="button" class="p-chip" id="hl-chip-owned" onclick="setHighlightsView('owned')"><i class="ti ti-building-warehouse" style="font-size:13px;vertical-align:-2px;margin-right:4px"></i>Comprato</button>
+      <button type="button" class="hl-chip" id="hl-chip-tasted" onclick="setHighlightsView('tasted')"><i class="ti ti-glass-full" style="font-size:13px;vertical-align:-2px;margin-right:4px"></i>Assaggiato</button>
+      <button type="button" class="hl-chip" id="hl-chip-owned" onclick="setHighlightsView('owned')"><i class="ti ti-building-warehouse" style="font-size:13px;vertical-align:-2px;margin-right:4px"></i>Comprato</button>
     </div>
 
     <div id="hl-empty" style="display:none;text-align:center;color:var(--muted);font-size:13px;padding:2.5rem 1rem">
@@ -5635,7 +5641,7 @@ function getSelectedPairings() {
 // Ricostruisce lo stato dei chip + campo libero a partire dalla stringa salvata
 function applyPairingToForm(pairingStr) {
   const tokens = (pairingStr || '').split(',').map(s => s.trim()).filter(Boolean);
-  const chipEls = [...document.querySelectorAll('.p-chip')];
+  const chipEls = [...document.querySelectorAll('.p-chip[data-p]')];
   const matched = [];
   const leftover = [];
   tokens.forEach(t => {
