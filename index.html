@@ -153,6 +153,10 @@
 
     /* ── HIGHLIGHTS ── */
     .hl-chart-box { position: relative; height: 220px; }
+    .hl-other-list { text-align: left; max-height: 280px; overflow-y: auto; margin-bottom: 1.1rem; }
+    .hl-other-row { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; font-size: 13px; color: var(--ink); border-bottom: 0.5px solid var(--border); }
+    .hl-other-row:last-child { border-bottom: none; }
+    .hl-other-row b { color: var(--wine); font-weight: 600; }
 
     /* ── FILTERS ── */
     .filter-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1.25rem; align-items: center; }
@@ -2919,6 +2923,16 @@
         <button class="btn sm primary" id="tutorial-next-btn" onclick="tutorialStep(1)">Avanti</button>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- HIGHLIGHTS — dettaglio "Altro", raggruppa le voci oltre la top 7 di ogni grafico -->
+<div class="public-prompt-overlay" id="hl-other-overlay">
+  <div class="public-prompt-card" style="max-width:340px">
+    <i class="ti ti-list-details"></i>
+    <h3 id="hl-other-title">Altro</h3>
+    <div class="hl-other-list" id="hl-other-list"></div>
+    <a href="#" onclick="closeHlOtherDetail();return false;" style="font-size:12px;color:var(--muted);text-decoration:underline">Chiudi</a>
   </div>
 </div>
 
@@ -7287,8 +7301,15 @@ function tallyTopN(values, n = 7) {
   values.forEach(v => { if (!v) return; counts.set(v, (counts.get(v) || 0) + 1); });
   const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]);
   const top = sorted.slice(0, n);
-  const restCount = sorted.slice(n).reduce((s, [, c]) => s + c, 0);
-  if (restCount > 0) top.push(['Altro', restCount]);
+  const rest = sorted.slice(n);
+  const restCount = rest.reduce((s, [, c]) => s + c, 0);
+  // Le voci oltre la top N finiscono in "Altro": teniamo il dettaglio agganciato
+  // all'array (non-enumerabile per non alterare le entries del grafico) per poterlo
+  // mostrare al click sulla fetta/barra "Altro".
+  if (restCount > 0) {
+    top.push(['Altro', restCount]);
+    Object.defineProperty(top, 'otherDetail', { value: rest, enumerable: false });
+  }
   return top;
 }
 
@@ -7310,8 +7331,25 @@ const HL_SHOP_PALETTE = ['#6B1839', '#B7924A', '#1A3A6B', '#1A5C3A', '#C86478', 
 
 function hlCssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
 
-function hlDrawDonut(id, entries, colorFor) {
+// Voci raggruppate in "Altro" per grafico, per il popup di dettaglio al click.
+let hlOtherDetails = {};
+
+function hlIsOtherIndex(id, index) {
+  return index != null && hlCharts[id]?.data.labels[index] === 'Altro';
+}
+function hlChartOnClick(id) {
+  return (evt, elements) => { if (elements.length && hlIsOtherIndex(id, elements[0].index)) showHlOtherDetail(id); };
+}
+function hlChartOnHover(id) {
+  return (evt, elements) => {
+    const target = evt?.native?.target;
+    if (target) target.style.cursor = (elements.length && hlIsOtherIndex(id, elements[0].index)) ? 'pointer' : '';
+  };
+}
+
+function hlDrawDonut(id, entries, colorFor, title) {
   hlCharts[id]?.destroy();
+  hlOtherDetails[id] = { title, entries: entries.otherDetail || null };
   const ink = hlCssVar('--ink');
   hlCharts[id] = new Chart(document.getElementById(id), {
     type: 'doughnut',
@@ -7321,13 +7359,15 @@ function hlDrawDonut(id, entries, colorFor) {
     },
     options: {
       responsive: true, maintainAspectRatio: false,
+      onClick: hlChartOnClick(id), onHover: hlChartOnHover(id),
       plugins: { legend: { position: 'bottom', labels: { color: ink, boxWidth: 11, font: { size: 11 } } } },
     },
   });
 }
 
-function hlDrawBars(id, entries) {
+function hlDrawBars(id, entries, title) {
   hlCharts[id]?.destroy();
+  hlOtherDetails[id] = { title, entries: entries.otherDetail || null };
   const ink = hlCssVar('--ink');
   const border = hlCssVar('--border');
   const wine = hlCssVar('--wine');
@@ -7336,6 +7376,7 @@ function hlDrawBars(id, entries) {
     data: { labels: entries.map(([label]) => label), datasets: [{ data: entries.map(([, count]) => count), backgroundColor: wine, borderRadius: 4 }] },
     options: {
       indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      onClick: hlChartOnClick(id), onHover: hlChartOnHover(id),
       plugins: { legend: { display: false } },
       scales: {
         x: { ticks: { color: ink, precision: 0 }, grid: { color: border } },
@@ -7343,6 +7384,28 @@ function hlDrawBars(id, entries) {
       },
     },
   });
+}
+
+function showHlOtherDetail(id) {
+  const detail = hlOtherDetails[id];
+  if (!detail?.entries?.length) return;
+  document.getElementById('hl-other-title').textContent = detail.title ? `Altro — ${detail.title}` : 'Altro';
+  const list = document.getElementById('hl-other-list');
+  list.innerHTML = '';
+  detail.entries.forEach(([label, count]) => {
+    const row = document.createElement('div');
+    row.className = 'hl-other-row';
+    const name = document.createElement('span');
+    name.textContent = label;
+    const n = document.createElement('b');
+    n.textContent = count;
+    row.append(name, n);
+    list.appendChild(row);
+  });
+  document.getElementById('hl-other-overlay').classList.add('open');
+}
+function closeHlOtherDetail() {
+  document.getElementById('hl-other-overlay').classList.remove('open');
 }
 
 function renderHighlights() {
@@ -7368,10 +7431,10 @@ function renderHighlights() {
   document.getElementById('hl-stat-regions').textContent = new Set(wines.map(w => w.region).filter(Boolean)).size;
   document.getElementById('hl-stat-grapes').textContent = new Set(wines.flatMap(wineGrapeNames)).size;
 
-  hlDrawDonut('hl-chart-type', stats.byType, label => HL_TYPE_COLORS[label] || HL_TYPE_COLORS.Altro);
-  hlDrawBars('hl-chart-grape', stats.byGrape);
-  hlDrawBars('hl-chart-region', stats.byRegion);
-  hlDrawDonut('hl-chart-shop', stats.byShop, (label, i) => HL_SHOP_PALETTE[i % HL_SHOP_PALETTE.length]);
+  hlDrawDonut('hl-chart-type', stats.byType, label => HL_TYPE_COLORS[label] || HL_TYPE_COLORS.Altro, 'Tipologia');
+  hlDrawBars('hl-chart-grape', stats.byGrape, 'Vitigno');
+  hlDrawBars('hl-chart-region', stats.byRegion, 'Zona');
+  hlDrawDonut('hl-chart-shop', stats.byShop, (label, i) => HL_SHOP_PALETTE[i % HL_SHOP_PALETTE.length], 'Dove acquisti');
 }
 
 function showHighlightsScreen() {
@@ -7846,7 +7909,7 @@ Object.assign(window, {
   setSortField, toggleSortDir, setNetworkSortField, toggleNetworkSortDir,
   showNetworkScreen, showNetworkWinePreview, showProfileScreen, showScreen, startPremiumCheckout, stepQty, switchDeg, switchLTab, switchRegType, toast,
   showGuideScreen,
-  showHighlightsScreen, setHighlightsView,
+  showHighlightsScreen, setHighlightsView, closeHlOtherDetail,
   toggleAdvFilters, toggleFisarMethodField, toggleNavMenu, togglePairing, toggleSection, updateGrapePct, updateTonalitaColore, updateAisColore,
   updateRegionOptions, updateProvinceOptions, dismissInstallBanner, triggerInstallPrompt, resetInstallBanner,
   dismissUpdateBanner, reloadApp, setTheme,
