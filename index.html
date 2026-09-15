@@ -153,6 +153,7 @@
 
     /* ── HIGHLIGHTS ── */
     .hl-chart-box { position: relative; height: 220px; }
+    .hl-back-link { font-size: 11px; color: var(--wine); text-decoration: underline; display: inline-block; margin-bottom: 6px; }
 
     /* ── FILTERS ── */
     .filter-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1.25rem; align-items: center; }
@@ -1470,16 +1471,19 @@
 
       <div class="fsec">
         <div class="stitle"><i class="ti ti-leaf"></i>Per vitigno</div>
+        <a href="#" id="hl-back-grapes" class="hl-back-link" style="display:none" onclick="hlBackGrapes();return false">← Torna ai vitigni</a>
         <div class="hl-chart-box"><canvas id="hl-chart-grape"></canvas></div>
       </div>
 
       <div class="fsec">
-        <div class="stitle"><i class="ti ti-map-pin"></i>Per zona</div>
+        <div class="stitle" id="hl-region-title"><i class="ti ti-map-pin"></i>Per zona</div>
+        <a href="#" id="hl-back-region" class="hl-back-link" style="display:none" onclick="hlBackRegion();return false">← Torna alle zone</a>
         <div class="hl-chart-box"><canvas id="hl-chart-region"></canvas></div>
       </div>
 
       <div class="fsec">
-        <div class="stitle"><i class="ti ti-shopping-cart"></i>Dove acquisti</div>
+        <div class="stitle" id="hl-shop-title"><i class="ti ti-shopping-cart"></i>Dove acquisti</div>
+        <a href="#" id="hl-back-shop" class="hl-back-link" style="display:none" onclick="hlBackShop();return false">← Torna al canale</a>
         <div class="hl-chart-box"><canvas id="hl-chart-shop"></canvas></div>
       </div>
     </div>
@@ -7292,20 +7296,10 @@ function tallyTopN(values, n = 7) {
   const counts = new Map();
   values.forEach(v => { if (!v) return; counts.set(v, (counts.get(v) || 0) + 1); });
   const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]);
-  const top = sorted.slice(0, n);
-  const restCount = sorted.slice(n).reduce((s, [, c]) => s + c, 0);
-  if (restCount > 0) top.push(['Altro', restCount]);
-  return top;
-}
-
-function computeHighlights(wines) {
-  return {
-    total: wines.length,
-    byType:   tallyTopN(wines.map(w => w.type)),
-    byGrape:  tallyTopN(wines.flatMap(wineGrapeNames)),
-    byRegion: tallyTopN(wines.map(w => w.region)),
-    byShop:   tallyTopN(wines.map(w => w.shopCategory)),
-  };
+  const entries = sorted.slice(0, n);
+  const overflow = sorted.slice(n);
+  if (overflow.length) entries.push(['Altro', overflow.reduce((s, [, c]) => s + c, 0)]);
+  return { entries, overflow: overflow.length ? overflow : null };
 }
 
 const HL_TYPE_COLORS = {
@@ -7316,9 +7310,12 @@ const HL_SHOP_PALETTE = ['#6B1839', '#B7924A', '#1A3A6B', '#1A5C3A', '#C86478', 
 
 function hlCssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
 
-function hlDrawDonut(id, entries, colorFor) {
+// tally = { entries: [[label,count],...], overflow? }. onClickLabel === null
+// disattiva completamente l'interazione (grafico statico, es. Per tipologia).
+function hlDrawDonut(id, tally, onClickLabel, colorFor) {
   hlCharts[id]?.destroy();
   const ink = hlCssVar('--ink');
+  const entries = tally.entries;
   hlCharts[id] = new Chart(document.getElementById(id), {
     type: 'doughnut',
     data: {
@@ -7328,15 +7325,18 @@ function hlDrawDonut(id, entries, colorFor) {
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: { legend: { position: 'bottom', labels: { color: ink, boxWidth: 11, font: { size: 11 } } } },
+      onClick: onClickLabel ? (evt, els) => { if (els.length) onClickLabel(entries[els[0].index][0]); } : undefined,
+      onHover: onClickLabel ? (evt, els) => { evt.native.target.style.cursor = els.length ? 'pointer' : 'default'; } : undefined,
     },
   });
 }
 
-function hlDrawBars(id, entries) {
+function hlDrawBars(id, tally, onClickLabel) {
   hlCharts[id]?.destroy();
   const ink = hlCssVar('--ink');
   const border = hlCssVar('--border');
   const wine = hlCssVar('--wine');
+  const entries = tally.entries;
   hlCharts[id] = new Chart(document.getElementById(id), {
     type: 'bar',
     data: { labels: entries.map(([label]) => label), datasets: [{ data: entries.map(([, count]) => count), backgroundColor: wine, borderRadius: 4 }] },
@@ -7347,18 +7347,103 @@ function hlDrawBars(id, entries) {
         x: { ticks: { color: ink, precision: 0 }, grid: { color: border } },
         y: { ticks: { color: ink, font: { size: 11 } }, grid: { display: false } },
       },
+      onClick: onClickLabel ? (evt, els) => { if (els.length) onClickLabel(entries[els[0].index][0]); } : undefined,
+      onHover: onClickLabel ? (evt, els) => { evt.native.target.style.cursor = els.length ? 'pointer' : 'default'; } : undefined,
     },
   });
 }
+
+// ── Grafici drillabili: ogni grafico ridisegna se stesso quando si clicca
+// una voce, invece di aprire una schermata o un elenco a parte. Solo dove
+// esiste davvero un livello di dettaglio sotto la voce cliccata:
+// - Per vitigno: nessun campo più granulare esiste sotto un vitigno, solo
+//   "Altro" è cliccabile (mostra i vitigni reali raggruppati lì dentro).
+// - Per zona: "Altro" mostra le altre zone; una zona reale mostra il
+//   dettaglio per provincia dei suoi vini.
+// - Dove acquisti: una voce reale mostra il dettaglio per punto vendita
+//   (campo "shop") dei vini di quel canale.
+let hlCurrentWines = [];
+let hlGrapeState  = { mode: 'top' };  // 'top' | 'altro'
+let hlRegionState = { mode: 'top' };  // 'top' | 'altro' | { mode:'province', region }
+let hlShopState   = { mode: 'top' };  // 'top' | { mode:'shop', category }
+
+function renderGrapeChart() {
+  const back = document.getElementById('hl-back-grapes');
+  if (hlGrapeState.mode === 'altro') {
+    back.style.display = 'inline-block';
+    const top = tallyTopN(hlCurrentWines.flatMap(wineGrapeNames), 7);
+    hlDrawBars('hl-chart-grape', { entries: (top.overflow || []).slice(0, 20) }, null);
+  } else {
+    back.style.display = 'none';
+    const tally = tallyTopN(hlCurrentWines.flatMap(wineGrapeNames), 7);
+    hlDrawBars('hl-chart-grape', tally, label => {
+      if (label === 'Altro' && tally.overflow) { hlGrapeState = { mode: 'altro' }; renderGrapeChart(); }
+    });
+  }
+}
+function hlBackGrapes() { hlGrapeState = { mode: 'top' }; renderGrapeChart(); }
+
+function renderRegionChart() {
+  const back = document.getElementById('hl-back-region');
+  const title = document.getElementById('hl-region-title');
+  if (hlRegionState.mode === 'province') {
+    const region = hlRegionState.region;
+    const tally = tallyTopN(hlCurrentWines.filter(w => w.region === region).map(w => w.province).filter(Boolean), 20);
+    if (!tally.entries.length) {
+      toast('Nessun dettaglio provincia disponibile per questa zona');
+      hlRegionState = { mode: 'top' }; renderRegionChart(); return;
+    }
+    title.textContent = `Per zona — provincia di ${region}`;
+    back.style.display = 'inline-block';
+    hlDrawBars('hl-chart-region', tally, null);
+  } else if (hlRegionState.mode === 'altro') {
+    title.textContent = 'Per zona — altre zone';
+    back.style.display = 'inline-block';
+    const top = tallyTopN(hlCurrentWines.map(w => w.region), 7);
+    hlDrawBars('hl-chart-region', { entries: (top.overflow || []).slice(0, 20) }, label => { hlRegionState = { mode: 'province', region: label }; renderRegionChart(); });
+  } else {
+    title.textContent = 'Per zona';
+    back.style.display = 'none';
+    const tally = tallyTopN(hlCurrentWines.map(w => w.region), 7);
+    hlDrawBars('hl-chart-region', tally, label => {
+      hlRegionState = (label === 'Altro' && tally.overflow) ? { mode: 'altro' } : { mode: 'province', region: label };
+      renderRegionChart();
+    });
+  }
+}
+function hlBackRegion() { hlRegionState = { mode: 'top' }; renderRegionChart(); }
+
+function renderShopChart() {
+  const back = document.getElementById('hl-back-shop');
+  const title = document.getElementById('hl-shop-title');
+  const paletteColor = (label, i) => HL_SHOP_PALETTE[i % HL_SHOP_PALETTE.length];
+  if (hlShopState.mode === 'shop') {
+    const cat = hlShopState.category;
+    const tally = tallyTopN(hlCurrentWines.filter(w => w.shopCategory === cat).map(w => w.shop).filter(Boolean), 20);
+    if (!tally.entries.length) {
+      toast('Nessun dettaglio disponibile per questo canale');
+      hlShopState = { mode: 'top' }; renderShopChart(); return;
+    }
+    title.textContent = `Dove acquisti — ${cat}`;
+    back.style.display = 'inline-block';
+    hlDrawDonut('hl-chart-shop', tally, null, paletteColor);
+  } else {
+    title.textContent = 'Dove acquisti';
+    back.style.display = 'none';
+    const tally = tallyTopN(hlCurrentWines.map(w => w.shopCategory), 7);
+    hlDrawDonut('hl-chart-shop', tally, label => { hlShopState = { mode: 'shop', category: label }; renderShopChart(); }, paletteColor);
+  }
+}
+function hlBackShop() { hlShopState = { mode: 'top' }; renderShopChart(); }
 
 function renderHighlights() {
   document.getElementById('hl-chip-tasted')?.classList.toggle('active', highlightsView === 'tasted');
   document.getElementById('hl-chip-owned')?.classList.toggle('active', highlightsView === 'owned');
 
-  const wines = myWines().filter(highlightsView === 'tasted' ? isWineTasted : isWineOwned);
+  hlCurrentWines = myWines().filter(highlightsView === 'tasted' ? isWineTasted : isWineOwned);
   const empty = document.getElementById('hl-empty');
   const body = document.getElementById('hl-body');
-  if (!wines.length) {
+  if (!hlCurrentWines.length) {
     document.getElementById('hl-empty-text').textContent = highlightsView === 'tasted'
       ? 'Non hai ancora vini degustati. Registra una data di degustazione per vederli qui.'
       : 'Non hai ancora vini in cantina.';
@@ -7369,15 +7454,14 @@ function renderHighlights() {
   empty.style.display = 'none';
   body.style.display = 'block';
 
-  const stats = computeHighlights(wines);
-  document.getElementById('hl-stat-total').textContent = stats.total;
-  document.getElementById('hl-stat-regions').textContent = new Set(wines.map(w => w.region).filter(Boolean)).size;
-  document.getElementById('hl-stat-grapes').textContent = new Set(wines.flatMap(wineGrapeNames)).size;
+  document.getElementById('hl-stat-total').textContent = hlCurrentWines.length;
+  document.getElementById('hl-stat-regions').textContent = new Set(hlCurrentWines.map(w => w.region).filter(Boolean)).size;
+  document.getElementById('hl-stat-grapes').textContent = new Set(hlCurrentWines.flatMap(wineGrapeNames)).size;
 
-  hlDrawDonut('hl-chart-type', stats.byType, label => HL_TYPE_COLORS[label] || HL_TYPE_COLORS.Altro);
-  hlDrawBars('hl-chart-grape', stats.byGrape);
-  hlDrawBars('hl-chart-region', stats.byRegion);
-  hlDrawDonut('hl-chart-shop', stats.byShop, (label, i) => HL_SHOP_PALETTE[i % HL_SHOP_PALETTE.length]);
+  hlDrawDonut('hl-chart-type', tallyTopN(hlCurrentWines.map(w => w.type), 7), null, label => HL_TYPE_COLORS[label] || HL_TYPE_COLORS.Altro);
+  hlGrapeState = { mode: 'top' }; renderGrapeChart();
+  hlRegionState = { mode: 'top' }; renderRegionChart();
+  hlShopState = { mode: 'top' }; renderShopChart();
 }
 
 function showHighlightsScreen() {
@@ -7852,7 +7936,7 @@ Object.assign(window, {
   setSortField, toggleSortDir, setNetworkSortField, toggleNetworkSortDir,
   showNetworkScreen, showNetworkWinePreview, showProfileScreen, showScreen, startPremiumCheckout, stepQty, switchDeg, switchLTab, switchRegType, toast,
   showGuideScreen,
-  showHighlightsScreen, setHighlightsView,
+  showHighlightsScreen, setHighlightsView, hlBackGrapes, hlBackRegion, hlBackShop,
   toggleAdvFilters, toggleFisarMethodField, toggleNavMenu, togglePairing, toggleSection, updateGrapePct, updateTonalitaColore, updateAisColore,
   updateRegionOptions, updateProvinceOptions, dismissInstallBanner, triggerInstallPrompt, resetInstallBanner,
   dismissUpdateBanner, reloadApp, setTheme,
