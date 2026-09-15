@@ -4089,7 +4089,11 @@ async function showWineryDetail(id) {
         <label>Provincia <span style="font-weight:400;color:var(--muted)">(se applicabile)</span></label>
         <input type="text" id="wy-province" value="${w.province || ''}" placeholder="es. Verona" autocomplete="off">
       </div>
-      <div class="fg"><label>Sito web</label><input type="text" id="wy-website" value="${w.website || ''}" placeholder="https://…"></div>
+      <div class="fg">
+        <label>Sito web</label>
+        <input type="text" id="wy-website" value="${w.website || ''}" placeholder="https://…">
+        ${currentUser?.isAdmin ? `<button type="button" class="btn sm" id="wy-enrich-btn" style="margin-top:8px" onclick="enrichWineryFromWebsite()"><i class="ti ti-sparkles"></i>Compila con AI</button>` : ''}
+      </div>
       <div class="fg"><label>Descrizione / storia</label><textarea id="wy-description" rows="4" placeholder="Storia, filosofia della cantina…">${w.description || ''}</textarea></div>
       <div class="fg">
         <label>Logo</label>
@@ -4224,6 +4228,36 @@ async function importWineryCatalogFromShop() {
   }
   toast(`✓ Importati ${data.imported} vini (trovati ${data.found}, già presenti ${data.skipped})`);
   showWineryDetail(currentWineryId);
+}
+
+// Precompila Paese/Regione/Provincia/Descrizione dal sito web della
+// cantina via AI (solo admin — vedi enrich-winery-profile). Non salva da
+// sola: riempie i campi del form, l'admin controlla e preme "Salva scheda"
+// come farebbe compilandoli a mano.
+async function enrichWineryFromWebsite() {
+  if (!currentUser?.isAdmin) return;
+  const website = document.getElementById('wy-website')?.value.trim();
+  if (!website) { toastErr('Inserisci prima il sito web'); return; }
+  const btn = document.getElementById('wy-enrich-btn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2"></i>Analisi in corso…'; }
+  const { data, error } = await sb.functions.invoke('enrich-winery-profile', { body: { website } });
+  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-sparkles"></i>Compila con AI'; }
+  if (error || data?.error) {
+    let msg = data?.message;
+    if (!msg && error?.context?.json) {
+      try { msg = (await error.context.json())?.message; } catch {}
+    }
+    toastErr(msg || error?.message || 'Analisi non riuscita');
+    return;
+  }
+  const info = data.data || {};
+  const set = (id, v) => { const el = document.getElementById(id); if (el && v) el.value = v; };
+  set('wy-country', info.country);
+  document.getElementById('wy-country')?.dispatchEvent(new Event('change'));
+  set('wy-region', info.region);
+  set('wy-province', info.province);
+  set('wy-description', info.description);
+  toast('✓ Proposta AI compilata — controlla e salva');
 }
 
 async function removeWineryCatalogWine(wineryWineId) {
@@ -8016,7 +8050,7 @@ Object.assign(window, {
   addDetailPosition, removeDetailPosition, onDetailPosL1Change, onDetailPosL2Change, onDetailPosL3Change,
   showWineryDetail, saveWineryDetails, uploadWineryLogo, goBackFromWinery, showAdminWineriesScreen, deleteWinery,
   addWineryCatalogWine, removeWineryCatalogWine, useFaviconAsLogo,
-  editWineryCatalogWine, cancelEditWineryCatalogWine, addWineryManually, importWineryCatalogFromShop,
+  editWineryCatalogWine, cancelEditWineryCatalogWine, addWineryManually, importWineryCatalogFromShop, enrichWineryFromWebsite,
   linkProducerToWinery, approveWineryClaim, rejectWineryClaim, submitWineryClaim, cancelWineryClaim, myWineryIds,
   showEventsScreen, showAddEventForm, showEventDetail, saveEvent, deleteEvent, duplicateEvent, setEventStatus,
   renderEventsList, updateEventsProvinceFilterOptions, toggleShowPastEvents, toggleEventFavorite,
