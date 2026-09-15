@@ -155,6 +155,11 @@
     .hl-chart-box { position: relative; height: 220px; }
     #screen-highlights .stat-row { display: flex; flex-wrap: wrap; }
     #screen-highlights .stat-row .stat { flex: 1 1 110px; }
+    .hl-period-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 1rem; }
+    .hl-period-bar select, .hl-period-bar input[type="date"] {
+      font-family: 'Inter', sans-serif; font-size: 12px; padding: 6px 10px; border-radius: 8px;
+      border: 0.5px solid var(--border); background: var(--bg); color: var(--ink);
+    }
     .hl-back-link { font-size: 11px; color: var(--wine); text-decoration: underline; display: inline-block; margin-bottom: 6px; }
 
     /* ── FILTERS ── */
@@ -1452,6 +1457,22 @@
     <div style="display:flex;gap:8px;margin-bottom:1rem">
       <button type="button" class="hl-chip" id="hl-chip-tasted" onclick="setHighlightsView('tasted')"><i class="ti ti-glass-full" style="font-size:13px;vertical-align:-2px;margin-right:4px"></i>Assaggiato</button>
       <button type="button" class="hl-chip" id="hl-chip-owned" onclick="setHighlightsView('owned')"><i class="ti ti-building-warehouse" style="font-size:13px;vertical-align:-2px;margin-right:4px"></i>Comprato</button>
+    </div>
+
+    <div class="hl-period-bar">
+      <label for="hl-period" style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Periodo</label>
+      <select id="hl-period" onchange="onHlPeriodChange()">
+        <option value="all">Sempre</option>
+        <option value="year">Anno corrente</option>
+        <option value="lastyear">Anno scorso</option>
+        <option value="12m">Ultimi 12 mesi</option>
+        <option value="custom">Personalizza…</option>
+      </select>
+      <div id="hl-period-custom" style="display:none;gap:6px;align-items:center">
+        <input type="date" id="hl-period-from" onchange="applyHlCustomPeriod()">
+        <span style="color:var(--muted);font-size:12px">–</span>
+        <input type="date" id="hl-period-to" onchange="applyHlCustomPeriod()">
+      </div>
     </div>
 
     <div id="hl-empty" style="display:none;text-align:center;color:var(--muted);font-size:13px;padding:2.5rem 1rem">
@@ -7440,17 +7461,54 @@ function renderShopChart() {
 }
 function hlBackShop() { hlShopState = { mode: 'top' }; renderShopChart(); }
 
+// ── Filtro periodo — filtra sulla data pertinente alla vista corrente
+// (tastingDate per Assaggiato, date d'acquisto per Comprato), per vedere
+// come cambia il profilo nel tempo. "Sempre" (default) non filtra nulla,
+// stesso comportamento di prima dell'introduzione del filtro.
+let hlPeriod = { mode: 'all', from: null, to: null };
+
+function hlPeriodRange() {
+  const pad = n => String(n).padStart(2, '0');
+  const iso = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const now = new Date();
+  switch (hlPeriod.mode) {
+    case 'year':     return { from: `${now.getFullYear()}-01-01`, to: `${now.getFullYear()}-12-31` };
+    case 'lastyear': { const y = now.getFullYear() - 1; return { from: `${y}-01-01`, to: `${y}-12-31` }; }
+    case '12m':      { const d = new Date(now); d.setFullYear(d.getFullYear() - 1); return { from: iso(d), to: iso(now) }; }
+    case 'custom':   return { from: hlPeriod.from || null, to: hlPeriod.to || null };
+    default:         return { from: null, to: null };
+  }
+}
+
+function onHlPeriodChange() {
+  hlPeriod.mode = document.getElementById('hl-period').value;
+  document.getElementById('hl-period-custom').style.display = hlPeriod.mode === 'custom' ? 'flex' : 'none';
+  if (hlPeriod.mode !== 'custom') renderHighlights();
+}
+
+function applyHlCustomPeriod() {
+  hlPeriod.from = document.getElementById('hl-period-from').value || null;
+  hlPeriod.to = document.getElementById('hl-period-to').value || null;
+  renderHighlights();
+}
+
 function renderHighlights() {
   document.getElementById('hl-chip-tasted')?.classList.toggle('active', highlightsView === 'tasted');
   document.getElementById('hl-chip-owned')?.classList.toggle('active', highlightsView === 'owned');
 
+  const dateField = highlightsView === 'tasted' ? 'tastingDate' : 'date';
+  const range = hlPeriodRange();
   hlCurrentWines = myWines().filter(highlightsView === 'tasted' ? isWineTasted : isWineOwned);
+  if (range.from) hlCurrentWines = hlCurrentWines.filter(w => w[dateField] && w[dateField] >= range.from);
+  if (range.to)   hlCurrentWines = hlCurrentWines.filter(w => w[dateField] && w[dateField] <= range.to);
   const empty = document.getElementById('hl-empty');
   const body = document.getElementById('hl-body');
   if (!hlCurrentWines.length) {
-    document.getElementById('hl-empty-text').textContent = highlightsView === 'tasted'
-      ? 'Non hai ancora vini degustati. Registra una data di degustazione per vederli qui.'
-      : 'Non hai ancora vini in cantina.';
+    document.getElementById('hl-empty-text').textContent = (range.from || range.to)
+      ? 'Nessun vino in questo periodo.'
+      : (highlightsView === 'tasted'
+        ? 'Non hai ancora vini degustati. Registra una data di degustazione per vederli qui.'
+        : 'Non hai ancora vini in cantina.');
     empty.style.display = 'block';
     body.style.display = 'none';
     return;
@@ -7946,7 +8004,7 @@ Object.assign(window, {
   setSortField, toggleSortDir, setNetworkSortField, toggleNetworkSortDir,
   showNetworkScreen, showNetworkWinePreview, showProfileScreen, showScreen, startPremiumCheckout, stepQty, switchDeg, switchLTab, switchRegType, toast,
   showGuideScreen,
-  showHighlightsScreen, setHighlightsView, hlBackGrapes, hlBackRegion, hlBackShop,
+  showHighlightsScreen, setHighlightsView, hlBackGrapes, hlBackRegion, hlBackShop, onHlPeriodChange, applyHlCustomPeriod,
   toggleAdvFilters, toggleFisarMethodField, toggleNavMenu, togglePairing, toggleSection, updateGrapePct, updateTonalitaColore, updateAisColore,
   updateRegionOptions, updateProvinceOptions, dismissInstallBanner, triggerInstallPrompt, resetInstallBanner,
   dismissUpdateBanner, reloadApp, setTheme,
