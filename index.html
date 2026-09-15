@@ -153,7 +153,8 @@
 
     /* ── HIGHLIGHTS ── */
     .hl-chart-box { position: relative; height: 220px; }
-    #screen-highlights .stat-row { grid-template-columns: repeat(3, 1fr); }
+    #screen-highlights .stat-row { display: flex; flex-wrap: wrap; }
+    #screen-highlights .stat-row .stat { flex: 1 1 110px; }
     .hl-back-link { font-size: 11px; color: var(--wine); text-decoration: underline; display: inline-block; margin-bottom: 6px; }
 
     /* ── FILTERS ── */
@@ -1463,6 +1464,8 @@
         <div class="stat"><div class="stat-n" id="hl-stat-total">0</div><div class="stat-l">Etichette</div></div>
         <div class="stat"><div class="stat-n" id="hl-stat-regions">0</div><div class="stat-l">Zone</div></div>
         <div class="stat"><div class="stat-n" id="hl-stat-grapes">0</div><div class="stat-l">Vitigni</div></div>
+        <div class="stat"><div class="stat-n" id="hl-stat-avgscore">—</div><div class="stat-l">Punteggio medio</div></div>
+        <div class="stat"><div class="stat-n" id="hl-stat-vintage">—</div><div class="stat-l">Annata</div></div>
       </div>
 
       <div class="fsec">
@@ -7458,6 +7461,12 @@ function renderHighlights() {
   document.getElementById('hl-stat-total').textContent = hlCurrentWines.length;
   document.getElementById('hl-stat-regions').textContent = new Set(hlCurrentWines.map(w => w.region).filter(Boolean)).size;
   document.getElementById('hl-stat-grapes').textContent = new Set(hlCurrentWines.flatMap(wineGrapeNames)).size;
+  const scored = hlCurrentWines.filter(w => w.score);
+  document.getElementById('hl-stat-avgscore').textContent = scored.length ? Math.round(scored.reduce((s, w) => s + w.score, 0) / scored.length) : '—';
+  const vintages = hlCurrentWines.map(w => w.vintage).filter(Boolean);
+  const vMin = vintages.length ? Math.min(...vintages) : null;
+  const vMax = vintages.length ? Math.max(...vintages) : null;
+  document.getElementById('hl-stat-vintage').textContent = vintages.length ? (vMin === vMax ? String(vMin) : `${vMin}–${vMax}`) : '—';
 
   hlDrawDonut('hl-chart-type', tallyTopN(hlCurrentWines.map(w => w.type), 7), null, label => HL_TYPE_COLORS[label] || HL_TYPE_COLORS.Altro);
   hlGrapeState = { mode: 'top' }; renderGrapeChart();
