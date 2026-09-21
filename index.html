@@ -2623,35 +2623,48 @@
   <div id="screen-admin-wineries" class="screen">
     <div class="nav" style="margin-bottom:.9rem">
       <button class="btn sm" onclick="showScreen('screen-home')"><i class="ti ti-arrow-left"></i>Home</button>
-      <span style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--ink)">Cantine da completare (<span id="admin-wineries-count">0</span>)</span>
+      <span style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--ink)">Cantine</span>
       <button class="btn sm primary" onclick="addWineryManually()"><i class="ti ti-plus"></i>Aggiungi cantina</button>
     </div>
 
-    <div class="fsec">
-      <div class="stitle"><i class="ti ti-search"></i>Tutte le cantine</div>
-      <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Cerca una cantina qualsiasi, completa o meno — la scheda ha sia gli strumenti di compilazione AI sia quelli di modifica, nello stesso posto.</p>
-      <input type="text" id="admin-all-wineries-search" class="network-search" placeholder="Cerca per nome…" oninput="searchAllWineries()">
-      <div id="admin-all-wineries-list" style="margin-top:10px"></div>
+    <div class="fsec collapsible collapsed" id="admin-sec-search">
+      <div class="stitle fsec-header" onclick="toggleSection('admin-sec-search')"><i class="ti ti-search"></i>Tutte le cantine<i class="ti ti-chevron-down fsec-chevron"></i></div>
+      <div class="fsec-body">
+        <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Cerca una cantina qualsiasi, completa o meno — la scheda ha sia gli strumenti di compilazione AI sia quelli di modifica, nello stesso posto.</p>
+        <input type="text" id="admin-all-wineries-search" class="network-search" placeholder="Cerca per nome…" oninput="searchAllWineries()">
+        <div id="admin-all-wineries-list" style="margin-top:10px"></div>
+      </div>
     </div>
 
-    <div id="admin-wineries-list"></div>
-
-    <div class="fsec" style="margin-top:1.5rem">
-      <div class="stitle"><i class="ti ti-plug-connected-x"></i>Produttori senza cantina collegata</div>
-      <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Vini (di qualunque utente) il cui produttore non è ancora agganciato a nessuna scheda in anagrafica — capita per i vini inseriti prima che esistesse l'anagrafica cantine.</p>
-      <div id="admin-unlinked-producers-list"></div>
+    <div class="fsec collapsible collapsed" id="admin-sec-incomplete" style="margin-top:.9rem">
+      <div class="stitle fsec-header" onclick="toggleSection('admin-sec-incomplete')"><i class="ti ti-building-warehouse"></i>Cantine da completare (<span id="admin-wineries-count">0</span>)<i class="ti ti-chevron-down fsec-chevron"></i></div>
+      <div class="fsec-body">
+        <div id="admin-wineries-list"></div>
+      </div>
     </div>
 
-    <div class="fsec" style="margin-top:1.5rem">
-      <div class="stitle"><i class="ti ti-user-check"></i>Richieste di collegamento cantina (<span id="admin-winery-claims-count">0</span>)</div>
-      <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Utenti che hanno chiesto di gestire una cantina in prima persona (dati, catalogo vini, eventi propri).</p>
-      <div id="admin-winery-claims-list"></div>
+    <div class="fsec collapsible collapsed" id="admin-sec-unlinked" style="margin-top:.9rem">
+      <div class="stitle fsec-header" onclick="toggleSection('admin-sec-unlinked')"><i class="ti ti-plug-connected-x"></i>Produttori senza cantina collegata<i class="ti ti-chevron-down fsec-chevron"></i></div>
+      <div class="fsec-body">
+        <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Vini (di qualunque utente) il cui produttore non è ancora agganciato a nessuna scheda in anagrafica — capita per i vini inseriti prima che esistesse l'anagrafica cantine.</p>
+        <div id="admin-unlinked-producers-list"></div>
+      </div>
     </div>
 
-    <div class="fsec" style="margin-top:1.5rem">
-      <div class="stitle"><i class="ti ti-calendar-event"></i>Eventi in attesa di approvazione (<span id="admin-pending-events-count">0</span>)</div>
-      <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Eventi inseriti da una cantina, non ancora visibili a tutti — apri per approvare o rifiutare.</p>
-      <div id="admin-pending-events-list"></div>
+    <div class="fsec collapsible collapsed" id="admin-sec-claims" style="margin-top:.9rem">
+      <div class="stitle fsec-header" onclick="toggleSection('admin-sec-claims')"><i class="ti ti-user-check"></i>Richieste di collegamento cantina (<span id="admin-winery-claims-count">0</span>)<i class="ti ti-chevron-down fsec-chevron"></i></div>
+      <div class="fsec-body">
+        <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Utenti che hanno chiesto di gestire una cantina in prima persona (dati, catalogo vini, eventi propri).</p>
+        <div id="admin-winery-claims-list"></div>
+      </div>
+    </div>
+
+    <div class="fsec collapsible collapsed" id="admin-sec-events" style="margin-top:.9rem">
+      <div class="stitle fsec-header" onclick="toggleSection('admin-sec-events')"><i class="ti ti-calendar-event"></i>Eventi in attesa di approvazione (<span id="admin-pending-events-count">0</span>)<i class="ti ti-chevron-down fsec-chevron"></i></div>
+      <div class="fsec-body">
+        <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Eventi inseriti da una cantina, non ancora visibili a tutti — apri per approvare o rifiutare.</p>
+        <div id="admin-pending-events-list"></div>
+      </div>
     </div>
   </div>
 
