@@ -77,24 +77,24 @@ Deno.serve(async (req) => {
   try {
     const authHeader = req.headers.get('Authorization') || '';
     const token = authHeader.replace('Bearer ', '');
-    if (!token) return json({ error: 'Devi essere autenticato' }, 401);
+    if (!token) return json({ error: 'auth', message: 'Devi essere autenticato' }, 200);
 
     const sbAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
     const { data: userData, error: userErr } = await sbAdmin.auth.getUser(token);
-    if (userErr || !userData?.user) return json({ error: 'Sessione non valida' }, 401);
+    if (userErr || !userData?.user) return json({ error: 'auth', message: 'Sessione non valida' }, 200);
 
     const { data: profile } = await sbAdmin.from('profiles').select('is_admin').eq('id', userData.user.id).maybeSingle();
-    if (!profile?.is_admin) return json({ error: 'Solo un admin può usare questa funzione' }, 403);
+    if (!profile?.is_admin) return json({ error: 'forbidden', message: 'Solo un admin può usare questa funzione' }, 200);
 
     const body = await req.json().catch(() => ({}));
     const wineryId = typeof body?.wineryId === 'string' ? body.wineryId : '';
-    if (!wineryId) return json({ error: 'wineryId mancante' }, 400);
+    if (!wineryId) return json({ error: 'bad_request', message: 'wineryId mancante' }, 200);
 
     const { data: allWines, error: winesErr } = await sbAdmin
       .from('winery_wines')
       .select('id,name,grapes,link')
       .eq('winery_id', wineryId);
-    if (winesErr) return json({ error: 'server_error', message: 'Errore lettura catalogo: ' + winesErr.message }, 500);
+    if (winesErr) return json({ error: 'server_error', message: 'Errore lettura catalogo: ' + winesErr.message }, 200);
 
     const wines = (allWines || []).filter((w) => w.link && !w.grapes).slice(0, MAX_WINES);
     if (!wines.length) {
@@ -140,7 +140,7 @@ Deno.serve(async (req) => {
     if (!aiResp.ok) {
       const errText = await aiResp.text();
       console.error('Anthropic API error:', aiResp.status, errText);
-      return json({ error: 'ai_error', message: 'Errore nella lettura dei vini. Riprova più tardi.' }, 502);
+      return json({ error: 'ai_error', message: 'Errore nella lettura dei vini. Riprova più tardi.' }, 200);
     }
 
     const aiData = await aiResp.json();
@@ -149,7 +149,7 @@ Deno.serve(async (req) => {
     try {
       extracted = JSON.parse(responseText.replace(/```json|```/g, '').trim());
     } catch {
-      return json({ error: 'parse_error', message: 'Non sono riuscito a interpretare la risposta. Riprova più tardi.' }, 502);
+      return json({ error: 'parse_error', message: 'Non sono riuscito a interpretare la risposta. Riprova più tardi.' }, 200);
     }
 
     let updated = 0;
@@ -162,6 +162,6 @@ Deno.serve(async (req) => {
     return json({ ok: true, checked: wines.length, updated, failed: failedCount });
   } catch (err) {
     console.error('enrich-winery-catalog error:', err);
-    return json({ error: 'server_error', message: `Errore imprevisto: ${err instanceof Error ? err.message : String(err)}` }, 500);
+    return json({ error: 'server_error', message: `Errore imprevisto: ${err instanceof Error ? err.message : String(err)}` }, 200);
   }
 });

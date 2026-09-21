@@ -87,36 +87,36 @@ Deno.serve(async (req) => {
   try {
     const authHeader = req.headers.get('Authorization') || '';
     const token = authHeader.replace('Bearer ', '');
-    if (!token) return json({ error: 'Devi essere autenticato' }, 401);
+    if (!token) return json({ error: 'auth', message: 'Devi essere autenticato' }, 200);
 
     const sbAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
     const { data: userData, error: userErr } = await sbAdmin.auth.getUser(token);
-    if (userErr || !userData?.user) return json({ error: 'Sessione non valida' }, 401);
+    if (userErr || !userData?.user) return json({ error: 'auth', message: 'Sessione non valida' }, 200);
 
     const { data: profile } = await sbAdmin.from('profiles').select('is_admin').eq('id', userData.user.id).maybeSingle();
-    if (!profile?.is_admin) return json({ error: 'Solo un admin può usare questa funzione' }, 403);
+    if (!profile?.is_admin) return json({ error: 'forbidden', message: 'Solo un admin può usare questa funzione' }, 200);
 
     const body = await req.json().catch(() => ({}));
     const website = typeof body?.website === 'string' ? body.website.trim() : '';
-    if (!website) return json({ error: 'Sito web mancante' }, 400);
+    if (!website) return json({ error: 'bad_request', message: 'Sito web mancante' }, 200);
 
     let parsed: URL;
-    try { parsed = new URL(website); } catch { return json({ error: 'Link non valido' }, 400); }
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return json({ error: 'Link non valido' }, 400);
+    try { parsed = new URL(website); } catch { return json({ error: 'bad_request', message: 'Link non valido' }, 200); }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return json({ error: 'bad_request', message: 'Link non valido' }, 200);
 
     let pageResp: Response;
     try {
       pageResp = await fetchWithTimeout(parsed.toString());
     } catch (fetchErr) {
       if (fetchErr instanceof Error && fetchErr.name === 'AbortError') {
-        return json({ error: 'timeout', message: 'Il sito ha impiegato troppo tempo a rispondere. Riprova o compila a mano.' }, 504);
+        return json({ error: 'timeout', message: 'Il sito ha impiegato troppo tempo a rispondere. Riprova o compila a mano.' }, 200);
       }
-      return json({ error: 'fetch_error', message: `Impossibile raggiungere il sito: ${fetchErr instanceof Error ? fetchErr.message : String(fetchErr)}` }, 502);
+      return json({ error: 'fetch_error', message: `Impossibile raggiungere il sito: ${fetchErr instanceof Error ? fetchErr.message : String(fetchErr)}` }, 200);
     }
-    if (!pageResp.ok) return json({ error: `Impossibile raggiungere il sito (${pageResp.status})` }, 502);
+    if (!pageResp.ok) return json({ error: 'fetch_error', message: `Impossibile raggiungere il sito (${pageResp.status})` }, 200);
     const html = (await pageResp.text()).slice(0, MAX_HTML_BYTES);
     const text = htmlToCleanText(html);
-    if (!text) return json({ error: 'Pagina vuota o illeggibile' }, 502);
+    if (!text) return json({ error: 'empty_page', message: 'Pagina vuota o illeggibile' }, 200);
 
     const promptText = `Ecco il testo della homepage del sito di una cantina vinicola. Estrai le informazioni richieste. Rispondi SOLO con JSON valido, zero testo extra, zero markdown. Schema: {"country":"","region":"","province":"","description":""}. "country" deve essere ESATTAMENTE uno tra questi valori (scegli il più adatto, "Altro" se nessuno corrisponde, stringa vuota se non è per niente chiaro): ${COUNTRY_OPTIONS.join(', ')}. "region" e "province" solo se il testo le rende chiare (per un'azienda italiana, la provincia è quella della sede/cantina, es. "Verona"); altrimenti stringa vuota — non indovinare. "description" è una breve descrizione in italiano (2-3 frasi) della cantina basata SOLO su quanto scritto nel testo, in terza persona, senza inventare dettagli non presenti.\n\nTesto della pagina:\n${text}`;
 
@@ -137,7 +137,7 @@ Deno.serve(async (req) => {
     if (!aiResp.ok) {
       const errText = await aiResp.text();
       console.error('Anthropic API error:', aiResp.status, errText);
-      return json({ error: 'ai_error', message: 'Errore nella lettura del sito. Riprova o compila a mano.' }, 502);
+      return json({ error: 'ai_error', message: 'Errore nella lettura del sito. Riprova o compila a mano.' }, 200);
     }
 
     const aiData = await aiResp.json();
@@ -146,12 +146,12 @@ Deno.serve(async (req) => {
     try {
       extracted = JSON.parse(responseText.replace(/```json|```/g, '').trim());
     } catch {
-      return json({ error: 'parse_error', message: 'Non sono riuscito a interpretare il sito. Riprova o compila a mano.' }, 502);
+      return json({ error: 'parse_error', message: 'Non sono riuscito a interpretare il sito. Riprova o compila a mano.' }, 200);
     }
 
     return json({ data: extracted });
   } catch (err) {
     console.error('enrich-winery-profile error:', err);
-    return json({ error: 'server_error', message: `Errore imprevisto: ${err instanceof Error ? err.message : String(err)}` }, 500);
+    return json({ error: 'server_error', message: `Errore imprevisto: ${err instanceof Error ? err.message : String(err)}` }, 200);
   }
 });
