@@ -2626,6 +2626,14 @@
       <span style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--ink)">Cantine da completare (<span id="admin-wineries-count">0</span>)</span>
       <button class="btn sm primary" onclick="addWineryManually()"><i class="ti ti-plus"></i>Aggiungi cantina</button>
     </div>
+
+    <div class="fsec">
+      <div class="stitle"><i class="ti ti-search"></i>Tutte le cantine</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Cerca una cantina qualsiasi, completa o meno — la scheda ha sia gli strumenti di compilazione AI sia quelli di modifica, nello stesso posto.</p>
+      <input type="text" id="admin-all-wineries-search" class="network-search" placeholder="Cerca per nome…" oninput="searchAllWineries()">
+      <div id="admin-all-wineries-list" style="margin-top:10px"></div>
+    </div>
+
     <div id="admin-wineries-list"></div>
 
     <div class="fsec" style="margin-top:1.5rem">
@@ -4393,9 +4401,46 @@ async function addWineryManually() {
   showWineryDetail(id);
 }
 
+// Ricerca libera su TUTTE le cantine (complete o meno) — a differenza
+// dell'elenco "da completare" sotto, che mostra solo quelle con ogni
+// campo vuoto, questa porta l'admin su una qualsiasi scheda cantina
+// già esistente per rivederla o correggerla in un secondo momento.
+// showWineryDetail() è lo stesso identico punto d'arrivo dell'elenco
+// "da completare": la scheda ha sia gli strumenti AI sia la modifica.
+let adminAllWineriesSearchTimer = null;
+
+async function loadAllWineriesForAdmin(query) {
+  let req = sb.from('wineries').select('id,name,country,region').order('name').limit(40);
+  if (query) req = req.ilike('name', `%${query}%`);
+  const { data, error } = await req;
+  if (error) { toastErr('Errore ricerca cantine: ' + error.message); return []; }
+  return data || [];
+}
+
+function renderAllWineriesList(wineries) {
+  const list = document.getElementById('admin-all-wineries-list');
+  list.innerHTML = wineries.length
+    ? wineries.map(w => `
+      <div class="winery-row" onclick="showWineryDetail('${w.id}')">
+        <div class="winery-row-name"><i class="ti ti-building-warehouse"></i>${w.name}${(w.region || w.country) ? ` <span style="font-size:11px;color:var(--muted);font-weight:400">— ${[w.region, w.country].filter(Boolean).join(', ')}</span>` : ''}</div>
+        <i class="ti ti-chevron-right"></i>
+      </div>`).join('')
+    : '<div style="text-align:center;padding:1rem;color:var(--muted);font-size:12px">Nessuna cantina trovata</div>';
+}
+
+function searchAllWineries() {
+  clearTimeout(adminAllWineriesSearchTimer);
+  const q = document.getElementById('admin-all-wineries-search').value.trim();
+  adminAllWineriesSearchTimer = setTimeout(async () => {
+    renderAllWineriesList(await loadAllWineriesForAdmin(q));
+  }, 350);
+}
+
 async function showAdminWineriesScreen() {
   if (!currentUser?.isAdmin) return;
   showScreen('screen-admin-wineries');
+  document.getElementById('admin-all-wineries-search').value = '';
+  loadAllWineriesForAdmin('').then(renderAllWineriesList);
   const list = document.getElementById('admin-wineries-list');
   list.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted)">Caricamento…</div>';
   const unlinkedList = document.getElementById('admin-unlinked-producers-list');
@@ -8083,7 +8128,7 @@ Object.assign(window, {
   confirmSumDuplicateQty, confirmSaveDuplicateAsNew, closeDuplicateWinePrompt,
   addPosNode, removePosNode, addWinePosition, removeWinePosition, onPosL1Change, onPosL2Change, onPosL3Change,
   addDetailPosition, removeDetailPosition, onDetailPosL1Change, onDetailPosL2Change, onDetailPosL3Change,
-  showWineryDetail, saveWineryDetails, uploadWineryLogo, goBackFromWinery, showAdminWineriesScreen, deleteWinery,
+  showWineryDetail, saveWineryDetails, uploadWineryLogo, goBackFromWinery, showAdminWineriesScreen, deleteWinery, searchAllWineries,
   addWineryCatalogWine, removeWineryCatalogWine, useFaviconAsLogo,
   editWineryCatalogWine, cancelEditWineryCatalogWine, addWineryManually, importWineryCatalogFromShop, enrichWineryFromWebsite, enrichWineryCatalogGrapes,
   linkProducerToWinery, approveWineryClaim, rejectWineryClaim, submitWineryClaim, cancelWineryClaim, myWineryIds,
