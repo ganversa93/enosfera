@@ -1457,6 +1457,7 @@
     <div style="display:flex;gap:8px;margin-bottom:1rem">
       <button type="button" class="hl-chip" id="hl-chip-tasted" onclick="setHighlightsView('tasted')"><i class="ti ti-glass-full" style="font-size:13px;vertical-align:-2px;margin-right:4px"></i>Assaggiato</button>
       <button type="button" class="hl-chip" id="hl-chip-owned" onclick="setHighlightsView('owned')"><i class="ti ti-building-warehouse" style="font-size:13px;vertical-align:-2px;margin-right:4px"></i>Comprato</button>
+      <button type="button" class="hl-chip" id="hl-chip-all" onclick="setHighlightsView('all')"><i class="ti ti-list" style="font-size:13px;vertical-align:-2px;margin-right:4px"></i>Complessivo</button>
     </div>
 
     <div class="hl-period-bar">
@@ -7526,15 +7527,26 @@ function applyHlCustomPeriod() {
   renderHighlights();
 }
 
+// Un vino rientra nel periodo scelto in base alla data pertinente alla
+// vista corrente: data degustazione per Assaggiato, data d'acquisto per
+// Comprato. Per Complessivo (l'unione delle due) basta che UNA delle due
+// date cada nel periodo — un vino può avere solo una delle due compilate.
+function hlWineInPeriod(w, range) {
+  if (!range.from && !range.to) return true;
+  const inRange = d => d && (!range.from || d >= range.from) && (!range.to || d <= range.to);
+  if (highlightsView === 'tasted') return inRange(w.tastingDate);
+  if (highlightsView === 'owned')  return inRange(w.date);
+  return inRange(w.tastingDate) || inRange(w.date);
+}
+
 function renderHighlights() {
   document.getElementById('hl-chip-tasted')?.classList.toggle('active', highlightsView === 'tasted');
   document.getElementById('hl-chip-owned')?.classList.toggle('active', highlightsView === 'owned');
+  document.getElementById('hl-chip-all')?.classList.toggle('active', highlightsView === 'all');
 
-  const dateField = highlightsView === 'tasted' ? 'tastingDate' : 'date';
+  const viewFilter = highlightsView === 'tasted' ? isWineTasted : highlightsView === 'owned' ? isWineOwned : () => true;
   const range = hlPeriodRange();
-  hlCurrentWines = myWines().filter(highlightsView === 'tasted' ? isWineTasted : isWineOwned);
-  if (range.from) hlCurrentWines = hlCurrentWines.filter(w => w[dateField] && w[dateField] >= range.from);
-  if (range.to)   hlCurrentWines = hlCurrentWines.filter(w => w[dateField] && w[dateField] <= range.to);
+  hlCurrentWines = myWines().filter(viewFilter).filter(w => hlWineInPeriod(w, range));
   const empty = document.getElementById('hl-empty');
   const body = document.getElementById('hl-body');
   if (!hlCurrentWines.length) {
