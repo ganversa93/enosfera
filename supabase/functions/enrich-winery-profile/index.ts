@@ -33,7 +33,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const FETCH_TIMEOUT_MS = 10000;
+const FETCH_TIMEOUT_MS = 20000;
 const MAX_HTML_BYTES = 1_500_000;
 // Testo ripulito inviato all'AI: tenuto corto di proposito — è la parte di
 // "ottimizzazione del recupero informazioni" che tiene il costo per
@@ -104,7 +104,15 @@ Deno.serve(async (req) => {
     try { parsed = new URL(website); } catch { return json({ error: 'Link non valido' }, 400); }
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return json({ error: 'Link non valido' }, 400);
 
-    const pageResp = await fetchWithTimeout(parsed.toString());
+    let pageResp: Response;
+    try {
+      pageResp = await fetchWithTimeout(parsed.toString());
+    } catch (fetchErr) {
+      if (fetchErr instanceof Error && fetchErr.name === 'AbortError') {
+        return json({ error: 'timeout', message: 'Il sito ha impiegato troppo tempo a rispondere. Riprova o compila a mano.' }, 504);
+      }
+      return json({ error: 'fetch_error', message: `Impossibile raggiungere il sito: ${fetchErr instanceof Error ? fetchErr.message : String(fetchErr)}` }, 502);
+    }
     if (!pageResp.ok) return json({ error: `Impossibile raggiungere il sito (${pageResp.status})` }, 502);
     const html = (await pageResp.text()).slice(0, MAX_HTML_BYTES);
     const text = htmlToCleanText(html);
@@ -144,6 +152,6 @@ Deno.serve(async (req) => {
     return json({ data: extracted });
   } catch (err) {
     console.error('enrich-winery-profile error:', err);
-    return json({ error: 'server_error', message: 'Errore imprevisto. Riprova più tardi.' }, 500);
+    return json({ error: 'server_error', message: `Errore imprevisto: ${err instanceof Error ? err.message : String(err)}` }, 500);
   }
 });
