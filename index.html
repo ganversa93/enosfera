@@ -1520,27 +1520,51 @@
     </div>
   </div>
 
-  <!-- ══ APPROFONDISCI ══ -->
+  <!-- ══ APPROFONDISCI (menu) ══ -->
   <div id="screen-approfondisci" class="screen">
     <div class="nav" style="margin-bottom:1.1rem">
       <button class="btn sm" onclick="showScreen('screen-home')"><i class="ti ti-arrow-left"></i>Home</button>
       <span style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--ink)">Approfondisci</span>
     </div>
+    <div class="home-grid">
+      <div class="home-card" onclick="showApBlogScreen()">
+        <i class="ti ti-news"></i>
+        <div class="home-card-title">Blog</div>
+        <div class="home-card-sub">In arrivo</div>
+      </div>
+      <div class="home-card" onclick="showApEnologiaScreen()">
+        <i class="ti ti-leaf"></i>
+        <div class="home-card-title">Enologia Italiana</div>
+        <div class="home-card-sub">Vitigni e denominazioni</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ APPROFONDISCI · BLOG ══ -->
+  <div id="screen-ap-blog" class="screen">
+    <div class="nav" style="margin-bottom:1.1rem">
+      <button class="btn sm" onclick="showScreen('screen-approfondisci')"><i class="ti ti-arrow-left"></i>Approfondisci</button>
+      <span style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--ink)">Blog</span>
+    </div>
+    <div id="ap-blog-admin-bar" style="display:none;margin-bottom:10px">
+      <button class="btn sm primary" onclick="showBlogPostDetail(null)"><i class="ti ti-plus"></i>Nuovo articolo</button>
+    </div>
+    <div id="ap-blog-list"></div>
+  </div>
+
+  <!-- ══ APPROFONDISCI · ENOLOGIA ITALIANA ══ -->
+  <div id="screen-ap-enologia" class="screen">
+    <div class="nav" style="margin-bottom:1.1rem">
+      <button class="btn sm" onclick="showScreen('screen-approfondisci')"><i class="ti ti-arrow-left"></i>Approfondisci</button>
+      <span style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--ink)">Enologia Italiana</span>
+    </div>
 
     <div style="display:flex;gap:8px;margin-bottom:1rem;flex-wrap:wrap">
-      <button type="button" class="hl-chip" id="ap-chip-blog" onclick="setApView('blog')"><i class="ti ti-news" style="font-size:13px;vertical-align:-2px;margin-right:4px"></i>Blog</button>
-      <button type="button" class="hl-chip" id="ap-chip-vitigni" onclick="setApView('vitigni')"><i class="ti ti-leaf" style="font-size:13px;vertical-align:-2px;margin-right:4px"></i>Vitigni</button>
-      <button type="button" class="hl-chip" id="ap-chip-denominazioni" onclick="setApView('denominazioni')"><i class="ti ti-map-pin" style="font-size:13px;vertical-align:-2px;margin-right:4px"></i>Denominazioni</button>
+      <button type="button" class="hl-chip" id="ap-chip-vitigni" onclick="setApEnologiaView('vitigni')"><i class="ti ti-leaf" style="font-size:13px;vertical-align:-2px;margin-right:4px"></i>Vitigni</button>
+      <button type="button" class="hl-chip" id="ap-chip-denominazioni" onclick="setApEnologiaView('denominazioni')"><i class="ti ti-map-pin" style="font-size:13px;vertical-align:-2px;margin-right:4px"></i>Denominazioni</button>
     </div>
 
-    <div id="ap-view-blog" class="ap-view">
-      <div id="ap-blog-admin-bar" style="display:none;margin-bottom:10px">
-        <button class="btn sm primary" onclick="showBlogPostDetail(null)"><i class="ti ti-plus"></i>Nuovo articolo</button>
-      </div>
-      <div id="ap-blog-list"></div>
-    </div>
-
-    <div id="ap-view-vitigni" class="ap-view" style="display:none">
+    <div id="ap-view-vitigni" class="ap-view">
       <input type="text" id="ap-vitigni-search" class="network-search" placeholder="Cerca vitigno per nome…" oninput="searchGrapeVarieties()">
       <div style="display:flex;gap:8px;margin:10px 0;flex-wrap:wrap" id="ap-vitigni-filters">
         <div class="chip" data-color="nera" onclick="toggleApColorFilter('nera',this)">Nera</div>
@@ -1570,7 +1594,7 @@
   <!-- ══ VITIGNO (dettaglio + modifica admin) ══ -->
   <div id="screen-grape-detail" class="screen">
     <div class="nav" style="margin-bottom:1.1rem">
-      <button class="btn sm" onclick="showScreen('screen-approfondisci')"><i class="ti ti-arrow-left"></i>Vitigni</button>
+      <button class="btn sm" onclick="showScreen('screen-ap-enologia')"><i class="ti ti-arrow-left"></i>Enologia Italiana</button>
       <span id="gv-title" style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--ink)">Vitigno</span>
     </div>
     <div id="gv-view-body"></div>
@@ -1606,7 +1630,7 @@
   <!-- ══ DENOMINAZIONE (dettaglio + modifica admin) ══ -->
   <div id="screen-denom-detail" class="screen">
     <div class="nav" style="margin-bottom:1.1rem">
-      <button class="btn sm" onclick="showScreen('screen-approfondisci')"><i class="ti ti-arrow-left"></i>Denominazioni</button>
+      <button class="btn sm" onclick="showScreen('screen-ap-enologia')"><i class="ti ti-arrow-left"></i>Enologia Italiana</button>
       <span id="dn-title" style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--ink)">Denominazione</span>
     </div>
     <div id="dn-view-body"></div>
@@ -1631,7 +1655,7 @@
   <!-- ══ ARTICOLO BLOG (dettaglio + modifica admin) ══ -->
   <div id="screen-blogpost-detail" class="screen">
     <div class="nav" style="margin-bottom:1.1rem">
-      <button class="btn sm" onclick="showScreen('screen-approfondisci')"><i class="ti ti-arrow-left"></i>Blog</button>
+      <button class="btn sm" onclick="showScreen('screen-ap-blog')"><i class="ti ti-arrow-left"></i>Blog</button>
       <span id="bp-title-nav" style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--ink)">Articolo</span>
     </div>
     <div id="bp-view-body"></div>
@@ -7572,7 +7596,7 @@ function showGuideScreen() {
 // volta dall'admin. Stesso schema "tutti leggono, solo admin scrive" già
 // usato per wineries/events, stesso pattern di dettaglio-che-fa-anche-
 // da-form-di-modifica già usato per showWineryDetail/showEventDetail.
-let apView = 'blog';
+let apEnologiaView = 'vitigni';
 let apVitigniSearchTimer = null;
 let apVitigniColorFilters = new Set();
 let apDenomSearchTimer = null;
@@ -7588,23 +7612,29 @@ const splitCsv = s => s ? s.split(',').map(x => x.trim()).filter(Boolean) : [];
 
 function showApprofondisciScreen() {
   showScreen('screen-approfondisci');
-  setApView(apView);
 }
 
-function setApView(view) {
-  apView = view;
-  document.getElementById('ap-chip-blog')?.classList.toggle('active', view === 'blog');
+function showApBlogScreen() {
+  showScreen('screen-ap-blog');
+  document.getElementById('ap-blog-admin-bar').style.display = currentUser?.isAdmin ? '' : 'none';
+  loadBlogPosts();
+}
+
+function showApEnologiaScreen() {
+  showScreen('screen-ap-enologia');
+  setApEnologiaView(apEnologiaView);
+}
+
+function setApEnologiaView(view) {
+  apEnologiaView = view;
   document.getElementById('ap-chip-vitigni')?.classList.toggle('active', view === 'vitigni');
   document.getElementById('ap-chip-denominazioni')?.classList.toggle('active', view === 'denominazioni');
-  document.getElementById('ap-view-blog').style.display = view === 'blog' ? '' : 'none';
   document.getElementById('ap-view-vitigni').style.display = view === 'vitigni' ? '' : 'none';
   document.getElementById('ap-view-denominazioni').style.display = view === 'denominazioni' ? '' : 'none';
   const isAdmin = !!currentUser?.isAdmin;
-  document.getElementById('ap-blog-admin-bar').style.display = isAdmin ? '' : 'none';
   document.getElementById('ap-vitigni-admin-bar').style.display = isAdmin ? '' : 'none';
   document.getElementById('ap-denom-admin-bar').style.display = isAdmin ? '' : 'none';
-  if (view === 'blog') loadBlogPosts();
-  else if (view === 'vitigni') searchGrapeVarieties();
+  if (view === 'vitigni') searchGrapeVarieties();
   else if (view === 'denominazioni') searchDenominations();
 }
 
@@ -7634,11 +7664,11 @@ async function showBlogPostDetail(id) {
   let post = null;
   if (id) {
     const { data, error } = await sb.from('blog_posts').select('*').eq('id', id).maybeSingle();
-    if (error || !data) { toastErr('Articolo non trovato'); showScreen('screen-approfondisci'); return; }
+    if (error || !data) { toastErr('Articolo non trovato'); showScreen('screen-ap-blog'); return; }
     post = data;
     currentBlogPostData = data;
   } else if (!isAdmin) {
-    showScreen('screen-approfondisci');
+    showScreen('screen-ap-blog');
     return;
   }
   document.getElementById('bp-title-nav').textContent = post ? post.title : 'Nuovo articolo';
@@ -7713,7 +7743,7 @@ async function deleteBlogPost() {
   const { error } = await sb.from('blog_posts').delete().eq('id', currentBlogPostId);
   if (error) { toastErr('Errore eliminazione: ' + error.message); return; }
   toast('✓ Articolo eliminato');
-  showScreen('screen-approfondisci');
+  showScreen('screen-ap-blog');
   loadBlogPosts();
 }
 
@@ -7757,10 +7787,10 @@ async function showGrapeVarietyDetail(id) {
   let gv = null;
   if (id) {
     const { data, error } = await sb.from('grape_varieties').select('*').eq('id', id).maybeSingle();
-    if (error || !data) { toastErr('Vitigno non trovato'); showScreen('screen-approfondisci'); return; }
+    if (error || !data) { toastErr('Vitigno non trovato'); showScreen('screen-ap-enologia'); return; }
     gv = data;
   } else if (!isAdmin) {
-    showScreen('screen-approfondisci');
+    showScreen('screen-ap-enologia');
     return;
   }
   document.getElementById('gv-title').textContent = gv ? gv.name : 'Nuovo vitigno';
@@ -7824,7 +7854,7 @@ async function deleteGrapeVariety() {
   const { error } = await sb.from('grape_varieties').delete().eq('id', currentGrapeVarietyId);
   if (error) { toastErr('Errore eliminazione: ' + error.message); return; }
   toast('✓ Vitigno eliminato');
-  showScreen('screen-approfondisci');
+  showScreen('screen-ap-enologia');
   searchGrapeVarieties();
 }
 
@@ -7870,10 +7900,10 @@ async function showDenominationDetail(id) {
   let dn = null;
   if (id) {
     const { data, error } = await sb.from('wine_denominations').select('*').eq('id', id).maybeSingle();
-    if (error || !data) { toastErr('Denominazione non trovata'); showScreen('screen-approfondisci'); return; }
+    if (error || !data) { toastErr('Denominazione non trovata'); showScreen('screen-ap-enologia'); return; }
     dn = data;
   } else if (!isAdmin) {
-    showScreen('screen-approfondisci');
+    showScreen('screen-ap-enologia');
     return;
   }
   document.getElementById('dn-title').textContent = dn ? dn.name : 'Nuova denominazione';
@@ -7929,7 +7959,7 @@ async function deleteDenomination() {
   const { error } = await sb.from('wine_denominations').delete().eq('id', currentDenominationId);
   if (error) { toastErr('Errore eliminazione: ' + error.message); return; }
   toast('✓ Denominazione eliminata');
-  showScreen('screen-approfondisci');
+  showScreen('screen-ap-enologia');
   searchDenominations();
 }
 
@@ -8664,7 +8694,7 @@ Object.assign(window, {
   showEventsScreen, showAddEventForm, showEventDetail, saveEvent, deleteEvent, duplicateEvent, setEventStatus,
   renderEventsList, updateEventsProvinceFilterOptions, toggleShowPastEvents, toggleEventFavorite,
   showConfigListsScreen, selectConfigList, addConfigListValue, removeConfigListValue,
-  showApprofondisciScreen, setApView,
+  showApprofondisciScreen, showApBlogScreen, showApEnologiaScreen, setApEnologiaView,
   showBlogPostDetail, saveBlogPost, deleteBlogPost, uploadBlogCover,
   showGrapeVarietyDetail, saveGrapeVariety, deleteGrapeVariety, searchGrapeVarieties, toggleApColorFilter,
   showDenominationDetail, saveDenomination, deleteDenomination, searchDenominations, toggleApTypeFilter
