@@ -218,6 +218,11 @@
     .bb  { background: rgba(184,137,42,.85); }
     .bro { background: rgba(200,100,120,.85); }
     .bs  { background: rgba(60,100,180,.85); }
+    .bgy { background: rgba(120,120,130,.85); }
+    /* Badge inline per gli archivi Vitigni/Denominazioni — stessi colori di
+       .wbadge (bb/bro/br/bs, riferiti al tipo vino) ma senza position:
+       absolute, adatti a una riga di lista invece che a una card. */
+    .gbadge { display: inline-flex; align-items: center; font-size: 10px; font-weight: 600; padding: 3px 9px; border-radius: 20px; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.25); white-space: nowrap; }
     .winfo { padding: 11px 13px; }
     .wname { font-family: 'Cormorant Garamond', serif; font-size: 14px; font-weight: 500; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .wprod { font-size: 11px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1111,10 +1116,10 @@
         <div class="home-card-title">Highlights</div>
         <div class="home-card-sub">Il tuo profilo da sommelier</div>
       </div>
-      <div class="home-card" onclick="showComingSoon('Approfondimenti')">
+      <div class="home-card" onclick="showApprofondisciScreen()">
         <i class="ti ti-news"></i>
-        <div class="home-card-title">Approfondimenti</div>
-        <div class="home-card-sub">In arrivo</div>
+        <div class="home-card-title">Approfondisci</div>
+        <div class="home-card-sub">Blog, vitigni e denominazioni</div>
       </div>
       <div class="home-card" onclick="showEventsScreen()">
         <i class="ti ti-calendar-event"></i>
@@ -1148,7 +1153,7 @@
     <div class="nav-menu-item" onclick="closeNavMenu();showScreen('screen-home')"><i class="ti ti-home"></i>Home</div>
     <div class="nav-menu-item" onclick="closeNavMenu();showScreen('screen-list')"><i class="ti ti-bottle"></i>Cantina e Degustazioni</div>
     <div class="nav-menu-item" onclick="closeNavMenu();showHighlightsScreen()"><i class="ti ti-sparkles"></i>Highlights</div>
-    <div class="nav-menu-item" onclick="closeNavMenu();showComingSoon('Approfondimenti')"><i class="ti ti-news"></i>Approfondimenti</div>
+    <div class="nav-menu-item" onclick="closeNavMenu();showApprofondisciScreen()"><i class="ti ti-news"></i>Approfondisci</div>
     <div class="nav-menu-item" onclick="closeNavMenu();showEventsScreen()"><i class="ti ti-calendar-event"></i>Eventi</div>
     <div class="nav-menu-item" onclick="closeNavMenu();showNetworkScreen()"><i class="ti ti-users"></i>Network</div>
     <div class="nav-menu-item" onclick="closeNavMenu();showGuideScreen()"><i class="ti ti-book"></i>Guida</div>
@@ -1511,6 +1516,141 @@
         <div class="stitle" id="hl-shop-title"><i class="ti ti-shopping-cart"></i>Dove acquisti</div>
         <a href="#" id="hl-back-shop" class="hl-back-link" style="display:none" onclick="hlBackShop();return false">← Torna al canale</a>
         <div class="hl-chart-box"><canvas id="hl-chart-shop"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ APPROFONDISCI ══ -->
+  <div id="screen-approfondisci" class="screen">
+    <div class="nav" style="margin-bottom:1.1rem">
+      <button class="btn sm" onclick="showScreen('screen-home')"><i class="ti ti-arrow-left"></i>Home</button>
+      <span style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--ink)">Approfondisci</span>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-bottom:1rem;flex-wrap:wrap">
+      <button type="button" class="hl-chip" id="ap-chip-blog" onclick="setApView('blog')"><i class="ti ti-news" style="font-size:13px;vertical-align:-2px;margin-right:4px"></i>Blog</button>
+      <button type="button" class="hl-chip" id="ap-chip-vitigni" onclick="setApView('vitigni')"><i class="ti ti-leaf" style="font-size:13px;vertical-align:-2px;margin-right:4px"></i>Vitigni</button>
+      <button type="button" class="hl-chip" id="ap-chip-denominazioni" onclick="setApView('denominazioni')"><i class="ti ti-map-pin" style="font-size:13px;vertical-align:-2px;margin-right:4px"></i>Denominazioni</button>
+    </div>
+
+    <div id="ap-view-blog" class="ap-view">
+      <div id="ap-blog-admin-bar" style="display:none;margin-bottom:10px">
+        <button class="btn sm primary" onclick="showBlogPostDetail(null)"><i class="ti ti-plus"></i>Nuovo articolo</button>
+      </div>
+      <div id="ap-blog-list"></div>
+    </div>
+
+    <div id="ap-view-vitigni" class="ap-view" style="display:none">
+      <input type="text" id="ap-vitigni-search" class="network-search" placeholder="Cerca vitigno per nome…" oninput="searchGrapeVarieties()">
+      <div style="display:flex;gap:8px;margin:10px 0;flex-wrap:wrap" id="ap-vitigni-filters">
+        <div class="chip" data-color="nera" onclick="toggleApColorFilter('nera',this)">Nera</div>
+        <div class="chip" data-color="bianca" onclick="toggleApColorFilter('bianca',this)">Bianca</div>
+        <div class="chip" data-color="rosa" onclick="toggleApColorFilter('rosa',this)">Rosa</div>
+        <div class="chip" data-color="grigia" onclick="toggleApColorFilter('grigia',this)">Grigia</div>
+      </div>
+      <div id="ap-vitigni-admin-bar" style="display:none;margin-bottom:10px">
+        <button class="btn sm" onclick="showGrapeVarietyDetail(null)"><i class="ti ti-plus"></i>Aggiungi vitigno</button>
+      </div>
+      <div id="ap-vitigni-list"></div>
+    </div>
+
+    <div id="ap-view-denominazioni" class="ap-view" style="display:none">
+      <input type="text" id="ap-denom-search" class="network-search" placeholder="Cerca denominazione per nome…" oninput="searchDenominations()">
+      <div style="display:flex;gap:8px;margin:10px 0;flex-wrap:wrap" id="ap-denom-filters">
+        <div class="chip" data-type="DOC" onclick="toggleApTypeFilter('DOC',this)">DOC</div>
+        <div class="chip" data-type="DOCG" onclick="toggleApTypeFilter('DOCG',this)">DOCG</div>
+      </div>
+      <div id="ap-denom-admin-bar" style="display:none;margin-bottom:10px">
+        <button class="btn sm" onclick="showDenominationDetail(null)"><i class="ti ti-plus"></i>Aggiungi denominazione</button>
+      </div>
+      <div id="ap-denom-list"></div>
+    </div>
+  </div>
+
+  <!-- ══ VITIGNO (dettaglio + modifica admin) ══ -->
+  <div id="screen-grape-detail" class="screen">
+    <div class="nav" style="margin-bottom:1.1rem">
+      <button class="btn sm" onclick="showScreen('screen-approfondisci')"><i class="ti ti-arrow-left"></i>Vitigni</button>
+      <span id="gv-title" style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--ink)">Vitigno</span>
+    </div>
+    <div id="gv-view-body"></div>
+    <div id="gv-edit-body" style="display:none">
+      <div class="fg"><label>Nome *</label><input type="text" id="gv-name" placeholder="es. Sangiovese"></div>
+      <div class="fg"><label>N° RNV</label><input type="number" id="gv-rnv" placeholder="es. 88"></div>
+      <div class="fg"><label>Bacca</label>
+        <select id="gv-color">
+          <option value="">—</option>
+          <option value="nera">Nera</option>
+          <option value="bianca">Bianca</option>
+          <option value="rosa">Rosa</option>
+          <option value="grigia">Grigia</option>
+        </select>
+      </div>
+      <div class="fg"><label>Aromaticità</label>
+        <select id="gv-aromatic">
+          <option value="">—</option>
+          <option value="aromatico">Aromatico</option>
+          <option value="semi-aromatico">Semi-aromatico</option>
+        </select>
+      </div>
+      <div class="fg"><label>Regioni (separate da virgola)</label><input type="text" id="gv-regions" placeholder="Toscana, Umbria…"></div>
+      <div class="fg"><label>Sinonimi (separati da virgola)</label><input type="text" id="gv-synonyms" placeholder="Sangioveto, Brunello…"></div>
+      <div class="fg"><label>Data registrazione</label><input type="date" id="gv-regdate"></div>
+      <div style="display:flex;gap:8px;margin-top:1rem">
+        <button class="btn primary" onclick="saveGrapeVariety()"><i class="ti ti-check"></i>Salva</button>
+        <button class="btn danger" id="gv-delete-btn" style="display:none" onclick="deleteGrapeVariety()"><i class="ti ti-trash"></i>Elimina</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ DENOMINAZIONE (dettaglio + modifica admin) ══ -->
+  <div id="screen-denom-detail" class="screen">
+    <div class="nav" style="margin-bottom:1.1rem">
+      <button class="btn sm" onclick="showScreen('screen-approfondisci')"><i class="ti ti-arrow-left"></i>Denominazioni</button>
+      <span id="dn-title" style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--ink)">Denominazione</span>
+    </div>
+    <div id="dn-view-body"></div>
+    <div id="dn-edit-body" style="display:none">
+      <div class="fg"><label>Nome *</label><input type="text" id="dn-name" placeholder="es. Chianti Classico"></div>
+      <div class="fg"><label>Tipo</label>
+        <select id="dn-type">
+          <option value="">—</option>
+          <option value="DOC">DOC</option>
+          <option value="DOCG">DOCG</option>
+        </select>
+      </div>
+      <div class="fg"><label>Colori prodotti (separati da virgola)</label><input type="text" id="dn-colors" placeholder="Bianco, Rosato, Rosso…"></div>
+      <div class="fg"><label>Regione</label><input type="text" id="dn-region" placeholder="es. Toscana"></div>
+      <div style="display:flex;gap:8px;margin-top:1rem">
+        <button class="btn primary" onclick="saveDenomination()"><i class="ti ti-check"></i>Salva</button>
+        <button class="btn danger" id="dn-delete-btn" style="display:none" onclick="deleteDenomination()"><i class="ti ti-trash"></i>Elimina</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ ARTICOLO BLOG (dettaglio + modifica admin) ══ -->
+  <div id="screen-blogpost-detail" class="screen">
+    <div class="nav" style="margin-bottom:1.1rem">
+      <button class="btn sm" onclick="showScreen('screen-approfondisci')"><i class="ti ti-arrow-left"></i>Blog</button>
+      <span id="bp-title-nav" style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--ink)">Articolo</span>
+    </div>
+    <div id="bp-view-body"></div>
+    <div id="bp-edit-body" style="display:none">
+      <div class="fg"><label>Titolo *</label><input type="text" id="bp-title" placeholder="Titolo dell'articolo"></div>
+      <div class="fg"><label>Copertina</label>
+        <div id="bp-cover-preview"></div>
+        <input type="file" accept="image/*" onchange="uploadBlogCover(this)">
+      </div>
+      <div class="fg"><label>Corpo</label><textarea id="bp-body" rows="10" placeholder="Testo dell'articolo…"></textarea></div>
+      <div class="fg"><label>Stato</label>
+        <select id="bp-status">
+          <option value="draft">Bozza</option>
+          <option value="published">Pubblicato</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:1rem">
+        <button class="btn primary" onclick="saveBlogPost()"><i class="ti ti-check"></i>Salva</button>
+        <button class="btn danger" id="bp-delete-btn" style="display:none" onclick="deleteBlogPost()"><i class="ti ti-trash"></i>Elimina</button>
       </div>
     </div>
   </div>
@@ -7426,6 +7566,373 @@ function showGuideScreen() {
   showScreen('screen-guide');
 }
 
+// ── Approfondisci — blog editoriale (solo struttura, nessun contenuto
+// ancora) + due archivi di consultazione, Vitigni e Denominazioni,
+// popolati da un import di massa e correggibili/estendibili uno alla
+// volta dall'admin. Stesso schema "tutti leggono, solo admin scrive" già
+// usato per wineries/events, stesso pattern di dettaglio-che-fa-anche-
+// da-form-di-modifica già usato per showWineryDetail/showEventDetail.
+let apView = 'blog';
+let apVitigniSearchTimer = null;
+let apVitigniColorFilters = new Set();
+let apDenomSearchTimer = null;
+let apDenomTypeFilters = new Set();
+let currentGrapeVarietyId = null;
+let currentDenominationId = null;
+let currentBlogPostId = null;
+let currentBlogPostData = null;
+let pendingBlogCoverUrl = null;
+
+const apFmtDate = d => { if (!d) return ''; try { return new Date(d.length === 10 ? d + 'T00:00:00' : d).toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return d; } };
+const splitCsv = s => s ? s.split(',').map(x => x.trim()).filter(Boolean) : [];
+
+function showApprofondisciScreen() {
+  showScreen('screen-approfondisci');
+  setApView(apView);
+}
+
+function setApView(view) {
+  apView = view;
+  document.getElementById('ap-chip-blog')?.classList.toggle('active', view === 'blog');
+  document.getElementById('ap-chip-vitigni')?.classList.toggle('active', view === 'vitigni');
+  document.getElementById('ap-chip-denominazioni')?.classList.toggle('active', view === 'denominazioni');
+  document.getElementById('ap-view-blog').style.display = view === 'blog' ? '' : 'none';
+  document.getElementById('ap-view-vitigni').style.display = view === 'vitigni' ? '' : 'none';
+  document.getElementById('ap-view-denominazioni').style.display = view === 'denominazioni' ? '' : 'none';
+  const isAdmin = !!currentUser?.isAdmin;
+  document.getElementById('ap-blog-admin-bar').style.display = isAdmin ? '' : 'none';
+  document.getElementById('ap-vitigni-admin-bar').style.display = isAdmin ? '' : 'none';
+  document.getElementById('ap-denom-admin-bar').style.display = isAdmin ? '' : 'none';
+  if (view === 'blog') loadBlogPosts();
+  else if (view === 'vitigni') searchGrapeVarieties();
+  else if (view === 'denominazioni') searchDenominations();
+}
+
+// ── Blog ──
+async function loadBlogPosts() {
+  const list = document.getElementById('ap-blog-list');
+  list.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--muted)">Caricamento…</div>';
+  const { data, error } = await sb.from('blog_posts').select('id,title,status').order('created_at', { ascending: false }).limit(50);
+  if (error) { list.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--muted)">Errore caricamento</div>'; return; }
+  list.innerHTML = data?.length
+    ? data.map(p => `
+      <div class="winery-row" onclick="showBlogPostDetail('${p.id}')">
+        <div class="winery-row-name"><i class="ti ti-news"></i>${escapeAttr(p.title)}${p.status === 'draft' ? ' <span class="chip">Bozza</span>' : ''}</div>
+        <i class="ti ti-chevron-right"></i>
+      </div>`).join('')
+    : `<div style="text-align:center;padding:2rem;color:var(--muted)">${currentUser?.isAdmin ? 'Nessun articolo ancora — crea il primo con "Nuovo articolo"' : 'Nessun articolo ancora'}</div>`;
+}
+
+async function showBlogPostDetail(id) {
+  currentBlogPostId = id;
+  currentBlogPostData = null;
+  pendingBlogCoverUrl = null;
+  showScreen('screen-blogpost-detail');
+  const viewBody = document.getElementById('bp-view-body');
+  const editBody = document.getElementById('bp-edit-body');
+  const isAdmin = !!currentUser?.isAdmin;
+  let post = null;
+  if (id) {
+    const { data, error } = await sb.from('blog_posts').select('*').eq('id', id).maybeSingle();
+    if (error || !data) { toastErr('Articolo non trovato'); showScreen('screen-approfondisci'); return; }
+    post = data;
+    currentBlogPostData = data;
+  } else if (!isAdmin) {
+    showScreen('screen-approfondisci');
+    return;
+  }
+  document.getElementById('bp-title-nav').textContent = post ? post.title : 'Nuovo articolo';
+  document.getElementById('bp-delete-btn').style.display = (isAdmin && post) ? '' : 'none';
+
+  if (isAdmin) {
+    viewBody.style.display = 'none';
+    editBody.style.display = '';
+    document.getElementById('bp-title').value = post?.title || '';
+    document.getElementById('bp-body').value = post?.body || '';
+    document.getElementById('bp-status').value = post?.status || 'draft';
+    document.getElementById('bp-cover-preview').innerHTML = post?.cover_image_url ? `<img src="${post.cover_image_url}" style="max-width:100%;border-radius:8px;display:block" alt="">` : '';
+  } else {
+    editBody.style.display = 'none';
+    viewBody.style.display = '';
+    viewBody.innerHTML = `
+      ${post.cover_image_url ? `<img src="${post.cover_image_url}" style="width:100%;border-radius:10px;margin-bottom:1rem" alt="">` : ''}
+      <p style="font-size:11px;color:var(--muted);margin-bottom:10px">${apFmtDate(post.published_at || post.created_at)}</p>
+      <div style="font-size:13.5px;color:var(--ink);line-height:1.7;white-space:pre-wrap">${post.body || ''}</div>
+    `;
+  }
+}
+
+async function uploadBlogCover(input) {
+  const file = input.files[0];
+  if (!file || !currentUser?.isAdmin) return;
+  let toUpload = file;
+  try { toUpload = await compressImage(file, 1200, 0.85); } catch (e) { console.warn('compressImage copertina fallita', e); }
+  const path = `blog/${currentBlogPostId || 'new-' + Date.now()}-${Date.now()}.jpg`;
+  const { error } = await sb.storage.from('wine-labels').upload(path, toUpload, { upsert: true, contentType: toUpload.type || 'image/jpeg', cacheControl: '31536000' });
+  if (error) { toastErr('Errore caricamento copertina: ' + error.message); return; }
+  const { data: urlData } = sb.storage.from('wine-labels').getPublicUrl(path);
+  document.getElementById('bp-cover-preview').innerHTML = `<img src="${urlData.publicUrl}" style="max-width:100%;border-radius:8px;display:block" alt="">`;
+  if (currentBlogPostId) {
+    const { error: updErr } = await sb.from('blog_posts').update({ cover_image_url: urlData.publicUrl }).eq('id', currentBlogPostId);
+    if (updErr) { toastErr('Errore salvataggio copertina: ' + updErr.message); return; }
+    if (currentBlogPostData) currentBlogPostData.cover_image_url = urlData.publicUrl;
+  } else {
+    pendingBlogCoverUrl = urlData.publicUrl;
+  }
+  toast('✓ Copertina caricata');
+}
+
+async function saveBlogPost() {
+  if (!currentUser?.isAdmin) return;
+  const g = id => document.getElementById(id)?.value.trim() || null;
+  const title = g('bp-title');
+  if (!title) { toastErr('Il titolo è obbligatorio'); return; }
+  const status = document.getElementById('bp-status').value;
+  const row = {
+    title, body: g('bp-body'), status,
+    published_at: status === 'published' ? (currentBlogPostData?.published_at || new Date().toISOString()) : null,
+    updated_at: new Date().toISOString(),
+  };
+  let data, error;
+  if (currentBlogPostId) {
+    ({ data, error } = await sb.from('blog_posts').update(row).eq('id', currentBlogPostId).select('id'));
+    if (!error && !data?.length) { toastErr('Salvataggio non riuscito: verifica di essere admin.'); return; }
+  } else {
+    row.created_by = currentUser.id;
+    row.cover_image_url = pendingBlogCoverUrl;
+    ({ data, error } = await sb.from('blog_posts').insert(row).select('id').single());
+  }
+  if (error) { toastErr('Errore salvataggio: ' + error.message); return; }
+  toast('✓ Articolo salvato');
+  showBlogPostDetail(currentBlogPostId || data?.id);
+}
+
+async function deleteBlogPost() {
+  if (!currentUser?.isAdmin || !currentBlogPostId) return;
+  if (!confirm('Eliminare questo articolo? Non è reversibile.')) return;
+  const { error } = await sb.from('blog_posts').delete().eq('id', currentBlogPostId);
+  if (error) { toastErr('Errore eliminazione: ' + error.message); return; }
+  toast('✓ Articolo eliminato');
+  showScreen('screen-approfondisci');
+  loadBlogPosts();
+}
+
+// ── Archivio Vitigni ──
+function grapeColorBadgeClass(c) { return c === 'bianca' ? 'bb' : c === 'rosa' ? 'bro' : c === 'grigia' ? 'bgy' : 'br'; }
+function grapeColorLabel(c) { return c === 'bianca' ? 'Bianca' : c === 'rosa' ? 'Rosa' : c === 'grigia' ? 'Grigia' : 'Nera'; }
+
+function toggleApColorFilter(color, el) {
+  if (apVitigniColorFilters.has(color)) { apVitigniColorFilters.delete(color); el.classList.remove('active'); }
+  else { apVitigniColorFilters.add(color); el.classList.add('active'); }
+  searchGrapeVarieties();
+}
+
+function searchGrapeVarieties() {
+  clearTimeout(apVitigniSearchTimer);
+  apVitigniSearchTimer = setTimeout(async () => {
+    const q = document.getElementById('ap-vitigni-search').value.trim();
+    const list = document.getElementById('ap-vitigni-list');
+    list.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--muted)">Caricamento…</div>';
+    let req = sb.from('grape_varieties').select('id,name,berry_color').order('name').limit(60);
+    if (q) req = req.ilike('name', `%${q}%`);
+    if (apVitigniColorFilters.size) req = req.in('berry_color', [...apVitigniColorFilters]);
+    const { data, error } = await req;
+    if (error) { list.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--muted)">Errore ricerca</div>'; return; }
+    list.innerHTML = data?.length
+      ? data.map(v => `
+        <div class="winery-row" onclick="showGrapeVarietyDetail('${v.id}')">
+          <div class="winery-row-name"><i class="ti ti-leaf"></i>${escapeAttr(v.name)}${v.berry_color ? ` <span class="gbadge ${grapeColorBadgeClass(v.berry_color)}">${grapeColorLabel(v.berry_color)}</span>` : ''}</div>
+          <i class="ti ti-chevron-right"></i>
+        </div>`).join('')
+      : '<div style="text-align:center;padding:2rem;color:var(--muted)">Nessun vitigno trovato</div>';
+  }, 300);
+}
+
+async function showGrapeVarietyDetail(id) {
+  currentGrapeVarietyId = id;
+  showScreen('screen-grape-detail');
+  const viewBody = document.getElementById('gv-view-body');
+  const editBody = document.getElementById('gv-edit-body');
+  const isAdmin = !!currentUser?.isAdmin;
+  let gv = null;
+  if (id) {
+    const { data, error } = await sb.from('grape_varieties').select('*').eq('id', id).maybeSingle();
+    if (error || !data) { toastErr('Vitigno non trovato'); showScreen('screen-approfondisci'); return; }
+    gv = data;
+  } else if (!isAdmin) {
+    showScreen('screen-approfondisci');
+    return;
+  }
+  document.getElementById('gv-title').textContent = gv ? gv.name : 'Nuovo vitigno';
+  document.getElementById('gv-delete-btn').style.display = (isAdmin && gv) ? '' : 'none';
+
+  if (isAdmin) {
+    viewBody.style.display = 'none';
+    editBody.style.display = '';
+    document.getElementById('gv-name').value = gv?.name || '';
+    document.getElementById('gv-rnv').value = gv?.rnv_number ?? '';
+    document.getElementById('gv-color').value = gv?.berry_color || '';
+    document.getElementById('gv-aromatic').value = gv?.aromatic || '';
+    document.getElementById('gv-regions').value = (gv?.regions || []).join(', ');
+    document.getElementById('gv-synonyms').value = (gv?.synonyms || []).join(', ');
+    document.getElementById('gv-regdate').value = gv?.registration_date || '';
+  } else {
+    editBody.style.display = 'none';
+    viewBody.style.display = '';
+    viewBody.innerHTML = `
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem">
+        ${gv.berry_color ? `<span class="gbadge ${grapeColorBadgeClass(gv.berry_color)}">${grapeColorLabel(gv.berry_color)}</span>` : ''}
+        ${gv.aromatic ? `<span class="chip">${gv.aromatic === 'aromatico' ? 'Aromatico' : 'Semi-aromatico'}</span>` : ''}
+      </div>
+      ${gv.rnv_number ? `<p style="font-size:12.5px;color:var(--muted)">N° RNV ${gv.rnv_number}${gv.registration_date ? ' · registrato il ' + apFmtDate(gv.registration_date) : ''}</p>` : ''}
+      ${gv.regions?.length ? `<div style="margin-top:1rem"><div class="stitle" style="font-size:12px"><i class="ti ti-map-pin"></i>Regioni</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">${gv.regions.map(r => `<span class="chip">${escapeAttr(r)}</span>`).join('')}</div></div>` : ''}
+      ${gv.synonyms?.length ? `<div style="margin-top:1rem"><div class="stitle" style="font-size:12px"><i class="ti ti-tag"></i>Sinonimi</div><p style="font-size:13px;color:var(--ink);margin-top:6px">${gv.synonyms.map(escapeAttr).join(', ')}</p></div>` : ''}
+    `;
+  }
+}
+
+async function saveGrapeVariety() {
+  if (!currentUser?.isAdmin) return;
+  const g = id => document.getElementById(id)?.value.trim() || null;
+  const name = g('gv-name');
+  if (!name) { toastErr('Il nome è obbligatorio'); return; }
+  const row = {
+    name,
+    rnv_number: g('gv-rnv') ? parseInt(g('gv-rnv'), 10) : null,
+    berry_color: g('gv-color'),
+    aromatic: g('gv-aromatic'),
+    regions: splitCsv(g('gv-regions')),
+    synonyms: splitCsv(g('gv-synonyms')),
+    registration_date: g('gv-regdate'),
+    updated_at: new Date().toISOString(),
+  };
+  let data, error;
+  if (currentGrapeVarietyId) {
+    ({ data, error } = await sb.from('grape_varieties').update(row).eq('id', currentGrapeVarietyId).select('id'));
+    if (!error && !data?.length) { toastErr('Salvataggio non riuscito: verifica di essere admin.'); return; }
+  } else {
+    ({ data, error } = await sb.from('grape_varieties').insert(row).select('id').single());
+  }
+  if (error) { toastErr('Errore salvataggio: ' + error.message); return; }
+  toast('✓ Vitigno salvato');
+  showGrapeVarietyDetail(currentGrapeVarietyId || data?.id);
+}
+
+async function deleteGrapeVariety() {
+  if (!currentUser?.isAdmin || !currentGrapeVarietyId) return;
+  if (!confirm('Eliminare questo vitigno? Non è reversibile.')) return;
+  const { error } = await sb.from('grape_varieties').delete().eq('id', currentGrapeVarietyId);
+  if (error) { toastErr('Errore eliminazione: ' + error.message); return; }
+  toast('✓ Vitigno eliminato');
+  showScreen('screen-approfondisci');
+  searchGrapeVarieties();
+}
+
+// ── Archivio Denominazioni ──
+function denomColorBadgeClass(c) { return c === 'bianco' ? 'bb' : c === 'rosato' ? 'bro' : 'br'; }
+
+function toggleApTypeFilter(type, el) {
+  if (apDenomTypeFilters.has(type)) { apDenomTypeFilters.delete(type); el.classList.remove('active'); }
+  else { apDenomTypeFilters.add(type); el.classList.add('active'); }
+  searchDenominations();
+}
+
+function searchDenominations() {
+  clearTimeout(apDenomSearchTimer);
+  apDenomSearchTimer = setTimeout(async () => {
+    const q = document.getElementById('ap-denom-search').value.trim();
+    const list = document.getElementById('ap-denom-list');
+    list.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--muted)">Caricamento…</div>';
+    let req = sb.from('wine_denominations').select('id,name,colors,type').order('name').limit(60);
+    if (q) req = req.ilike('name', `%${q}%`);
+    if (apDenomTypeFilters.size) req = req.in('type', [...apDenomTypeFilters]);
+    const { data, error } = await req;
+    if (error) { list.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--muted)">Errore ricerca</div>'; return; }
+    list.innerHTML = data?.length
+      ? data.map(d => `
+        <div class="winery-row" onclick="showDenominationDetail('${d.id}')">
+          <div class="winery-row-name"><i class="ti ti-map-pin"></i>${escapeAttr(d.name)}
+            ${(d.colors || []).map(c => `<span class="gbadge ${denomColorBadgeClass(c)}">${escapeAttr(c)}</span>`).join(' ')}
+            ${d.type ? `<span class="${d.type === 'DOCG' ? 'premium-pill' : 'chip'}">${d.type}</span>` : ''}
+          </div>
+          <i class="ti ti-chevron-right"></i>
+        </div>`).join('')
+      : '<div style="text-align:center;padding:2rem;color:var(--muted)">Nessuna denominazione trovata</div>';
+  }, 300);
+}
+
+async function showDenominationDetail(id) {
+  currentDenominationId = id;
+  showScreen('screen-denom-detail');
+  const viewBody = document.getElementById('dn-view-body');
+  const editBody = document.getElementById('dn-edit-body');
+  const isAdmin = !!currentUser?.isAdmin;
+  let dn = null;
+  if (id) {
+    const { data, error } = await sb.from('wine_denominations').select('*').eq('id', id).maybeSingle();
+    if (error || !data) { toastErr('Denominazione non trovata'); showScreen('screen-approfondisci'); return; }
+    dn = data;
+  } else if (!isAdmin) {
+    showScreen('screen-approfondisci');
+    return;
+  }
+  document.getElementById('dn-title').textContent = dn ? dn.name : 'Nuova denominazione';
+  document.getElementById('dn-delete-btn').style.display = (isAdmin && dn) ? '' : 'none';
+
+  if (isAdmin) {
+    viewBody.style.display = 'none';
+    editBody.style.display = '';
+    document.getElementById('dn-name').value = dn?.name || '';
+    document.getElementById('dn-type').value = dn?.type || '';
+    document.getElementById('dn-colors').value = (dn?.colors || []).join(', ');
+    document.getElementById('dn-region').value = dn?.region || '';
+  } else {
+    editBody.style.display = 'none';
+    viewBody.style.display = '';
+    viewBody.innerHTML = `
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem">
+        ${(dn.colors || []).map(c => `<span class="gbadge ${denomColorBadgeClass(c)}">${escapeAttr(c)}</span>`).join('')}
+        ${dn.type ? `<span class="${dn.type === 'DOCG' ? 'premium-pill' : 'chip'}">${dn.type}</span>` : ''}
+      </div>
+      ${dn.region ? `<p style="font-size:12.5px;color:var(--muted)"><i class="ti ti-map-pin"></i> ${escapeAttr(dn.region)}</p>` : ''}
+    `;
+  }
+}
+
+async function saveDenomination() {
+  if (!currentUser?.isAdmin) return;
+  const g = id => document.getElementById(id)?.value.trim() || null;
+  const name = g('dn-name');
+  if (!name) { toastErr('Il nome è obbligatorio'); return; }
+  const row = {
+    name,
+    type: g('dn-type'),
+    colors: splitCsv(g('dn-colors')),
+    region: g('dn-region'),
+    updated_at: new Date().toISOString(),
+  };
+  let data, error;
+  if (currentDenominationId) {
+    ({ data, error } = await sb.from('wine_denominations').update(row).eq('id', currentDenominationId).select('id'));
+    if (!error && !data?.length) { toastErr('Salvataggio non riuscito: verifica di essere admin.'); return; }
+  } else {
+    ({ data, error } = await sb.from('wine_denominations').insert(row).select('id').single());
+  }
+  if (error) { toastErr('Errore salvataggio: ' + error.message); return; }
+  toast('✓ Denominazione salvata');
+  showDenominationDetail(currentDenominationId || data?.id);
+}
+
+async function deleteDenomination() {
+  if (!currentUser?.isAdmin || !currentDenominationId) return;
+  if (!confirm('Eliminare questa denominazione? Non è reversibile.')) return;
+  const { error } = await sb.from('wine_denominations').delete().eq('id', currentDenominationId);
+  if (error) { toastErr('Errore eliminazione: ' + error.message); return; }
+  toast('✓ Denominazione eliminata');
+  showScreen('screen-approfondisci');
+  searchDenominations();
+}
+
 // ── Highlights — profilo del sommelier (assaggiato vs comprato) ──
 let highlightsView = 'tasted'; // default: Assaggiato
 let hlCharts = {};             // { canvasId: Chart instance }, per destroy/recreate pulito
@@ -8156,7 +8663,11 @@ Object.assign(window, {
   linkProducerToWinery, approveWineryClaim, rejectWineryClaim, submitWineryClaim, cancelWineryClaim, myWineryIds,
   showEventsScreen, showAddEventForm, showEventDetail, saveEvent, deleteEvent, duplicateEvent, setEventStatus,
   renderEventsList, updateEventsProvinceFilterOptions, toggleShowPastEvents, toggleEventFavorite,
-  showConfigListsScreen, selectConfigList, addConfigListValue, removeConfigListValue
+  showConfigListsScreen, selectConfigList, addConfigListValue, removeConfigListValue,
+  showApprofondisciScreen, setApView,
+  showBlogPostDetail, saveBlogPost, deleteBlogPost, uploadBlogCover,
+  showGrapeVarietyDetail, saveGrapeVariety, deleteGrapeVariety, searchGrapeVarieties, toggleApColorFilter,
+  showDenominationDetail, saveDenomination, deleteDenomination, searchDenominations, toggleApTypeFilter
 });
 </script>
 </body>
