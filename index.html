@@ -4234,6 +4234,7 @@ async function importWineryCatalogFromShop() {
   const defaultUrl = document.getElementById('wy-website')?.value.trim() || '';
   const shopUrl = (prompt('Link alla pagina del negozio/catalogo vini:', defaultUrl) || '').trim();
   if (!shopUrl) return;
+  await sb.auth.refreshSession().catch(() => {});
   toast('Importazione in corso…');
   const { data, error } = await sb.functions.invoke('import-winery-catalog', { body: { wineryId: currentWineryId, shopUrl } });
   if (error || data?.error) {
@@ -4259,6 +4260,7 @@ async function importWineryCatalogFromShop() {
 // non uno alla volta come modificandoli a mano. Solo admin.
 async function enrichWineryCatalogGrapes() {
   if (!currentUser?.isAdmin || !currentWineryId) return;
+  await sb.auth.refreshSession().catch(() => {});
   const btn = document.getElementById('wy-enrich-grapes-btn');
   if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2"></i>Analisi in corso…'; }
   const { data, error } = await sb.functions.invoke('enrich-winery-catalog', { body: { wineryId: currentWineryId } });
@@ -4283,6 +4285,7 @@ async function enrichWineryFromWebsite() {
   if (!currentUser?.isAdmin) return;
   const website = document.getElementById('wy-website')?.value.trim();
   if (!website) { toastErr('Inserisci prima il sito web'); return; }
+  await sb.auth.refreshSession().catch(() => {});
   const btn = document.getElementById('wy-enrich-btn');
   if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2"></i>Analisi in corso…'; }
   const { data, error } = await sb.functions.invoke('enrich-winery-profile', { body: { website } });
@@ -4451,6 +4454,12 @@ function searchAllWineries() {
 
 async function showAdminWineriesScreen() {
   if (!currentUser?.isAdmin) return;
+  // La tab può restare aperta/inattiva a lungo tra un accesso admin e
+  // l'altro: un refresh proattivo evita che le chiamate sottostanti
+  // falliscano per un token stantio (autoRefreshToken può saltare se la
+  // tab è stata in background), senza dover distinguere gli errori delle
+  // varie chiamate sotto per capire se ritentare.
+  await sb.auth.refreshSession().catch(() => {});
   showScreen('screen-admin-wineries');
   document.getElementById('admin-all-wineries-search').value = '';
   loadAllWineriesForAdmin('').then(renderAllWineriesList);
