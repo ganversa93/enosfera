@@ -8279,6 +8279,8 @@ async function showDenominationDetail(id) {
     });
     dnSelectedAromas = [...(dn?.aromas || [])];
     renderDnAromaTags();
+    const aromasInput = document.getElementById('dn-aromas-input');
+    if (aromasInput) aromasInput.value = '';
     document.getElementById('dn-characteristics').value = dn?.characteristics || '';
   } else {
     editBody.style.display = 'none';
