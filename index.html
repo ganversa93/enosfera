@@ -1583,9 +1583,9 @@
       <div style="display:flex;gap:8px;margin:10px 0;flex-wrap:wrap;align-items:center" id="ap-denom-filters">
         <div class="chip" data-type="DOC" onclick="toggleApTypeFilter('DOC',this)">DOC</div>
         <div class="chip" data-type="DOCG" onclick="toggleApTypeFilter('DOCG',this)">DOCG</div>
-        <select id="ap-denom-region-filter" onchange="searchDenominations()" style="font-family:'Inter',sans-serif;font-size:12px;padding:6px 10px;border-radius:8px;border:0.5px solid var(--border);background:var(--bg);color:var(--ink)">
-          <option value="">Tutte le regioni</option>
-        </select>
+        <div style="position:relative">
+          <button type="button" class="chip" id="ap-denom-region-btn" onclick="toggleDenomRegionMenu()">Tutte le regioni <i class="ti ti-chevron-down" style="font-size:11px;margin-left:2px;vertical-align:-1px"></i></button>
+        </div>
       </div>
       <div id="ap-denom-admin-bar" style="display:none;margin-bottom:10px">
         <button class="btn sm" onclick="showDenominationDetail(null)"><i class="ti ti-plus"></i>Aggiungi denominazione</button>
@@ -7641,18 +7641,45 @@ function setApEnologiaView(view) {
   document.getElementById('ap-vitigni-admin-bar').style.display = isAdmin ? '' : 'none';
   document.getElementById('ap-denom-admin-bar').style.display = isAdmin ? '' : 'none';
   if (view === 'vitigni') searchGrapeVarieties();
-  else if (view === 'denominazioni') { populateDenomRegionFilter(); searchDenominations(); }
+  else if (view === 'denominazioni') searchDenominations();
 }
 
-function populateDenomRegionFilter() {
-  const sel = document.getElementById('ap-denom-region-filter');
-  if (sel.options.length > 1) return;
-  (GEO_REGIONS.Italia || []).forEach(r => {
-    const opt = document.createElement('option');
-    opt.value = r;
-    opt.textContent = r;
-    sel.appendChild(opt);
+// Menu regioni per l'archivio Denominazioni: un vero <select> mostra il
+// popup nativo del browser/OS a tema chiaro, stonando con il resto
+// dell'app in dark mode — riusa invece lo stesso box .ac-box/.ac-item
+// già stilizzato a tema usato per gli autocomplete (attachAutocomplete),
+// qui come semplice menu a click invece che filtrato da testo digitato.
+let apDenomRegionValue = '';
+function toggleDenomRegionMenu() {
+  const btn = document.getElementById('ap-denom-region-btn');
+  const existing = document.getElementById('ap-denom-region-box');
+  if (existing) { existing.remove(); return; }
+  const box = document.createElement('div');
+  box.className = 'ac-box';
+  box.id = 'ap-denom-region-box';
+  box.style.minWidth = '190px';
+  const options = ['', ...(GEO_REGIONS.Italia || [])];
+  options.forEach(r => {
+    const item = document.createElement('div');
+    item.className = 'ac-item';
+    item.textContent = r || 'Tutte le regioni';
+    item.addEventListener('mousedown', e => {
+      e.preventDefault();
+      apDenomRegionValue = r;
+      btn.innerHTML = `${escapeAttr(r || 'Tutte le regioni')} <i class="ti ti-chevron-down" style="font-size:11px;margin-left:2px;vertical-align:-1px"></i>`;
+      box.remove();
+      searchDenominations();
+    });
+    box.appendChild(item);
   });
+  btn.parentElement.appendChild(box);
+  setTimeout(() => document.addEventListener('mousedown', closeDenomRegionMenuOnce), 0);
+  function closeDenomRegionMenuOnce(e) {
+    if (!box.contains(e.target) && e.target !== btn) {
+      box.remove();
+      document.removeEventListener('mousedown', closeDenomRegionMenuOnce);
+    }
+  }
 }
 
 // ── Blog ──
@@ -7890,7 +7917,7 @@ function searchDenominations() {
     const q = document.getElementById('ap-denom-search').value.trim();
     const list = document.getElementById('ap-denom-list');
     list.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--muted)">Caricamento…</div>';
-    const regionFilter = document.getElementById('ap-denom-region-filter')?.value || '';
+    const regionFilter = apDenomRegionValue;
     let req = sb.from('wine_denominations').select('id,name,colors,type').order('name').limit(60);
     if (q) req = req.ilike('name', `%${q}%`);
     if (apDenomTypeFilters.size) req = req.in('type', [...apDenomTypeFilters]);
@@ -8734,7 +8761,7 @@ Object.assign(window, {
   showApprofondisciScreen, showApBlogScreen, showApEnologiaScreen, setApEnologiaView,
   showBlogPostDetail, saveBlogPost, deleteBlogPost, uploadBlogCover,
   showGrapeVarietyDetail, saveGrapeVariety, deleteGrapeVariety, searchGrapeVarieties, toggleApColorFilter,
-  showDenominationDetail, saveDenomination, deleteDenomination, searchDenominations, toggleApTypeFilter
+  showDenominationDetail, saveDenomination, deleteDenomination, searchDenominations, toggleApTypeFilter, toggleDenomRegionMenu
 });
 </script>
 </body>
