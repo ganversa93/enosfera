@@ -8311,6 +8311,7 @@ async function saveDenomination() {
   const g = id => document.getElementById(id)?.value.trim() || null;
   const name = g('dn-name');
   if (!name) { toastErr('Il nome è obbligatorio'); return; }
+  addDnAroma(document.getElementById('dn-aromas-input')?.value);
   const row = {
     name,
     type: g('dn-type'),
