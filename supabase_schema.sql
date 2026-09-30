@@ -2649,3 +2649,8 @@ alter table public.wine_denominations add column if not exists acidita smallint 
 alter table public.wine_denominations add column if not exists dolcezza smallint check (dolcezza between 1 and 5);
 alter table public.wine_denominations add column if not exists sapidita smallint check (sapidita between 1 and 5);
 alter table public.wine_denominations add column if not exists tannicita smallint check (tannicita between 1 and 5);
+
+-- Sentori principali (es. "Frutta rossa", "Viola", "Spezie") — tag
+-- liberi, nessun archivio controllato dietro (a differenza di grapes,
+-- che pesca da grape_varieties): sono solo descrittori aromatici.
+alter table public.wine_denominations add column if not exists aromas text[] not null default '{}';
