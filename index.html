@@ -1579,7 +1579,7 @@
     </div>
 
     <div id="ap-view-denominazioni" class="ap-view" style="display:none">
-      <input type="text" id="ap-denom-search" class="network-search" placeholder="Cerca denominazione per nome…" oninput="searchDenominations()">
+      <input type="text" id="ap-denom-search" class="network-search" placeholder="Cerca per nome, regione, tipo o vitigno…" oninput="searchDenominations()">
       <div style="display:flex;gap:8px;margin:10px 0;flex-wrap:wrap;align-items:center" id="ap-denom-filters">
         <div class="chip" data-type="DOC" onclick="toggleApTypeFilter('DOC',this)">DOC</div>
         <div class="chip" data-type="DOCG" onclick="toggleApTypeFilter('DOCG',this)">DOCG</div>
@@ -7929,7 +7929,13 @@ function searchDenominations() {
     list.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--muted)">Caricamento…</div>';
     const regionFilter = apDenomRegionValue;
     let req = sb.from('wine_denominations').select('id,name,versions,type').order('name').limit(60);
-    if (q) req = req.ilike('name', `%${q}%`);
+    if (q) {
+      // Cerca lo stesso testo su più campi insieme, non solo sul nome —
+      // così digitando "toscana" o "sangiovese" o "docg" si trova comunque
+      // la denominazione, senza dover per forza usare i filtri a parte.
+      const qSafe = q.replace(/,/g, ' ');
+      req = req.or(`name.ilike.%${qSafe}%,region.ilike.%${qSafe}%,type.ilike.%${qSafe}%,grapes.ilike.%${qSafe}%`);
+    }
     if (apDenomTypeFilters.size) req = req.in('type', [...apDenomTypeFilters]);
     if (regionFilter) {
       // "Trentino-Alto Adige" non compare mai testualmente nella fonte
