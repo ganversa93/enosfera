@@ -1580,9 +1580,12 @@
 
     <div id="ap-view-denominazioni" class="ap-view" style="display:none">
       <input type="text" id="ap-denom-search" class="network-search" placeholder="Cerca denominazione per nome…" oninput="searchDenominations()">
-      <div style="display:flex;gap:8px;margin:10px 0;flex-wrap:wrap" id="ap-denom-filters">
+      <div style="display:flex;gap:8px;margin:10px 0;flex-wrap:wrap;align-items:center" id="ap-denom-filters">
         <div class="chip" data-type="DOC" onclick="toggleApTypeFilter('DOC',this)">DOC</div>
         <div class="chip" data-type="DOCG" onclick="toggleApTypeFilter('DOCG',this)">DOCG</div>
+        <select id="ap-denom-region-filter" onchange="searchDenominations()" style="font-family:'Inter',sans-serif;font-size:12px;padding:6px 10px;border-radius:8px;border:0.5px solid var(--border);background:var(--bg);color:var(--ink)">
+          <option value="">Tutte le regioni</option>
+        </select>
       </div>
       <div id="ap-denom-admin-bar" style="display:none;margin-bottom:10px">
         <button class="btn sm" onclick="showDenominationDetail(null)"><i class="ti ti-plus"></i>Aggiungi denominazione</button>
@@ -7638,7 +7641,18 @@ function setApEnologiaView(view) {
   document.getElementById('ap-vitigni-admin-bar').style.display = isAdmin ? '' : 'none';
   document.getElementById('ap-denom-admin-bar').style.display = isAdmin ? '' : 'none';
   if (view === 'vitigni') searchGrapeVarieties();
-  else if (view === 'denominazioni') searchDenominations();
+  else if (view === 'denominazioni') { populateDenomRegionFilter(); searchDenominations(); }
+}
+
+function populateDenomRegionFilter() {
+  const sel = document.getElementById('ap-denom-region-filter');
+  if (sel.options.length > 1) return;
+  (GEO_REGIONS.Italia || []).forEach(r => {
+    const opt = document.createElement('option');
+    opt.value = r;
+    opt.textContent = r;
+    sel.appendChild(opt);
+  });
 }
 
 // ── Blog ──
@@ -7876,9 +7890,20 @@ function searchDenominations() {
     const q = document.getElementById('ap-denom-search').value.trim();
     const list = document.getElementById('ap-denom-list');
     list.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--muted)">Caricamento…</div>';
+    const regionFilter = document.getElementById('ap-denom-region-filter')?.value || '';
     let req = sb.from('wine_denominations').select('id,name,colors,type').order('name').limit(60);
     if (q) req = req.ilike('name', `%${q}%`);
     if (apDenomTypeFilters.size) req = req.in('type', [...apDenomTypeFilters]);
+    if (regionFilter) {
+      // "Trentino-Alto Adige" non compare mai testualmente nella fonte
+      // dati (l'elenco MASAF usa le due province autonome per nome) —
+      // unico caso che serve un OR invece di un ilike diretto.
+      if (regionFilter === 'Trentino-Alto Adige') {
+        req = req.or('region.ilike.%trent%,region.ilike.%bolzano%');
+      } else {
+        req = req.ilike('region', `%${regionFilter}%`);
+      }
+    }
     const { data, error } = await req;
     if (error) { list.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--muted)">Errore ricerca</div>'; return; }
     list.innerHTML = data?.length
