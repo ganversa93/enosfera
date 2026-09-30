@@ -507,6 +507,12 @@
       background: var(--bg); color: var(--wine);
     }
     .grape-tag .pct-sign { font-size: 11px; color: var(--wine); opacity: .7; }
+    .grape-tag .bound-toggle {
+      cursor: pointer; font-size: 10px; font-weight: 600; padding: 1px 6px;
+      border-radius: 10px; background: rgba(107,24,57,.12); color: var(--wine);
+      user-select: none;
+    }
+    .grape-tag .bound-toggle:hover { background: rgba(107,24,57,.22); }
     .grape-tag .rm-btn {
       cursor: pointer; color: var(--wine); opacity: .6; font-size: 15px;
       line-height: 1; padding: 0 2px;
@@ -1653,7 +1659,11 @@
         <div id="dn-version-chips" style="display:flex;gap:8px;flex-wrap:wrap"></div>
       </div>
       <div class="fg"><label>Regione</label><input type="text" id="dn-region" placeholder="es. Toscana"></div>
-      <div class="fg"><label>Vitigni</label><textarea id="dn-grapes" rows="2" placeholder="es. Sangiovese minimo 80%…"></textarea></div>
+      <div class="fg" style="position:relative">
+        <label>Vitigni</label>
+        <input type="text" id="dn-grapes-input" placeholder="Scrivi per cercare un vitigno…" autocomplete="off">
+        <div class="grape-tags" id="dn-grape-tags"></div>
+      </div>
       <div class="fg"><label>Affinamento</label><textarea id="dn-aging" rows="2" placeholder="es. Minimo 24 mesi di cui 12 in legno…"></textarea></div>
       <div class="fg"><label>Caratteristiche</label><textarea id="dn-characteristics" rows="3" placeholder="Colore, profumo, sapore secondo il disciplinare…"></textarea></div>
       <div style="display:flex;gap:8px;margin-top:1rem">
@@ -7093,6 +7103,92 @@ function applyGrapesToForm(grapesStr) {
   renderGrapeTags();
 }
 
+// ── Vitigni di una denominazione (form admin) — stesso pattern a tag di
+// selectedGrapes/renderGrapeTags sopra (usato per il vino), con due
+// differenze: l'autocomplete pesca dall'archivio Vitigni vero (non dalla
+// lista GRAPE_VARIETIES fissa) per "controllare" l'inserimento invece di
+// lasciarlo libero, e ogni tag ha un indicatore ciclabile Minimo/Massimo/
+// esatto (i disciplinari parlano quasi sempre di percentuali minime o
+// massime, raramente di un valore fisso). Resta salvato come testo
+// libero in wine_denominations.grapes, stessa colonna di sempre — solo
+// l'input cambia, non lo schema.
+let dnSelectedGrapes = []; // [{name, pct, bound}] bound: '' | 'min' | 'max'
+let grapeVarietyNamesCache = null;
+
+async function loadGrapeVarietyNamesCache() {
+  if (grapeVarietyNamesCache) return grapeVarietyNamesCache;
+  const { data, error } = await sb.from('grape_varieties').select('name').order('name');
+  grapeVarietyNamesCache = error ? [] : (data || []).map(r => r.name);
+  return grapeVarietyNamesCache;
+}
+
+function renderDnGrapeTags() {
+  const box = document.getElementById('dn-grape-tags');
+  if (!box) return;
+  box.innerHTML = dnSelectedGrapes.map((g, i) => `
+    <span class="grape-tag">
+      ${escapeAttr(g.name)}
+      <span class="bound-toggle" onclick="event.stopPropagation();cycleDnGrapeBound(${i})" title="Minimo / Massimo / esatto">${g.bound === 'min' ? 'min' : g.bound === 'max' ? 'max' : '='}</span>
+      <input type="number" min="0" max="100" placeholder="—" value="${g.pct || ''}"
+             oninput="updateDnGrapePct(${i}, this.value)" onclick="event.stopPropagation()">
+      <span class="pct-sign">%</span>
+      <span class="rm-btn" onclick="removeDnGrapeTag(${i})">×</span>
+    </span>
+  `).join('');
+}
+
+function addDnGrapeTag(name) {
+  const trimmed = (name || '').trim();
+  if (!trimmed) return;
+  if (dnSelectedGrapes.some(g => g.name.toLowerCase() === trimmed.toLowerCase())) return;
+  dnSelectedGrapes.push({ name: trimmed, pct: '', bound: '' });
+  renderDnGrapeTags();
+  const input = document.getElementById('dn-grapes-input');
+  if (input) { input.value = ''; input.focus(); }
+}
+
+function cycleDnGrapeBound(index) {
+  const g = dnSelectedGrapes[index];
+  if (!g) return;
+  g.bound = g.bound === '' ? 'min' : g.bound === 'min' ? 'max' : '';
+  renderDnGrapeTags();
+}
+
+function updateDnGrapePct(index, val) {
+  if (dnSelectedGrapes[index]) dnSelectedGrapes[index].pct = val;
+}
+
+function removeDnGrapeTag(index) {
+  dnSelectedGrapes.splice(index, 1);
+  renderDnGrapeTags();
+}
+
+function dnGrapesToString() {
+  return dnSelectedGrapes.map(g => {
+    let s = g.name;
+    if (g.bound === 'min') s += ' minimo';
+    else if (g.bound === 'max') s += ' massimo';
+    if (g.pct) s += ' ' + g.pct + '%';
+    return s;
+  }).join(', ');
+}
+
+// Ricostruisce i tag a partire dalla stringa salvata (es. "Sangiovese
+// minimo 80%, Canaiolo massimo 20%") — stesso approccio di
+// applyGrapesToForm sopra, esteso a riconoscere minimo/massimo.
+function applyDnGrapesFromString(str) {
+  dnSelectedGrapes = (str || '').split(',').map(s => s.trim()).filter(Boolean).map(token => {
+    let bound = '';
+    let t = token;
+    if (/\bminimo\b/i.test(t)) { bound = 'min'; t = t.replace(/\bminimo\b/i, '').trim(); }
+    else if (/\bmassimo\b/i.test(t)) { bound = 'max'; t = t.replace(/\bmassimo\b/i, '').trim(); }
+    const m = t.match(/^(.*?)\s+(\d{1,3}(?:[.,]\d+)?)\s*%$/);
+    if (m) return { name: m[1].trim(), pct: m[2].replace(',', '.'), bound };
+    return { name: t, pct: '', bound };
+  });
+  renderDnGrapeTags();
+}
+
 /* ── Posizione in cantina sul form vino — un vino può avere più posizioni ── */
 let selectedWinePositions = []; // [{l1,l2,l3}]
 
@@ -8040,7 +8136,8 @@ async function showDenominationDetail(id) {
     document.getElementById('dn-type').value = dn?.type || '';
     await renderDnVersionChips(dn?.versions || []);
     document.getElementById('dn-region').value = dn?.region || '';
-    document.getElementById('dn-grapes').value = dn?.grapes || '';
+    loadGrapeVarietyNamesCache();
+    applyDnGrapesFromString(dn?.grapes || '');
     document.getElementById('dn-aging').value = dn?.aging || '';
     document.getElementById('dn-characteristics').value = dn?.characteristics || '';
   } else {
@@ -8069,7 +8166,7 @@ async function saveDenomination() {
     type: g('dn-type'),
     versions: [...dnSelectedVersions],
     region: g('dn-region'),
-    grapes: g('dn-grapes'),
+    grapes: dnGrapesToString() || null,
     aging: g('dn-aging'),
     characteristics: g('dn-characteristics'),
     updated_at: new Date().toISOString(),
@@ -8767,6 +8864,10 @@ attachAutocomplete('f-grapes-input', () => GRAPE_VARIETIES, name => addGrapeTag(
 document.getElementById('f-grapes-input')?.addEventListener('keydown', e => {
   if (e.key === 'Enter') { e.preventDefault(); addGrapeTag(e.target.value); }
 });
+attachAutocomplete('dn-grapes-input', () => grapeVarietyNamesCache || [], name => addDnGrapeTag(name));
+document.getElementById('dn-grapes-input')?.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); addDnGrapeTag(e.target.value); }
+});
 
 // Suggerisce cantine già in anagrafica mentre si scrive il produttore, per
 // evitare doppioni per un refuso; selezionandone una si aggancia quella
@@ -8830,7 +8931,8 @@ Object.assign(window, {
   showApprofondisciScreen, showApBlogScreen, showApEnologiaScreen, setApEnologiaView,
   showBlogPostDetail, saveBlogPost, deleteBlogPost, uploadBlogCover,
   showGrapeVarietyDetail, saveGrapeVariety, deleteGrapeVariety, searchGrapeVarieties, toggleApColorFilter,
-  showDenominationDetail, saveDenomination, deleteDenomination, searchDenominations, toggleApTypeFilter, toggleDenomRegionMenu, toggleDnVersionChip, toggleDenomSortMenu
+  showDenominationDetail, saveDenomination, deleteDenomination, searchDenominations, toggleApTypeFilter, toggleDenomRegionMenu, toggleDnVersionChip, toggleDenomSortMenu,
+  cycleDnGrapeBound, updateDnGrapePct, removeDnGrapeTag
 });
 </script>
 </body>
