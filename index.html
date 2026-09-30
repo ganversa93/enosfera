@@ -1646,7 +1646,9 @@
           <option value="DOCG">DOCG</option>
         </select>
       </div>
-      <div class="fg"><label>Colori prodotti (separati da virgola)</label><input type="text" id="dn-colors" placeholder="Bianco, Rosato, Rosso…"></div>
+      <div class="fg"><label>Versione</label>
+        <div id="dn-version-chips" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+      </div>
       <div class="fg"><label>Regione</label><input type="text" id="dn-region" placeholder="es. Toscana"></div>
       <div class="fg"><label>Vitigni</label><textarea id="dn-grapes" rows="2" placeholder="es. Sangiovese minimo 80%…"></textarea></div>
       <div class="fg"><label>Affinamento</label><textarea id="dn-aging" rows="2" placeholder="es. Minimo 24 mesi di cui 12 in legno…"></textarea></div>
@@ -4795,6 +4797,7 @@ async function loadEventOptionLists() {
 const CONFIG_LIST_LABELS = {
   event_category: 'Categoria eventi',
   event_association: 'Associazioni collegate',
+  denomination_version: 'Versione denominazione',
 };
 let currentConfigListKey = Object.keys(CONFIG_LIST_LABELS)[0];
 
@@ -7903,7 +7906,14 @@ async function deleteGrapeVariety() {
 }
 
 // ── Archivio Denominazioni ──
-function denomColorBadgeClass(c) { return c === 'bianco' ? 'bb' : c === 'rosato' ? 'bro' : 'br'; }
+function denomVersionBadgeClass(v) {
+  const lv = (v || '').toLowerCase();
+  if (lv === 'bianco') return 'bb';
+  if (lv === 'rosato') return 'bro';
+  if (lv === 'rosso') return 'br';
+  if (lv === 'spumante') return 'bs';
+  return 'bgy';
+}
 
 function toggleApTypeFilter(type, el) {
   if (apDenomTypeFilters.has(type)) { apDenomTypeFilters.delete(type); el.classList.remove('active'); }
@@ -7918,7 +7928,7 @@ function searchDenominations() {
     const list = document.getElementById('ap-denom-list');
     list.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--muted)">Caricamento…</div>';
     const regionFilter = apDenomRegionValue;
-    let req = sb.from('wine_denominations').select('id,name,colors,type').order('name').limit(60);
+    let req = sb.from('wine_denominations').select('id,name,versions,type').order('name').limit(60);
     if (q) req = req.ilike('name', `%${q}%`);
     if (apDenomTypeFilters.size) req = req.in('type', [...apDenomTypeFilters]);
     if (regionFilter) {
@@ -7937,13 +7947,34 @@ function searchDenominations() {
       ? data.map(d => `
         <div class="winery-row" onclick="showDenominationDetail('${d.id}')">
           <div class="winery-row-name"><i class="ti ti-map-pin"></i>${escapeAttr(d.name)}
-            ${(d.colors || []).map(c => `<span class="gbadge ${denomColorBadgeClass(c)}">${escapeAttr(c)}</span>`).join(' ')}
+            ${(d.versions || []).map(v => `<span class="gbadge ${denomVersionBadgeClass(v)}">${escapeAttr(v)}</span>`).join(' ')}
             ${d.type ? `<span class="${d.type === 'DOCG' ? 'premium-pill' : 'chip'}">${d.type}</span>` : ''}
           </div>
           <i class="ti ti-chevron-right"></i>
         </div>`).join('')
       : '<div style="text-align:center;padding:2rem;color:var(--muted)">Nessuna denominazione trovata</div>';
   }, 300);
+}
+
+// Le versioni ammesse (Bianco/Rosato/Rosso/Spumante/Dolce/Passito…) sono
+// una config_lists (list_key 'denomination_version') gestibile
+// dall'admin in Profilo → Configurazione liste, non una lista fissa nel
+// codice — qui si carica quella lista e si renderizzano come chip a
+// selezione multipla, stesso pattern dei chip Bacca in Vitigni ma con
+// opzioni caricate a runtime invece che fisse in markup.
+let dnSelectedVersions = new Set();
+async function renderDnVersionChips(selected) {
+  dnSelectedVersions = new Set(selected || []);
+  const box = document.getElementById('dn-version-chips');
+  const options = await loadConfigList('denomination_version');
+  box.innerHTML = options.length
+    ? options.map(o => `<div class="chip${dnSelectedVersions.has(o.value) ? ' active' : ''}" data-value="${escapeAttr(o.value)}" onclick="toggleDnVersionChip('${escapeAttr(o.value)}',this)">${escapeAttr(o.value)}</div>`).join('')
+    : '<p style="font-size:12px;color:var(--muted)">Nessuna versione configurata — aggiungile in Profilo → Configurazione liste.</p>';
+}
+
+function toggleDnVersionChip(value, el) {
+  if (dnSelectedVersions.has(value)) { dnSelectedVersions.delete(value); el.classList.remove('active'); }
+  else { dnSelectedVersions.add(value); el.classList.add('active'); }
 }
 
 async function showDenominationDetail(id) {
@@ -7969,7 +8000,7 @@ async function showDenominationDetail(id) {
     editBody.style.display = '';
     document.getElementById('dn-name').value = dn?.name || '';
     document.getElementById('dn-type').value = dn?.type || '';
-    document.getElementById('dn-colors').value = (dn?.colors || []).join(', ');
+    await renderDnVersionChips(dn?.versions || []);
     document.getElementById('dn-region').value = dn?.region || '';
     document.getElementById('dn-grapes').value = dn?.grapes || '';
     document.getElementById('dn-aging').value = dn?.aging || '';
@@ -7979,7 +8010,7 @@ async function showDenominationDetail(id) {
     viewBody.style.display = '';
     viewBody.innerHTML = `
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem">
-        ${(dn.colors || []).map(c => `<span class="gbadge ${denomColorBadgeClass(c)}">${escapeAttr(c)}</span>`).join('')}
+        ${(dn.versions || []).map(v => `<span class="gbadge ${denomVersionBadgeClass(v)}">${escapeAttr(v)}</span>`).join('')}
         ${dn.type ? `<span class="${dn.type === 'DOCG' ? 'premium-pill' : 'chip'}">${dn.type}</span>` : ''}
       </div>
       ${dn.region ? `<p style="font-size:12.5px;color:var(--muted)"><i class="ti ti-map-pin"></i> ${escapeAttr(dn.region)}</p>` : ''}
@@ -7998,7 +8029,7 @@ async function saveDenomination() {
   const row = {
     name,
     type: g('dn-type'),
-    colors: splitCsv(g('dn-colors')),
+    versions: [...dnSelectedVersions],
     region: g('dn-region'),
     grapes: g('dn-grapes'),
     aging: g('dn-aging'),
@@ -8761,7 +8792,7 @@ Object.assign(window, {
   showApprofondisciScreen, showApBlogScreen, showApEnologiaScreen, setApEnologiaView,
   showBlogPostDetail, saveBlogPost, deleteBlogPost, uploadBlogCover,
   showGrapeVarietyDetail, saveGrapeVariety, deleteGrapeVariety, searchGrapeVarieties, toggleApColorFilter,
-  showDenominationDetail, saveDenomination, deleteDenomination, searchDenominations, toggleApTypeFilter, toggleDenomRegionMenu
+  showDenominationDetail, saveDenomination, deleteDenomination, searchDenominations, toggleApTypeFilter, toggleDenomRegionMenu, toggleDnVersionChip
 });
 </script>
 </body>

@@ -2614,3 +2614,21 @@ insert into public.wine_denominations (name, type, colors, region) values
   ('Vittoria', 'DOC', array[]::text[], 'Sicilia'),
   ('Zagarolo', 'DOC', array[]::text[], 'Lazio')
 on conflict (name) do nothing;
+
+-- ════════════════════════════════════════════════════════════════
+-- "Colori prodotti" diventa "Versione" (Bianco/Rosato/Rosso/Spumante/
+-- Dolce/Passito…), multi-valore come prima ma con le opzioni gestite
+-- dall'admin da Profilo → Configurazione liste (config_lists, stesso
+-- meccanismo già usato per categoria/associazioni evento) invece che
+-- testo libero digitato a mano — colonna rinominata di conseguenza.
+-- ════════════════════════════════════════════════════════════════
+alter table public.wine_denominations rename column colors to versions;
+
+insert into public.config_lists (list_key, value, sort_order) values
+  ('denomination_version', 'Bianco', 0),
+  ('denomination_version', 'Rosato', 1),
+  ('denomination_version', 'Rosso', 2),
+  ('denomination_version', 'Spumante', 3),
+  ('denomination_version', 'Dolce', 4),
+  ('denomination_version', 'Passito', 5)
+on conflict (list_key, value) do nothing;
