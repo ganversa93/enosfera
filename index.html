@@ -1586,6 +1586,9 @@
         <div style="position:relative">
           <button type="button" class="chip" id="ap-denom-region-btn" onclick="toggleDenomRegionMenu()">Tutte le regioni <i class="ti ti-chevron-down" style="font-size:11px;margin-left:2px;vertical-align:-1px"></i></button>
         </div>
+        <div style="position:relative">
+          <button type="button" class="chip" id="ap-denom-sort-btn" onclick="toggleDenomSortMenu()"><i class="ti ti-arrows-sort" style="font-size:12px;margin-right:3px;vertical-align:-1px"></i>Nome (A-Z)</button>
+        </div>
       </div>
       <div id="ap-denom-admin-bar" style="display:none;margin-bottom:10px">
         <button class="btn sm" onclick="showDenominationDetail(null)"><i class="ti ti-plus"></i>Aggiungi denominazione</button>
@@ -7653,36 +7656,59 @@ function setApEnologiaView(view) {
 // già stilizzato a tema usato per gli autocomplete (attachAutocomplete),
 // qui come semplice menu a click invece che filtrato da testo digitato.
 let apDenomRegionValue = '';
-function toggleDenomRegionMenu() {
-  const btn = document.getElementById('ap-denom-region-btn');
-  const existing = document.getElementById('ap-denom-region-box');
+// Menu generico a tema per bottoni tipo "chip" — riusato sia per il
+// filtro Regione sia per l'ordinamento, invece di duplicare due volte lo
+// stesso box .ac-box/.ac-item con la sua logica di apertura/chiusura.
+function openThemedMenu(btnId, boxId, items, onSelect) {
+  const btn = document.getElementById(btnId);
+  const existing = document.getElementById(boxId);
   if (existing) { existing.remove(); return; }
   const box = document.createElement('div');
   box.className = 'ac-box';
-  box.id = 'ap-denom-region-box';
+  box.id = boxId;
   box.style.minWidth = '190px';
-  const options = ['', ...(GEO_REGIONS.Italia || [])];
-  options.forEach(r => {
+  items.forEach(({ value, label }) => {
     const item = document.createElement('div');
     item.className = 'ac-item';
-    item.textContent = r || 'Tutte le regioni';
+    item.textContent = label;
     item.addEventListener('mousedown', e => {
       e.preventDefault();
-      apDenomRegionValue = r;
-      btn.innerHTML = `${escapeAttr(r || 'Tutte le regioni')} <i class="ti ti-chevron-down" style="font-size:11px;margin-left:2px;vertical-align:-1px"></i>`;
       box.remove();
-      searchDenominations();
+      onSelect(value, label);
     });
     box.appendChild(item);
   });
   btn.parentElement.appendChild(box);
-  setTimeout(() => document.addEventListener('mousedown', closeDenomRegionMenuOnce), 0);
-  function closeDenomRegionMenuOnce(e) {
+  setTimeout(() => document.addEventListener('mousedown', closeOnce), 0);
+  function closeOnce(e) {
     if (!box.contains(e.target) && e.target !== btn) {
       box.remove();
-      document.removeEventListener('mousedown', closeDenomRegionMenuOnce);
+      document.removeEventListener('mousedown', closeOnce);
     }
   }
+}
+
+function toggleDenomRegionMenu() {
+  const options = ['', ...(GEO_REGIONS.Italia || [])].map(r => ({ value: r, label: r || 'Tutte le regioni' }));
+  openThemedMenu('ap-denom-region-btn', 'ap-denom-region-box', options, (value, label) => {
+    apDenomRegionValue = value;
+    document.getElementById('ap-denom-region-btn').innerHTML = `${escapeAttr(label)} <i class="ti ti-chevron-down" style="font-size:11px;margin-left:2px;vertical-align:-1px"></i>`;
+    searchDenominations();
+  });
+}
+
+let apDenomSortField = 'name';
+const DENOM_SORT_OPTIONS = [
+  { value: 'name', label: 'Nome (A-Z)' },
+  { value: 'region', label: 'Regione' },
+  { value: 'versions', label: 'Versione' },
+];
+function toggleDenomSortMenu() {
+  openThemedMenu('ap-denom-sort-btn', 'ap-denom-sort-box', DENOM_SORT_OPTIONS, (value, label) => {
+    apDenomSortField = value;
+    document.getElementById('ap-denom-sort-btn').innerHTML = `<i class="ti ti-arrows-sort" style="font-size:12px;margin-right:3px;vertical-align:-1px"></i>${escapeAttr(label)}`;
+    searchDenominations();
+  });
 }
 
 // ── Blog ──
@@ -7928,7 +7954,13 @@ function searchDenominations() {
     const list = document.getElementById('ap-denom-list');
     list.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--muted)">Caricamento…</div>';
     const regionFilter = apDenomRegionValue;
-    let req = sb.from('wine_denominations').select('id,name,versions,type').order('name').limit(60);
+    let req = sb.from('wine_denominations').select('id,name,versions,type').limit(60);
+    // Ordina sempre anche per nome come criterio secondario, tranne
+    // quando il nome è già il criterio primario — così "per regione" o
+    // "per versione" restano comunque alfabetici a parità di gruppo.
+    if (apDenomSortField === 'region') req = req.order('region').order('name');
+    else if (apDenomSortField === 'versions') req = req.order('versions').order('name');
+    else req = req.order('name');
     if (q) {
       // Cerca lo stesso testo su più campi insieme, non solo sul nome —
       // così digitando "toscana" o "sangiovese" o "docg" si trova comunque
@@ -8798,7 +8830,7 @@ Object.assign(window, {
   showApprofondisciScreen, showApBlogScreen, showApEnologiaScreen, setApEnologiaView,
   showBlogPostDetail, saveBlogPost, deleteBlogPost, uploadBlogCover,
   showGrapeVarietyDetail, saveGrapeVariety, deleteGrapeVariety, searchGrapeVarieties, toggleApColorFilter,
-  showDenominationDetail, saveDenomination, deleteDenomination, searchDenominations, toggleApTypeFilter, toggleDenomRegionMenu, toggleDnVersionChip
+  showDenominationDetail, saveDenomination, deleteDenomination, searchDenominations, toggleApTypeFilter, toggleDenomRegionMenu, toggleDnVersionChip, toggleDenomSortMenu
 });
 </script>
 </body>
