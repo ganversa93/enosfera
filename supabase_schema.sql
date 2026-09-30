@@ -2632,3 +2632,20 @@ insert into public.config_lists (list_key, value, sort_order) values
   ('denomination_version', 'Dolce', 4),
   ('denomination_version', 'Passito', 5)
 on conflict (list_key, value) do nothing;
+
+-- ════════════════════════════════════════════════════════════════
+-- Profilo sensoriale 1-5 di una denominazione (Alcolicità/Struttura/
+-- Acidità/Dolcezza/Sapidità/Tannicità) — stessi nomi già usati per gli
+-- stessi 6 parametri nella scheda FISAR descrittiva del vino
+-- (fisar_desc_params.alcolicita ecc.), qui come colonne dirette perché
+-- sono solo 6 valori fissi, non uno schema variabile come quello. Vanno
+-- ad affiancare "characteristics" (rinominato "Note da disciplinare" in
+-- UI), non a sostituirlo: uno dà un profilo numerico rapido, l'altro
+-- resta testo libero per note discorsive dal disciplinare.
+-- ════════════════════════════════════════════════════════════════
+alter table public.wine_denominations add column if not exists alcolicita smallint check (alcolicita between 1 and 5);
+alter table public.wine_denominations add column if not exists struttura smallint check (struttura between 1 and 5);
+alter table public.wine_denominations add column if not exists acidita smallint check (acidita between 1 and 5);
+alter table public.wine_denominations add column if not exists dolcezza smallint check (dolcezza between 1 and 5);
+alter table public.wine_denominations add column if not exists sapidita smallint check (sapidita between 1 and 5);
+alter table public.wine_denominations add column if not exists tannicita smallint check (tannicita between 1 and 5);

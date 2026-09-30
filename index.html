@@ -1664,8 +1664,21 @@
         <input type="text" id="dn-grapes-input" placeholder="Scrivi per cercare un vitigno…" autocomplete="off">
         <div class="grape-tags" id="dn-grape-tags"></div>
       </div>
-      <div class="fg"><label>Affinamento</label><textarea id="dn-aging" rows="2" placeholder="es. Minimo 24 mesi di cui 12 in legno…"></textarea></div>
-      <div class="fg"><label>Caratteristiche</label><textarea id="dn-characteristics" rows="3" placeholder="Colore, profumo, sapore secondo il disciplinare…"></textarea></div>
+      <div class="fg">
+        <label>Affinamento</label>
+        <div id="dn-aging-rows"></div>
+        <button type="button" class="btn sm" onclick="addDnAgingRow()"><i class="ti ti-plus"></i>Aggiungi riga</button>
+      </div>
+      <div class="fg">
+        <label>Profilo (1-5)</label>
+        <div class="param-row"><span class="param-label">Alcolicità</span><input type="range" min="1" max="5" step="1" value="3" id="dn-alcolicita" oninput="updateDnParam(this,'dn-alcolicita-val','alcolicita')"><span class="param-val" id="dn-alcolicita-val">3</span></div>
+        <div class="param-row"><span class="param-label">Struttura</span><input type="range" min="1" max="5" step="1" value="3" id="dn-struttura" oninput="updateDnParam(this,'dn-struttura-val','struttura')"><span class="param-val" id="dn-struttura-val">3</span></div>
+        <div class="param-row"><span class="param-label">Acidità</span><input type="range" min="1" max="5" step="1" value="3" id="dn-acidita" oninput="updateDnParam(this,'dn-acidita-val','acidita')"><span class="param-val" id="dn-acidita-val">3</span></div>
+        <div class="param-row"><span class="param-label">Dolcezza</span><input type="range" min="1" max="5" step="1" value="3" id="dn-dolcezza" oninput="updateDnParam(this,'dn-dolcezza-val','dolcezza')"><span class="param-val" id="dn-dolcezza-val">3</span></div>
+        <div class="param-row"><span class="param-label">Sapidità</span><input type="range" min="1" max="5" step="1" value="3" id="dn-sapidita" oninput="updateDnParam(this,'dn-sapidita-val','sapidita')"><span class="param-val" id="dn-sapidita-val">3</span></div>
+        <div class="param-row"><span class="param-label">Tannicità</span><input type="range" min="1" max="5" step="1" value="3" id="dn-tannicita" oninput="updateDnParam(this,'dn-tannicita-val','tannicita')"><span class="param-val" id="dn-tannicita-val">3</span></div>
+      </div>
+      <div class="fg"><label>Note da disciplinare</label><textarea id="dn-characteristics" rows="3" placeholder="Colore, profumo, sapore secondo il disciplinare…"></textarea></div>
       <div style="display:flex;gap:8px;margin-top:1rem">
         <button class="btn primary" onclick="saveDenomination()"><i class="ti ti-check"></i>Salva</button>
         <button class="btn danger" id="dn-delete-btn" style="display:none" onclick="deleteDenomination()"><i class="ti ti-trash"></i>Elimina</button>
@@ -7189,6 +7202,85 @@ function applyDnGrapesFromString(str) {
   renderDnGrapeTags();
 }
 
+// Affinamento di una denominazione: righe ripetibili {tipo, testo} (es.
+// "Base" → "minimo 12 mesi", "Riserva" → "minimo 24 mesi di cui 12 in
+// legno") invece di un unico testo libero, perché una denominazione ha
+// quasi sempre più tipologie di affinamento diverse da elencare separate.
+// Stesso approccio "righe aggiungibili con un +" già usato per le
+// posizioni in cantina di un vino (selectedWinePositions sotto), salvato
+// come testo libero nella stessa colonna wine_denominations.aging di
+// sempre (formato "Tipo: testo" separato da "; ").
+let dnAgingRows = []; // [{tipo, testo}]
+
+function renderDnAgingRows() {
+  const box = document.getElementById('dn-aging-rows');
+  if (!box) return;
+  box.innerHTML = dnAgingRows.map((r, i) => `
+    <div style="display:flex;gap:6px;margin-bottom:6px;align-items:center">
+      <input type="text" style="width:100px;flex-shrink:0" placeholder="Base" value="${escapeAttr(r.tipo)}" oninput="updateDnAgingRow(${i},'tipo',this.value)">
+      <input type="text" style="flex:1" placeholder="es. minimo 12 mesi" value="${escapeAttr(r.testo)}" oninput="updateDnAgingRow(${i},'testo',this.value)">
+      <span class="rm-btn" onclick="removeDnAgingRow(${i})">×</span>
+    </div>
+  `).join('');
+}
+
+function addDnAgingRow() {
+  dnAgingRows.push({ tipo: '', testo: '' });
+  renderDnAgingRows();
+}
+
+function updateDnAgingRow(index, field, val) {
+  if (dnAgingRows[index]) dnAgingRows[index][field] = val;
+}
+
+function removeDnAgingRow(index) {
+  dnAgingRows.splice(index, 1);
+  if (!dnAgingRows.length) dnAgingRows.push({ tipo: '', testo: '' });
+  renderDnAgingRows();
+}
+
+function dnAgingToString() {
+  return dnAgingRows
+    .filter(r => r.tipo.trim() || r.testo.trim())
+    .map(r => r.tipo.trim() ? `${r.tipo.trim()}: ${r.testo.trim()}` : r.testo.trim())
+    .join('; ');
+}
+
+function applyDnAgingFromString(str) {
+  const rows = (str || '').split(';').map(s => s.trim()).filter(Boolean).map(chunk => {
+    const idx = chunk.indexOf(':');
+    return idx > -1 ? { tipo: chunk.slice(0, idx).trim(), testo: chunk.slice(idx + 1).trim() } : { tipo: '', testo: chunk };
+  });
+  dnAgingRows = rows.length ? rows : [{ tipo: '', testo: '' }];
+  renderDnAgingRows();
+}
+
+// Profilo sensoriale 1-5 di una denominazione (Alcolicità/Struttura/
+// Acidità/Dolcezza/Sapidità/Tannicità) — stessi nomi già usati per gli
+// stessi parametri nella scheda FISAR descrittiva del vino
+// (fisar_desc_params.alcolicita ecc.), qui come colonne dirette invece
+// che dentro un JSON perché sono solo 6 valori fissi, non uno schema
+// variabile. Uno slider non ha un vero stato "vuoto": si traccia quali
+// l'admin ha effettivamente toccato (dnParamTouched) così salvare senza
+// aver aperto questa sezione non sovrascrive con il valore di default.
+const DN_PARAM_KEYS = ['alcolicita', 'struttura', 'acidita', 'dolcezza', 'sapidita', 'tannicita'];
+const DN_PARAM_LABELS = { alcolicita: 'Alcolicità', struttura: 'Struttura', acidita: 'Acidità', dolcezza: 'Dolcezza', sapidita: 'Sapidità', tannicita: 'Tannicità' };
+let dnParamTouched = new Set();
+
+function updateDnParam(el, valId, key) {
+  document.getElementById(valId).textContent = el.value;
+  dnParamTouched.add(key);
+}
+
+function dnParamDots(value) {
+  if (!value) return '<span style="font-size:12px;color:var(--muted)">—</span>';
+  let dots = '';
+  for (let i = 1; i <= 5; i++) {
+    dots += `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:3px;background:${i <= value ? 'var(--wine)' : 'var(--border)'}"></span>`;
+  }
+  return dots;
+}
+
 /* ── Posizione in cantina sul form vino — un vino può avere più posizioni ── */
 let selectedWinePositions = []; // [{l1,l2,l3}]
 
@@ -8138,7 +8230,15 @@ async function showDenominationDetail(id) {
     document.getElementById('dn-region').value = dn?.region || '';
     loadGrapeVarietyNamesCache();
     applyDnGrapesFromString(dn?.grapes || '');
-    document.getElementById('dn-aging').value = dn?.aging || '';
+    applyDnAgingFromString(dn?.aging || '');
+    dnParamTouched = new Set();
+    DN_PARAM_KEYS.forEach(k => {
+      const val = dn?.[k] || 3;
+      const input = document.getElementById('dn-' + k);
+      if (input) input.value = val;
+      const span = document.getElementById('dn-' + k + '-val');
+      if (span) span.textContent = val;
+    });
     document.getElementById('dn-characteristics').value = dn?.characteristics || '';
   } else {
     editBody.style.display = 'none';
@@ -8151,7 +8251,14 @@ async function showDenominationDetail(id) {
       ${dn.region ? `<p style="font-size:12.5px;color:var(--muted)"><i class="ti ti-map-pin"></i> ${escapeAttr(dn.region)}</p>` : ''}
       ${dn.grapes ? `<div style="margin-top:1rem"><div class="stitle" style="font-size:12px"><i class="ti ti-leaf"></i>Vitigni</div><p style="font-size:13px;color:var(--ink);margin-top:6px;white-space:pre-wrap">${escapeAttr(dn.grapes)}</p></div>` : ''}
       ${dn.aging ? `<div style="margin-top:1rem"><div class="stitle" style="font-size:12px"><i class="ti ti-clock"></i>Affinamento</div><p style="font-size:13px;color:var(--ink);margin-top:6px;white-space:pre-wrap">${escapeAttr(dn.aging)}</p></div>` : ''}
-      ${dn.characteristics ? `<div style="margin-top:1rem"><div class="stitle" style="font-size:12px"><i class="ti ti-list-details"></i>Caratteristiche</div><p style="font-size:13px;color:var(--ink);margin-top:6px;white-space:pre-wrap">${escapeAttr(dn.characteristics)}</p></div>` : ''}
+      ${DN_PARAM_KEYS.some(k => dn[k]) ? `
+        <div style="margin-top:1rem">
+          <div class="stitle" style="font-size:12px"><i class="ti ti-chart-bar"></i>Profilo</div>
+          <div style="margin-top:6px">
+            ${DN_PARAM_KEYS.map(k => `<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:12.5px;color:var(--ink)"><span>${DN_PARAM_LABELS[k]}</span><span>${dnParamDots(dn[k])}</span></div>`).join('')}
+          </div>
+        </div>` : ''}
+      ${dn.characteristics ? `<div style="margin-top:1rem"><div class="stitle" style="font-size:12px"><i class="ti ti-list-details"></i>Note da disciplinare</div><p style="font-size:13px;color:var(--ink);margin-top:6px;white-space:pre-wrap">${escapeAttr(dn.characteristics)}</p></div>` : ''}
     `;
   }
 }
@@ -8167,10 +8274,17 @@ async function saveDenomination() {
     versions: [...dnSelectedVersions],
     region: g('dn-region'),
     grapes: dnGrapesToString() || null,
-    aging: g('dn-aging'),
+    aging: dnAgingToString() || null,
     characteristics: g('dn-characteristics'),
     updated_at: new Date().toISOString(),
   };
+  // Uno slider ha sempre un valore (non può restare "vuoto"): si scrive
+  // solo per i parametri che l'admin ha davvero toccato in questa
+  // sessione di modifica, così salvare senza aver aperto la sezione
+  // Profilo non sovrascrive con il valore di default (3) tutte le voci.
+  DN_PARAM_KEYS.forEach(k => {
+    if (dnParamTouched.has(k)) row[k] = parseInt(document.getElementById('dn-' + k)?.value, 10) || null;
+  });
   let data, error;
   if (currentDenominationId) {
     ({ data, error } = await sb.from('wine_denominations').update(row).eq('id', currentDenominationId).select('id'));
@@ -8932,7 +9046,8 @@ Object.assign(window, {
   showBlogPostDetail, saveBlogPost, deleteBlogPost, uploadBlogCover,
   showGrapeVarietyDetail, saveGrapeVariety, deleteGrapeVariety, searchGrapeVarieties, toggleApColorFilter,
   showDenominationDetail, saveDenomination, deleteDenomination, searchDenominations, toggleApTypeFilter, toggleDenomRegionMenu, toggleDnVersionChip, toggleDenomSortMenu,
-  cycleDnGrapeBound, updateDnGrapePct, removeDnGrapeTag
+  cycleDnGrapeBound, updateDnGrapePct, removeDnGrapeTag,
+  addDnAgingRow, updateDnAgingRow, removeDnAgingRow, updateDnParam
 });
 </script>
 </body>
