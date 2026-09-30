@@ -2654,3 +2654,10 @@ alter table public.wine_denominations add column if not exists tannicita smallin
 -- liberi, nessun archivio controllato dietro (a differenza di grapes,
 -- che pesca da grape_varieties): sono solo descrittori aromatici.
 alter table public.wine_denominations add column if not exists aromas text[] not null default '{}';
+
+-- Sentori principali: da tag multipli (array) a testo libero, in linea
+-- con "Note da disciplinare" — converte gli eventuali valori già
+-- presenti unendo i tag con virgola invece di perderli.
+alter table public.wine_denominations alter column aromas type text using array_to_string(aromas, ', ');
+alter table public.wine_denominations alter column aromas drop not null;
+alter table public.wine_denominations alter column aromas drop default;

@@ -1678,10 +1678,9 @@
         <div class="param-row"><span class="param-label">Sapidità</span><input type="range" min="1" max="5" step="1" value="3" id="dn-sapidita" oninput="updateDnParam(this,'dn-sapidita-val','sapidita')"><span class="param-val" id="dn-sapidita-val">3</span></div>
         <div class="param-row"><span class="param-label">Tannicità</span><input type="range" min="1" max="5" step="1" value="3" id="dn-tannicita" oninput="updateDnParam(this,'dn-tannicita-val','tannicita')"><span class="param-val" id="dn-tannicita-val">3</span></div>
       </div>
-      <div class="fg" style="position:relative">
+      <div class="fg">
         <label>Sentori principali</label>
-        <input type="text" id="dn-aromas-input" placeholder="es. Frutta rossa, poi premi Invio…" autocomplete="off">
-        <div class="grape-tags" id="dn-aromas-tags"></div>
+        <textarea id="dn-aromas" rows="2" placeholder="es. Frutta rossa, viola, spezie…"></textarea>
       </div>
       <div class="fg"><label>Note da disciplinare</label><textarea id="dn-characteristics" rows="3" placeholder="Colore, profumo, sapore secondo il disciplinare…"></textarea></div>
       <div style="display:flex;gap:8px;margin-top:1rem">
@@ -7286,38 +7285,6 @@ function dnParamDots(value) {
   return dots;
 }
 
-// Sentori principali (es. "Frutta rossa", "Viola", "Spezie") — tag
-// liberi come i vitigni sopra ma senza percentuale/min-max, che qui non
-// ha senso: sono solo descrittori aromatici elencati. Nessun archivio
-// controllato dietro (a differenza dei Vitigni): è testo libero, si
-// aggiunge scrivendo e premendo Invio.
-let dnSelectedAromas = [];
-
-function renderDnAromaTags() {
-  const box = document.getElementById('dn-aromas-tags');
-  if (!box) return;
-  box.innerHTML = dnSelectedAromas.map((a, i) => `
-    <span class="grape-tag">
-      ${escapeAttr(a)}
-      <span class="rm-btn" onclick="removeDnAroma(${i})">×</span>
-    </span>
-  `).join('');
-}
-
-function addDnAroma(name) {
-  const trimmed = (name || '').trim();
-  if (!trimmed) return;
-  if (dnSelectedAromas.some(a => a.toLowerCase() === trimmed.toLowerCase())) return;
-  dnSelectedAromas.push(trimmed);
-  renderDnAromaTags();
-  const input = document.getElementById('dn-aromas-input');
-  if (input) { input.value = ''; input.focus(); }
-}
-
-function removeDnAroma(index) {
-  dnSelectedAromas.splice(index, 1);
-  renderDnAromaTags();
-}
 
 /* ── Posizione in cantina sul form vino — un vino può avere più posizioni ── */
 let selectedWinePositions = []; // [{l1,l2,l3}]
@@ -8277,10 +8244,7 @@ async function showDenominationDetail(id) {
       const span = document.getElementById('dn-' + k + '-val');
       if (span) span.textContent = val;
     });
-    dnSelectedAromas = [...(dn?.aromas || [])];
-    renderDnAromaTags();
-    const aromasInput = document.getElementById('dn-aromas-input');
-    if (aromasInput) aromasInput.value = '';
+    document.getElementById('dn-aromas').value = dn?.aromas || '';
     document.getElementById('dn-characteristics').value = dn?.characteristics || '';
   } else {
     editBody.style.display = 'none';
@@ -8300,7 +8264,7 @@ async function showDenominationDetail(id) {
             ${DN_PARAM_KEYS.map(k => `<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:12.5px;color:var(--ink)"><span>${DN_PARAM_LABELS[k]}</span><span>${dnParamDots(dn[k])}</span></div>`).join('')}
           </div>
         </div>` : ''}
-      ${dn.aromas?.length ? `<div style="margin-top:1rem"><div class="stitle" style="font-size:12px"><i class="ti ti-droplet"></i>Sentori principali</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">${dn.aromas.map(a => `<span class="chip">${escapeAttr(a)}</span>`).join('')}</div></div>` : ''}
+      ${dn.aromas ? `<div style="margin-top:1rem"><div class="stitle" style="font-size:12px"><i class="ti ti-droplet"></i>Sentori principali</div><p style="font-size:13px;color:var(--ink);margin-top:6px;white-space:pre-wrap">${escapeAttr(dn.aromas)}</p></div>` : ''}
       ${dn.characteristics ? `<div style="margin-top:1rem"><div class="stitle" style="font-size:12px"><i class="ti ti-list-details"></i>Note da disciplinare</div><p style="font-size:13px;color:var(--ink);margin-top:6px;white-space:pre-wrap">${escapeAttr(dn.characteristics)}</p></div>` : ''}
     `;
   }
@@ -8311,7 +8275,6 @@ async function saveDenomination() {
   const g = id => document.getElementById(id)?.value.trim() || null;
   const name = g('dn-name');
   if (!name) { toastErr('Il nome è obbligatorio'); return; }
-  addDnAroma(document.getElementById('dn-aromas-input')?.value);
   const row = {
     name,
     type: g('dn-type'),
@@ -8319,7 +8282,7 @@ async function saveDenomination() {
     region: g('dn-region'),
     grapes: dnGrapesToString() || null,
     aging: dnAgingToString() || null,
-    aromas: [...dnSelectedAromas],
+    aromas: g('dn-aromas'),
     characteristics: g('dn-characteristics'),
     updated_at: new Date().toISOString(),
   };
@@ -9027,10 +8990,6 @@ attachAutocomplete('dn-grapes-input', () => grapeVarietyNamesCache || [], name =
 document.getElementById('dn-grapes-input')?.addEventListener('keydown', e => {
   if (e.key === 'Enter') { e.preventDefault(); addDnGrapeTag(e.target.value); }
 });
-document.getElementById('dn-aromas-input')?.addEventListener('keydown', e => {
-  if (e.key === 'Enter') { e.preventDefault(); addDnAroma(e.target.value); }
-});
-
 // Suggerisce cantine già in anagrafica mentre si scrive il produttore, per
 // evitare doppioni per un refuso; selezionandone una si aggancia quella
 // scheda esatta (utile quando due produttori diversi hanno nomi simili).
@@ -9095,7 +9054,7 @@ Object.assign(window, {
   showGrapeVarietyDetail, saveGrapeVariety, deleteGrapeVariety, searchGrapeVarieties, toggleApColorFilter,
   showDenominationDetail, saveDenomination, deleteDenomination, searchDenominations, toggleApTypeFilter, toggleDenomRegionMenu, toggleDnVersionChip, toggleDenomSortMenu,
   cycleDnGrapeBound, updateDnGrapePct, removeDnGrapeTag,
-  addDnAgingRow, updateDnAgingRow, removeDnAgingRow, updateDnParam, removeDnAroma
+  addDnAgingRow, updateDnAgingRow, removeDnAgingRow, updateDnParam
 });
 </script>
 </body>
