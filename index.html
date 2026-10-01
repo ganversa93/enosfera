@@ -1715,6 +1715,7 @@
     <div id="bp-view-body"></div>
     <div id="bp-edit-body" style="display:none">
       <div class="fg"><label>Titolo *</label><input type="text" id="bp-title" placeholder="Titolo dell'articolo"></div>
+      <div class="fg"><label>Autore</label><input type="text" id="bp-author" placeholder="Nome mostrato ai lettori"></div>
       <div class="fg"><label>Breve descrizione</label><textarea id="bp-excerpt" rows="2" placeholder="Anteprima mostrata nell'elenco articoli…"></textarea></div>
       <div class="fg"><label>Copertina</label>
         <div id="bp-cover-preview"></div>
@@ -7992,6 +7993,7 @@ async function showBlogPostDetail(id) {
     viewBody.style.display = 'none';
     editBody.style.display = '';
     document.getElementById('bp-title').value = post?.title || '';
+    document.getElementById('bp-author').value = post?.author_name || (post ? '' : (currentUser.name || ''));
     document.getElementById('bp-excerpt').value = post?.excerpt || '';
     document.getElementById('bp-body').value = post?.body || '';
     document.getElementById('bp-status').value = post?.status || 'draft';
@@ -8002,7 +8004,7 @@ async function showBlogPostDetail(id) {
     viewBody.style.display = '';
     viewBody.innerHTML = `
       ${post.cover_image_url ? `<img src="${post.cover_image_url}" style="width:100%;border-radius:10px;margin-bottom:1rem" alt="">` : ''}
-      <p style="font-size:11px;color:var(--muted);margin-bottom:10px">${apFmtDate(post.published_at || post.created_at)}</p>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:10px">${post.author_name ? `${escapeAttr(post.author_name)} · ` : ''}${apFmtDate(post.published_at || post.created_at)}</p>
       ${(post.tags || []).length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${post.tags.map(t => `<span class="chip">${escapeAttr(t)}</span>`).join('')}</div>` : ''}
       <div style="font-size:13.5px;color:var(--ink);line-height:1.7;white-space:pre-wrap">${post.body || ''}</div>
     `;
@@ -8037,6 +8039,7 @@ async function saveBlogPost() {
   const status = document.getElementById('bp-status').value;
   const row = {
     title, body: g('bp-body'), status,
+    author_name: g('bp-author'),
     excerpt: g('bp-excerpt'),
     tags: [...bpSelectedTags],
     published_at: status === 'published' ? (currentBlogPostData?.published_at || new Date().toISOString()) : null,

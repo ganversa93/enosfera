@@ -2728,3 +2728,14 @@ create policy "wine-labels: admin o editor aggiorna le copertine blog"
 -- completo mostrato nel dettaglio.
 -- ════════════════════════════════════════════════════════════════
 alter table public.blog_posts add column if not exists excerpt text;
+
+-- ════════════════════════════════════════════════════════════════
+-- Autore dell'articolo — testo libero invece di un riferimento a
+-- created_by: created_by resta "chi ha creato la riga" (per RLS/
+-- audit), author_name è il nome mostrato ai lettori, pre-compilato
+-- con il nome di chi scrive ma modificabile (utile quando in futuro
+-- più editor scriveranno sul blog, o per attribuire un articolo a
+-- chi l'ha scritto davvero anche se un admin lo pubblica per conto
+-- suo). Le policy sono già quelle di blog_posts, nessuna nuova.
+-- ════════════════════════════════════════════════════════════════
+alter table public.blog_posts add column if not exists author_name text;
