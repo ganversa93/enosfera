@@ -1568,6 +1568,17 @@
       <button class="btn sm" onclick="showScreen('screen-approfondisci')"><i class="ti ti-arrow-left"></i>Approfondisci</button>
       <span style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--ink)">Blog</span>
     </div>
+    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center" id="ap-blog-filters">
+      <div style="position:relative">
+        <button type="button" class="chip" id="ap-blog-tag-btn" onclick="toggleBlogTagMenu()">Tutti i tag <i class="ti ti-chevron-down" style="font-size:11px;margin-left:2px;vertical-align:-1px"></i></button>
+      </div>
+      <div style="position:relative;display:none" id="ap-blog-status-wrap">
+        <button type="button" class="chip" id="ap-blog-status-btn" onclick="toggleBlogStatusMenu()">Tutti gli stati <i class="ti ti-chevron-down" style="font-size:11px;margin-left:2px;vertical-align:-1px"></i></button>
+      </div>
+      <div style="position:relative">
+        <button type="button" class="chip" id="ap-blog-sort-btn" onclick="toggleBlogSortMenu()"><i class="ti ti-arrows-sort" style="font-size:12px;margin-right:3px;vertical-align:-1px"></i>Più recenti</button>
+      </div>
+    </div>
     <div id="ap-blog-admin-bar" style="display:none;margin-bottom:10px">
       <button class="btn sm primary" onclick="showBlogPostDetail(null)"><i class="ti ti-plus"></i>Nuovo articolo</button>
     </div>
@@ -7845,7 +7856,50 @@ function showApprofondisciScreen() {
 function showApBlogScreen() {
   showScreen('screen-ap-blog');
   document.getElementById('ap-blog-admin-bar').style.display = canManageBlog() ? '' : 'none';
+  document.getElementById('ap-blog-status-wrap').style.display = canManageBlog() ? '' : 'none';
   loadBlogPosts();
+}
+
+// Filtro Tag (aperto a tutti) e filtro Stato (solo admin/editor, le
+// bozze restano comunque invisibili agli altri via RLS) — stesso
+// meccanismo a tema di toggleDenomRegionMenu/toggleDenomSortMenu.
+let apBlogTagValue = '';
+async function toggleBlogTagMenu() {
+  const opts = await loadConfigList('blog_tag');
+  const options = [{ value: '', label: 'Tutti i tag' }, ...opts.map(o => ({ value: o.value, label: o.value }))];
+  openThemedMenu('ap-blog-tag-btn', 'ap-blog-tag-box', options, (value, label) => {
+    apBlogTagValue = value;
+    document.getElementById('ap-blog-tag-btn').innerHTML = `${escapeAttr(label)} <i class="ti ti-chevron-down" style="font-size:11px;margin-left:2px;vertical-align:-1px"></i>`;
+    loadBlogPosts();
+  });
+}
+
+let apBlogStatusValue = '';
+const BLOG_STATUS_OPTIONS = [
+  { value: '', label: 'Tutti gli stati' },
+  { value: 'published', label: 'Pubblicati' },
+  { value: 'draft', label: 'Bozze' },
+];
+function toggleBlogStatusMenu() {
+  openThemedMenu('ap-blog-status-btn', 'ap-blog-status-box', BLOG_STATUS_OPTIONS, (value, label) => {
+    apBlogStatusValue = value;
+    document.getElementById('ap-blog-status-btn').innerHTML = `${escapeAttr(label)} <i class="ti ti-chevron-down" style="font-size:11px;margin-left:2px;vertical-align:-1px"></i>`;
+    loadBlogPosts();
+  });
+}
+
+let apBlogSortField = 'recent';
+const BLOG_SORT_OPTIONS = [
+  { value: 'recent', label: 'Più recenti' },
+  { value: 'oldest', label: 'Meno recenti' },
+  { value: 'title', label: 'Titolo (A-Z)' },
+];
+function toggleBlogSortMenu() {
+  openThemedMenu('ap-blog-sort-btn', 'ap-blog-sort-box', BLOG_SORT_OPTIONS, (value, label) => {
+    apBlogSortField = value;
+    document.getElementById('ap-blog-sort-btn').innerHTML = `<i class="ti ti-arrows-sort" style="font-size:12px;margin-right:3px;vertical-align:-1px"></i>${escapeAttr(label)}`;
+    loadBlogPosts();
+  });
 }
 
 function showApEnologiaScreen() {
@@ -7938,7 +7992,13 @@ function canManageBlog() {
 async function loadBlogPosts() {
   const list = document.getElementById('ap-blog-list');
   list.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--muted)">Caricamento…</div>';
-  const { data, error } = await sb.from('blog_posts').select('id,title,status,tags,excerpt,cover_image_url').order('created_at', { ascending: false }).limit(50);
+  let req = sb.from('blog_posts').select('id,title,status,tags,excerpt,cover_image_url').limit(50);
+  if (apBlogSortField === 'oldest') req = req.order('created_at', { ascending: true });
+  else if (apBlogSortField === 'title') req = req.order('title');
+  else req = req.order('created_at', { ascending: false });
+  if (apBlogTagValue) req = req.contains('tags', [apBlogTagValue]);
+  if (canManageBlog() && apBlogStatusValue) req = req.eq('status', apBlogStatusValue);
+  const { data, error } = await req;
   if (error) { list.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--muted)">Errore caricamento</div>'; return; }
   list.innerHTML = data?.length
     ? data.map(p => `
@@ -9107,6 +9167,7 @@ Object.assign(window, {
   showConfigListsScreen, selectConfigList, addConfigListValue, removeConfigListValue,
   showApprofondisciScreen, showApBlogScreen, showApEnologiaScreen, setApEnologiaView,
   showBlogPostDetail, saveBlogPost, deleteBlogPost, uploadBlogCover, toggleBpTagChip,
+  toggleBlogTagMenu, toggleBlogStatusMenu, toggleBlogSortMenu,
   showGrapeVarietyDetail, saveGrapeVariety, deleteGrapeVariety, searchGrapeVarieties, toggleApColorFilter,
   showDenominationDetail, saveDenomination, deleteDenomination, searchDenominations, toggleApTypeFilter, toggleDenomRegionMenu, toggleDnVersionChip, toggleDenomSortMenu,
   cycleDnGrapeBound, updateDnGrapePct, removeDnGrapeTag,
