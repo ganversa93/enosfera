@@ -19,6 +19,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css">
+  <script src="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js"></script>
   <script>
     // Applica subito il tema scelto manualmente (se presente) per evitare
     // un flash del tema di sistema prima che carichi lo script del modulo.
@@ -784,6 +786,29 @@
       font-size: 12px; color: var(--muted); line-height: 1.45;
       display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
     }
+    /* Editor di testo ricco (Quill) per il corpo articolo — riveste il
+       tema di default "snow" con le variabili colore dell'app invece di
+       uno stile a sé stante, e in dark mode segue automaticamente var(). */
+    .bp-rte .ql-toolbar.ql-snow { border: 0.5px solid var(--border); border-bottom: none; border-radius: 8px 8px 0 0; background: var(--bg); }
+    .bp-rte .ql-container.ql-snow { border: 0.5px solid var(--border); border-radius: 0 0 8px 8px; background: var(--bg); font-family: 'Inter', sans-serif; font-size: 13px; }
+    .bp-rte .ql-editor { color: var(--ink); min-height: 180px; }
+    .bp-rte .ql-editor.ql-blank::before { color: var(--muted); font-style: normal; }
+    .bp-rte .ql-snow .ql-stroke { stroke: var(--muted); }
+    .bp-rte .ql-snow .ql-fill { fill: var(--muted); }
+    .bp-rte .ql-snow .ql-picker { color: var(--muted); }
+    .bp-rte .ql-snow .ql-picker-options { background: var(--bg); border-color: var(--border) !important; }
+    .bp-rte .ql-snow.ql-toolbar button:hover .ql-stroke, .bp-rte .ql-snow.ql-toolbar button.ql-active .ql-stroke { stroke: var(--wine); }
+    .bp-rte .ql-snow.ql-toolbar button:hover .ql-fill, .bp-rte .ql-snow.ql-toolbar button.ql-active .ql-fill { fill: var(--wine); }
+    /* Corpo articolo renderizzato in lettura: il contenuto arriva già
+       come HTML da Quill (p/strong/em/u/liste/immagini), non più testo
+       semplice — qui solo le regole di stile che l'editor non applica
+       già inline. */
+    .blog-body-content { font-size: 13.5px; color: var(--ink); line-height: 1.7; }
+    .blog-body-content p { margin: 0 0 1em; }
+    .blog-body-content img { max-width: 100%; border-radius: 10px; display: block; margin: 1em 0; }
+    .blog-body-content a { color: var(--wine); }
+    .blog-body-content blockquote { border-left: 3px solid var(--wine); margin: 1em 0; padding-left: 1em; color: var(--muted); }
+    .blog-body-content ul, .blog-body-content ol { padding-left: 1.4em; margin: 0 0 1em; }
     .event-fav-btn {
       position: absolute; top: .85rem; right: .85rem; background: none; border: 0; cursor: pointer;
       font-size: 19px; color: var(--border); padding: 4px; line-height: 1; z-index: 1;
@@ -1739,7 +1764,7 @@
       <div class="fg"><label>Tag</label>
         <div id="bp-tag-chips" style="display:flex;gap:8px;flex-wrap:wrap"></div>
       </div>
-      <div class="fg"><label>Corpo</label><textarea id="bp-body" rows="10" placeholder="Testo dell'articolo…"></textarea></div>
+      <div class="fg"><label>Corpo</label><div id="bp-body-editor" class="bp-rte"></div></div>
       <div class="fg"><label>Stato</label>
         <select id="bp-status">
           <option value="draft">Bozza</option>
@@ -8081,7 +8106,7 @@ async function showBlogPostDetail(id) {
     document.getElementById('bp-title').value = post?.title || '';
     await loadBlogAuthorOptions(post?.author_id || (post ? '' : currentUser.id));
     document.getElementById('bp-excerpt').value = post?.excerpt || '';
-    document.getElementById('bp-body').value = post?.body || '';
+    getBpEditor().root.innerHTML = bpBodyToHtml(post?.body);
     document.getElementById('bp-status').value = post?.status || 'draft';
     document.getElementById('bp-cover-preview').innerHTML = post?.cover_image_url ? `<img src="${post.cover_image_url}" style="max-width:100%;border-radius:8px;display:block" alt="">` : '';
     await renderBpTagChips(post?.tags || []);
@@ -8100,7 +8125,7 @@ function renderBlogPublicView(post) {
     ${post.cover_image_url ? `<img src="${post.cover_image_url}" style="width:100%;border-radius:10px;margin-bottom:1rem" alt="">` : ''}
     <p style="font-size:11px;color:var(--muted);margin-bottom:10px;display:flex;align-items:center;gap:5px;flex-wrap:wrap">${post.author_name ? `<span>${escapeAttr(post.author_name)}</span>${post.author_assoc ? `<span class="assoc-badge badge-${post.author_assoc.toLowerCase()}">${escapeAttr(post.author_assoc)}</span>` : ''}<span>·</span>` : ''}<span>${apFmtDate(post.published_at || post.created_at)}</span></p>
     ${(post.tags || []).length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${post.tags.map(t => `<span class="chip">${escapeAttr(t)}</span>`).join('')}</div>` : ''}
-    <div style="font-size:13.5px;color:var(--ink);line-height:1.7;white-space:pre-wrap">${post.body || ''}</div>
+    <div class="blog-body-content">${bpBodyToHtml(post.body)}</div>
   `;
 }
 
@@ -8143,6 +8168,71 @@ async function uploadBlogCover(input) {
   toast('✓ Copertina caricata');
 }
 
+// Il corpo arrivava come testo semplice prima dell'editor Quill — gli
+// articoli già scritti così non hanno tag HTML, quindi i loro ritorni a
+// capo andrebbero persi aprendoli nell'editor o in lettura (il nuovo
+// corpo HTML non usa più white-space:pre-wrap). Se il testo non
+// contiene già tag, lo tratta come legacy e lo converte in paragrafi;
+// il contenuto scritto con Quill (sempre con tag) passa invariato.
+function bpBodyToHtml(body) {
+  if (!body) return '';
+  if (/<[a-z][\s\S]*>/i.test(body)) return body;
+  return body.split(/\n{2,}/).map(p => `<p>${escapeAttr(p).replace(/\n/g, '<br>')}</p>`).join('');
+}
+
+// Editor di testo ricco del corpo articolo (Quill, caricato da CDN —
+// vedi <head>), un'unica istanza riusata ogni volta che si apre il
+// form invece di ricrearla, dato che il contenitore #bp-body-editor
+// resta sempre nel DOM (la "schermata" è solo nascosta, non rimossa).
+let bpEditor = null;
+function getBpEditor() {
+  if (bpEditor) return bpEditor;
+  bpEditor = new Quill('#bp-body-editor', {
+    theme: 'snow',
+    placeholder: 'Testo dell\'articolo…',
+    modules: {
+      toolbar: {
+        container: [
+          [{ header: [2, 3, false] }],
+          ['bold', 'italic', 'underline', 'strike'],
+          [{ list: 'ordered' }, { list: 'bullet' }],
+          ['blockquote', 'link', 'image'],
+          ['clean'],
+        ],
+        handlers: { image: insertBpEditorImage },
+      },
+    },
+  });
+  return bpEditor;
+}
+
+// Immagine inserita nel corpo: stesso trattamento della copertina
+// (compressione + upload nel bucket wine-labels, prefisso blog/ — le
+// policy storage sono già quelle admin/editor, nessuna nuova), poi
+// incorporata nel punto del cursore invece che salvata come base64
+// dentro l'HTML dell'articolo.
+async function insertBpEditorImage() {
+  if (!canManageBlog()) return;
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.onchange = async () => {
+    const file = input.files[0];
+    if (!file) return;
+    const editor = getBpEditor();
+    const range = editor.getSelection(true);
+    let toUpload = file;
+    try { toUpload = await compressImage(file, 1000, 0.85); } catch (e) { console.warn('compressImage immagine corpo fallita', e); }
+    const path = `blog/body-${currentBlogPostId || 'new-' + Date.now()}-${Date.now()}.jpg`;
+    const { error } = await sb.storage.from('wine-labels').upload(path, toUpload, { upsert: true, contentType: toUpload.type || 'image/jpeg', cacheControl: '31536000' });
+    if (error) { toastErr('Errore caricamento immagine: ' + error.message); return; }
+    const { data: urlData } = sb.storage.from('wine-labels').getPublicUrl(path);
+    editor.insertEmbed(range.index, 'image', urlData.publicUrl, 'user');
+    editor.setSelection(range.index + 1);
+  };
+  input.click();
+}
+
 async function saveBlogPost() {
   if (!canManageBlog()) return;
   const g = id => document.getElementById(id)?.value.trim() || null;
@@ -8151,8 +8241,9 @@ async function saveBlogPost() {
   const status = document.getElementById('bp-status').value;
   const authorSel = document.getElementById('bp-author-id');
   const authorOpt = authorSel?.options[authorSel.selectedIndex];
+  const bodyHtml = getBpEditor().root.innerHTML;
   const row = {
-    title, body: g('bp-body'), status,
+    title, body: bodyHtml === '<p><br></p>' ? null : bodyHtml, status,
     author_id: authorSel?.value || null,
     author_name: authorOpt?.dataset.name || null,
     author_assoc: authorOpt?.dataset.assoc || null,
