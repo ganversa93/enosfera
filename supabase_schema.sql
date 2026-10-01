@@ -2739,3 +2739,11 @@ alter table public.blog_posts add column if not exists excerpt text;
 -- suo). Le policy sono già quelle di blog_posts, nessuna nuova.
 -- ════════════════════════════════════════════════════════════════
 alter table public.blog_posts add column if not exists author_name text;
+
+-- ════════════════════════════════════════════════════════════════
+-- Associazione dell'autore (AIS/FISAR/ONAV/FIS), da mostrare accanto
+-- al nome — stesso trattamento di author_name: testo libero
+-- pre-compilato con l'associazione di chi scrive, non legato a
+-- profiles per restare indipendente da chi pubblica la riga.
+-- ════════════════════════════════════════════════════════════════
+alter table public.blog_posts add column if not exists author_assoc text;

@@ -777,8 +777,9 @@
     .blog-card-img { width: 42%; flex-shrink: 0; aspect-ratio: 4 / 3; border-radius: 10px; overflow: hidden; background: var(--wine-pale); }
     .blog-card-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .blog-card-img-ph { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: var(--wine); font-size: 22px; }
-    .blog-card-body { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
+    .blog-card-body { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 5px; }
     .blog-card-title { font-family: 'Cormorant Garamond', serif; font-size: 17px; color: var(--ink); line-height: 1.25; }
+    .blog-card-byline { font-size: 11.5px; color: var(--muted); display: flex; align-items: center; gap: 5px; }
     .blog-card-excerpt {
       font-size: 12px; color: var(--muted); line-height: 1.45;
       display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
@@ -1727,6 +1728,15 @@
     <div id="bp-edit-body" style="display:none">
       <div class="fg"><label>Titolo *</label><input type="text" id="bp-title" placeholder="Titolo dell'articolo"></div>
       <div class="fg"><label>Autore</label><input type="text" id="bp-author" placeholder="Nome mostrato ai lettori"></div>
+      <div class="fg"><label>Associazione autore</label>
+        <select id="bp-author-assoc">
+          <option value="">Nessuna</option>
+          <option value="AIS">AIS</option>
+          <option value="FISAR">FISAR</option>
+          <option value="ONAV">ONAV</option>
+          <option value="FIS">FIS</option>
+        </select>
+      </div>
       <div class="fg"><label>Breve descrizione</label><textarea id="bp-excerpt" rows="2" placeholder="Anteprima mostrata nell'elenco articoli…"></textarea></div>
       <div class="fg"><label>Copertina</label>
         <div id="bp-cover-preview"></div>
@@ -7992,7 +8002,7 @@ function canManageBlog() {
 async function loadBlogPosts() {
   const list = document.getElementById('ap-blog-list');
   list.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--muted)">Caricamento…</div>';
-  let req = sb.from('blog_posts').select('id,title,status,tags,excerpt,cover_image_url').limit(50);
+  let req = sb.from('blog_posts').select('id,title,status,tags,excerpt,cover_image_url,author_name,author_assoc').limit(50);
   if (apBlogSortField === 'oldest') req = req.order('created_at', { ascending: true });
   else if (apBlogSortField === 'title') req = req.order('title');
   else req = req.order('created_at', { ascending: false });
@@ -8006,7 +8016,7 @@ async function loadBlogPosts() {
         <div class="blog-card-img">${p.cover_image_url ? `<img src="${p.cover_image_url}" alt="">` : '<div class="blog-card-img-ph"><i class="ti ti-news"></i></div>'}</div>
         <div class="blog-card-body">
           <div class="blog-card-title">${escapeAttr(p.title)}${p.status === 'draft' ? ' <span class="chip">Bozza</span>' : ''}</div>
-          ${(p.tags || []).length ? `<div style="display:flex;gap:4px;flex-wrap:wrap">${p.tags.map(t => `<span class="chip">${escapeAttr(t)}</span>`).join('')}</div>` : ''}
+          ${p.author_name ? `<div class="blog-card-byline">${escapeAttr(p.author_name)}${p.author_assoc ? ` <span class="assoc-badge badge-${p.author_assoc.toLowerCase()}">${escapeAttr(p.author_assoc)}</span>` : ''}</div>` : ''}
           ${p.excerpt ? `<div class="blog-card-excerpt">${escapeAttr(p.excerpt)}</div>` : ''}
         </div>
       </div>`).join('')
@@ -8054,6 +8064,7 @@ async function showBlogPostDetail(id) {
     editBody.style.display = '';
     document.getElementById('bp-title').value = post?.title || '';
     document.getElementById('bp-author').value = post?.author_name || (post ? '' : (currentUser.name || ''));
+    document.getElementById('bp-author-assoc').value = post?.author_assoc || (post ? '' : (currentUser.assoc || ''));
     document.getElementById('bp-excerpt').value = post?.excerpt || '';
     document.getElementById('bp-body').value = post?.body || '';
     document.getElementById('bp-status').value = post?.status || 'draft';
@@ -8064,7 +8075,7 @@ async function showBlogPostDetail(id) {
     viewBody.style.display = '';
     viewBody.innerHTML = `
       ${post.cover_image_url ? `<img src="${post.cover_image_url}" style="width:100%;border-radius:10px;margin-bottom:1rem" alt="">` : ''}
-      <p style="font-size:11px;color:var(--muted);margin-bottom:10px">${post.author_name ? `${escapeAttr(post.author_name)} · ` : ''}${apFmtDate(post.published_at || post.created_at)}</p>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:10px;display:flex;align-items:center;gap:5px;flex-wrap:wrap">${post.author_name ? `<span>${escapeAttr(post.author_name)}</span>${post.author_assoc ? `<span class="assoc-badge badge-${post.author_assoc.toLowerCase()}">${escapeAttr(post.author_assoc)}</span>` : ''}<span>·</span>` : ''}<span>${apFmtDate(post.published_at || post.created_at)}</span></p>
       ${(post.tags || []).length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${post.tags.map(t => `<span class="chip">${escapeAttr(t)}</span>`).join('')}</div>` : ''}
       <div style="font-size:13.5px;color:var(--ink);line-height:1.7;white-space:pre-wrap">${post.body || ''}</div>
     `;
@@ -8100,6 +8111,7 @@ async function saveBlogPost() {
   const row = {
     title, body: g('bp-body'), status,
     author_name: g('bp-author'),
+    author_assoc: document.getElementById('bp-author-assoc')?.value || null,
     excerpt: g('bp-excerpt'),
     tags: [...bpSelectedTags],
     published_at: status === 'published' ? (currentBlogPostData?.published_at || new Date().toISOString()) : null,
