@@ -1703,6 +1703,9 @@
         <div id="bp-cover-preview"></div>
         <input type="file" accept="image/*" onchange="uploadBlogCover(this)">
       </div>
+      <div class="fg"><label>Tag</label>
+        <div id="bp-tag-chips" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+      </div>
       <div class="fg"><label>Corpo</label><textarea id="bp-body" rows="10" placeholder="Testo dell'articolo…"></textarea></div>
       <div class="fg"><label>Stato</label>
         <select id="bp-status">
@@ -3528,6 +3531,7 @@ async function loadProfile(authUser) {
     emailConfirmed:    !!authUser.email_confirmed_at,
     cellarPosTree:     profile?.cellar_positions_tree || [],
     isAdmin:           profile?.is_admin || false,
+    isEditor:          profile?.is_editor || false,
     assocPromptPending: profile?.assoc_prompt_pending || false,
     tutorialSeen: profile?.tutorial_seen || false,
     privacyAcceptedAt: profile?.privacy_accepted_at || null
@@ -4828,6 +4832,7 @@ const CONFIG_LIST_LABELS = {
   event_category: 'Categoria eventi',
   event_association: 'Associazioni collegate',
   denomination_version: 'Versione denominazione',
+  blog_tag: 'Tag articoli blog',
 };
 let currentConfigListKey = Object.keys(CONFIG_LIST_LABELS)[0];
 
@@ -7821,7 +7826,7 @@ function showApprofondisciScreen() {
 
 function showApBlogScreen() {
   showScreen('screen-ap-blog');
-  document.getElementById('ap-blog-admin-bar').style.display = currentUser?.isAdmin ? '' : 'none';
+  document.getElementById('ap-blog-admin-bar').style.display = canManageBlog() ? '' : 'none';
   loadBlogPosts();
 }
 
@@ -7905,18 +7910,42 @@ function toggleDenomSortMenu() {
 }
 
 // ── Blog ──
+// Il blog è l'unica sezione gestibile anche da un ruolo "Editor"
+// (profiles.is_editor) oltre che dall'admin — vedi le policy RLS di
+// blog_posts, che ora accettano is_admin() OR is_editor().
+function canManageBlog() {
+  return !!currentUser?.isAdmin || !!currentUser?.isEditor;
+}
+
 async function loadBlogPosts() {
   const list = document.getElementById('ap-blog-list');
   list.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--muted)">Caricamento…</div>';
-  const { data, error } = await sb.from('blog_posts').select('id,title,status').order('created_at', { ascending: false }).limit(50);
+  const { data, error } = await sb.from('blog_posts').select('id,title,status,tags').order('created_at', { ascending: false }).limit(50);
   if (error) { list.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--muted)">Errore caricamento</div>'; return; }
   list.innerHTML = data?.length
     ? data.map(p => `
       <div class="winery-row" onclick="showBlogPostDetail('${p.id}')">
-        <div class="winery-row-name"><i class="ti ti-news"></i>${escapeAttr(p.title)}${p.status === 'draft' ? ' <span class="chip">Bozza</span>' : ''}</div>
+        <div class="winery-row-name"><i class="ti ti-news"></i>${escapeAttr(p.title)}${p.status === 'draft' ? ' <span class="chip">Bozza</span>' : ''}
+          ${(p.tags || []).map(t => `<span class="chip">${escapeAttr(t)}</span>`).join('')}
+        </div>
         <i class="ti ti-chevron-right"></i>
       </div>`).join('')
-    : `<div style="text-align:center;padding:2rem;color:var(--muted)">${currentUser?.isAdmin ? 'Nessun articolo ancora — crea il primo con "Nuovo articolo"' : 'Nessun articolo ancora'}</div>`;
+    : `<div style="text-align:center;padding:2rem;color:var(--muted)">${canManageBlog() ? 'Nessun articolo ancora — crea il primo con "Nuovo articolo"' : 'Nessun articolo ancora'}</div>`;
+}
+
+let bpSelectedTags = new Set();
+async function renderBpTagChips(selected) {
+  bpSelectedTags = new Set(selected || []);
+  const box = document.getElementById('bp-tag-chips');
+  if (!box) return;
+  const options = await loadConfigList('blog_tag');
+  box.innerHTML = options.length
+    ? options.map(o => `<div class="chip${bpSelectedTags.has(o.value) ? ' active' : ''}" data-value="${escapeAttr(o.value)}" onclick="toggleBpTagChip('${escapeAttr(o.value)}',this)">${escapeAttr(o.value)}</div>`).join('')
+    : '<div style="font-size:12px;color:var(--muted)">Nessun tag configurato — aggiungili da Configurazione liste.</div>';
+}
+function toggleBpTagChip(value, el) {
+  if (bpSelectedTags.has(value)) { bpSelectedTags.delete(value); el.classList.remove('active'); }
+  else { bpSelectedTags.add(value); el.classList.add('active'); }
 }
 
 async function showBlogPostDetail(id) {
@@ -7926,7 +7955,7 @@ async function showBlogPostDetail(id) {
   showScreen('screen-blogpost-detail');
   const viewBody = document.getElementById('bp-view-body');
   const editBody = document.getElementById('bp-edit-body');
-  const isAdmin = !!currentUser?.isAdmin;
+  const isAdmin = canManageBlog();
   let post = null;
   if (id) {
     const { data, error } = await sb.from('blog_posts').select('*').eq('id', id).maybeSingle();
@@ -7947,12 +7976,14 @@ async function showBlogPostDetail(id) {
     document.getElementById('bp-body').value = post?.body || '';
     document.getElementById('bp-status').value = post?.status || 'draft';
     document.getElementById('bp-cover-preview').innerHTML = post?.cover_image_url ? `<img src="${post.cover_image_url}" style="max-width:100%;border-radius:8px;display:block" alt="">` : '';
+    await renderBpTagChips(post?.tags || []);
   } else {
     editBody.style.display = 'none';
     viewBody.style.display = '';
     viewBody.innerHTML = `
       ${post.cover_image_url ? `<img src="${post.cover_image_url}" style="width:100%;border-radius:10px;margin-bottom:1rem" alt="">` : ''}
       <p style="font-size:11px;color:var(--muted);margin-bottom:10px">${apFmtDate(post.published_at || post.created_at)}</p>
+      ${(post.tags || []).length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${post.tags.map(t => `<span class="chip">${escapeAttr(t)}</span>`).join('')}</div>` : ''}
       <div style="font-size:13.5px;color:var(--ink);line-height:1.7;white-space:pre-wrap">${post.body || ''}</div>
     `;
   }
@@ -7960,7 +7991,7 @@ async function showBlogPostDetail(id) {
 
 async function uploadBlogCover(input) {
   const file = input.files[0];
-  if (!file || !currentUser?.isAdmin) return;
+  if (!file || !canManageBlog()) return;
   let toUpload = file;
   try { toUpload = await compressImage(file, 1200, 0.85); } catch (e) { console.warn('compressImage copertina fallita', e); }
   const path = `blog/${currentBlogPostId || 'new-' + Date.now()}-${Date.now()}.jpg`;
@@ -7979,20 +8010,21 @@ async function uploadBlogCover(input) {
 }
 
 async function saveBlogPost() {
-  if (!currentUser?.isAdmin) return;
+  if (!canManageBlog()) return;
   const g = id => document.getElementById(id)?.value.trim() || null;
   const title = g('bp-title');
   if (!title) { toastErr('Il titolo è obbligatorio'); return; }
   const status = document.getElementById('bp-status').value;
   const row = {
     title, body: g('bp-body'), status,
+    tags: [...bpSelectedTags],
     published_at: status === 'published' ? (currentBlogPostData?.published_at || new Date().toISOString()) : null,
     updated_at: new Date().toISOString(),
   };
   let data, error;
   if (currentBlogPostId) {
     ({ data, error } = await sb.from('blog_posts').update(row).eq('id', currentBlogPostId).select('id'));
-    if (!error && !data?.length) { toastErr('Salvataggio non riuscito: verifica di essere admin.'); return; }
+    if (!error && !data?.length) { toastErr('Salvataggio non riuscito: verifica di essere admin o editor del blog.'); return; }
   } else {
     row.created_by = currentUser.id;
     row.cover_image_url = pendingBlogCoverUrl;
@@ -8004,7 +8036,7 @@ async function saveBlogPost() {
 }
 
 async function deleteBlogPost() {
-  if (!currentUser?.isAdmin || !currentBlogPostId) return;
+  if (!canManageBlog() || !currentBlogPostId) return;
   if (!confirm('Eliminare questo articolo? Non è reversibile.')) return;
   const { error } = await sb.from('blog_posts').delete().eq('id', currentBlogPostId);
   if (error) { toastErr('Errore eliminazione: ' + error.message); return; }
@@ -9050,7 +9082,7 @@ Object.assign(window, {
   renderEventsList, updateEventsProvinceFilterOptions, toggleShowPastEvents, toggleEventFavorite,
   showConfigListsScreen, selectConfigList, addConfigListValue, removeConfigListValue,
   showApprofondisciScreen, showApBlogScreen, showApEnologiaScreen, setApEnologiaView,
-  showBlogPostDetail, saveBlogPost, deleteBlogPost, uploadBlogCover,
+  showBlogPostDetail, saveBlogPost, deleteBlogPost, uploadBlogCover, toggleBpTagChip,
   showGrapeVarietyDetail, saveGrapeVariety, deleteGrapeVariety, searchGrapeVarieties, toggleApColorFilter,
   showDenominationDetail, saveDenomination, deleteDenomination, searchDenominations, toggleApTypeFilter, toggleDenomRegionMenu, toggleDnVersionChip, toggleDenomSortMenu,
   cycleDnGrapeBound, updateDnGrapePct, removeDnGrapeTag,

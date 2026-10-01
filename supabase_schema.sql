@@ -2661,3 +2661,63 @@ alter table public.wine_denominations add column if not exists aromas text[] not
 alter table public.wine_denominations alter column aromas type text using array_to_string(aromas, ', ');
 alter table public.wine_denominations alter column aromas drop not null;
 alter table public.wine_denominations alter column aromas drop default;
+
+-- ════════════════════════════════════════════════════════════════
+-- Tag articoli blog (es. "Area", "Vitigno", "Degustazione"…),
+-- multi-valore, gestiti dall'admin da Profilo → Configurazione liste
+-- (config_lists, stesso meccanismo già usato per categoria/
+-- associazioni evento e versione denominazione).
+-- ════════════════════════════════════════════════════════════════
+alter table public.blog_posts add column if not exists tags text[] not null default '{}';
+
+insert into public.config_lists (list_key, value, sort_order) values
+  ('blog_tag', 'Area', 0),
+  ('blog_tag', 'Vitigno', 1),
+  ('blog_tag', 'Degustazione', 2),
+  ('blog_tag', 'Abbinamento', 3),
+  ('blog_tag', 'Notizie', 4)
+on conflict (list_key, value) do nothing;
+
+-- ════════════════════════════════════════════════════════════════
+-- Ruolo "Editor": può gestire il blog (vedere le bozze, scrivere,
+-- pubblicare, eliminare articoli) senza i permessi pieni di un admin
+-- sul resto dell'app — stessa meccanica di is_admin(), una seconda
+-- colonna/funzione dedicata, usata solo dalle policy di blog_posts.
+-- Si assegna a mano come is_admin (vedi commento più sopra):
+--   update public.profiles set is_editor = true
+--   where id = (select id from auth.users where email = 'EMAIL-EDITOR@esempio.it');
+-- ════════════════════════════════════════════════════════════════
+alter table public.profiles add column if not exists is_editor boolean not null default false;
+
+create or replace function public.is_editor()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce((select p.is_editor from public.profiles p where p.id = auth.uid()), false);
+$$;
+revoke all on function public.is_editor() from public, anon;
+grant execute on function public.is_editor() to authenticated;
+
+drop policy if exists "blog_posts: lettura pubblicati o admin" on public.blog_posts;
+create policy "blog_posts: lettura pubblicati o admin/editor"
+  on public.blog_posts for select to authenticated
+  using (status = 'published' or public.is_admin() or public.is_editor());
+
+drop policy if exists "blog_posts: scrittura solo admin" on public.blog_posts;
+create policy "blog_posts: scrittura admin o editor"
+  on public.blog_posts for all to authenticated
+  using (public.is_admin() or public.is_editor()) with check (public.is_admin() or public.is_editor());
+
+drop policy if exists "wine-labels: admin scrive le copertine blog" on storage.objects;
+create policy "wine-labels: admin o editor scrive le copertine blog"
+  on storage.objects for insert to authenticated
+  with check (bucket_id = 'wine-labels' and (storage.foldername(name))[1] = 'blog' and (public.is_admin() or public.is_editor()));
+
+drop policy if exists "wine-labels: admin aggiorna le copertine blog" on storage.objects;
+create policy "wine-labels: admin o editor aggiorna le copertine blog"
+  on storage.objects for update to authenticated
+  using (bucket_id = 'wine-labels' and (storage.foldername(name))[1] = 'blog' and (public.is_admin() or public.is_editor()))
+  with check (bucket_id = 'wine-labels' and (storage.foldername(name))[1] = 'blog' and (public.is_admin() or public.is_editor()));
