@@ -1754,7 +1754,10 @@
     <div id="bp-edit-body" style="display:none">
       <div class="fg"><label>Titolo *</label><input type="text" id="bp-title" placeholder="Titolo dell'articolo"></div>
       <div class="fg"><label>Autore</label>
-        <select id="bp-author-id"><option value="">— seleziona —</option></select>
+        <div style="display:flex;gap:8px;align-items:center">
+          <select id="bp-author-id" style="flex:1" onchange="updateBpAuthorAssocBadge()"><option value="">— seleziona —</option></select>
+          <span id="bp-author-assoc-badge"></span>
+        </div>
       </div>
       <div class="fg"><label>Breve descrizione</label><textarea id="bp-excerpt" rows="2" placeholder="Anteprima mostrata nell'elenco articoli…"></textarea></div>
       <div class="fg"><label>Copertina</label>
@@ -8073,6 +8076,19 @@ async function loadBlogAuthorOptions(selectedId) {
     `<option value="${u.id}" data-name="${escapeAttr(u.full_name || '')}" data-assoc="${escapeAttr(u.assoc || '')}">${escapeAttr(u.full_name || 'Senza nome')}${u.assoc ? ' · ' + escapeAttr(u.assoc) : ''}</option>`
   ).join('');
   sel.value = selectedId || '';
+  updateBpAuthorAssocBadge();
+}
+
+// Icona dell'associazione accanto alla select Autore, aggiornata ad
+// ogni cambio di selezione (oltre che al primo popolamento) — stesso
+// stile .assoc-badge già usato in elenco e nella vista di lettura.
+function updateBpAuthorAssocBadge() {
+  const badge = document.getElementById('bp-author-assoc-badge');
+  if (!badge) return;
+  const sel = document.getElementById('bp-author-id');
+  const opt = sel?.options[sel.selectedIndex];
+  const assoc = opt?.dataset.assoc;
+  badge.innerHTML = assoc ? `<span class="assoc-badge badge-${assoc.toLowerCase()}">${escapeAttr(assoc)}</span>` : '';
 }
 
 async function showBlogPostDetail(id) {
@@ -9314,7 +9330,7 @@ Object.assign(window, {
   showConfigListsScreen, selectConfigList, addConfigListValue, removeConfigListValue,
   showApprofondisciScreen, showApBlogScreen, showApEnologiaScreen, setApEnologiaView,
   showBlogPostDetail, saveBlogPost, deleteBlogPost, uploadBlogCover, toggleBpTagChip,
-  toggleBlogTagMenu, toggleBlogStatusMenu, toggleBlogSortMenu, toggleBlogPreview,
+  toggleBlogTagMenu, toggleBlogStatusMenu, toggleBlogSortMenu, toggleBlogPreview, updateBpAuthorAssocBadge,
   showGrapeVarietyDetail, saveGrapeVariety, deleteGrapeVariety, searchGrapeVarieties, toggleApColorFilter,
   showDenominationDetail, saveDenomination, deleteDenomination, searchDenominations, toggleApTypeFilter, toggleDenomRegionMenu, toggleDnVersionChip, toggleDenomSortMenu,
   cycleDnGrapeBound, updateDnGrapePct, removeDnGrapeTag,
