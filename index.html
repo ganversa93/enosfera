@@ -777,9 +777,9 @@
     .blog-card-img { width: 42%; flex-shrink: 0; aspect-ratio: 4 / 3; border-radius: 10px; overflow: hidden; background: var(--wine-pale); }
     .blog-card-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .blog-card-img-ph { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: var(--wine); font-size: 22px; }
-    .blog-card-body { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 5px; }
+    .blog-card-body { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: flex-start; gap: 5px; }
     .blog-card-title { font-family: 'Cormorant Garamond', serif; font-size: 17px; color: var(--ink); line-height: 1.25; }
-    .blog-card-byline { font-size: 11.5px; color: var(--muted); display: flex; align-items: center; gap: 5px; }
+    .blog-card-byline { font-size: 11.5px; color: var(--muted); display: flex; align-items: center; justify-content: flex-end; gap: 5px; margin-top: auto; align-self: flex-end; }
     .blog-card-excerpt {
       font-size: 12px; color: var(--muted); line-height: 1.45;
       display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
@@ -1723,19 +1723,13 @@
     <div class="nav" style="margin-bottom:1.1rem">
       <button class="btn sm" onclick="showScreen('screen-ap-blog')"><i class="ti ti-arrow-left"></i>Blog</button>
       <span id="bp-title-nav" style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--ink)">Articolo</span>
+      <button class="btn sm" id="bp-preview-btn" style="display:none" onclick="toggleBlogPreview()"><i class="ti ti-eye"></i>Visualizza</button>
     </div>
     <div id="bp-view-body"></div>
     <div id="bp-edit-body" style="display:none">
       <div class="fg"><label>Titolo *</label><input type="text" id="bp-title" placeholder="Titolo dell'articolo"></div>
-      <div class="fg"><label>Autore</label><input type="text" id="bp-author" placeholder="Nome mostrato ai lettori"></div>
-      <div class="fg"><label>Associazione autore</label>
-        <select id="bp-author-assoc">
-          <option value="">Nessuna</option>
-          <option value="AIS">AIS</option>
-          <option value="FISAR">FISAR</option>
-          <option value="ONAV">ONAV</option>
-          <option value="FIS">FIS</option>
-        </select>
+      <div class="fg"><label>Autore</label>
+        <select id="bp-author-id"><option value="">— seleziona —</option></select>
       </div>
       <div class="fg"><label>Breve descrizione</label><textarea id="bp-excerpt" rows="2" placeholder="Anteprima mostrata nell'elenco articoli…"></textarea></div>
       <div class="fg"><label>Copertina</label>
@@ -8015,9 +8009,11 @@ async function loadBlogPosts() {
       <div class="blog-card" onclick="showBlogPostDetail('${p.id}')">
         <div class="blog-card-img">${p.cover_image_url ? `<img src="${p.cover_image_url}" alt="">` : '<div class="blog-card-img-ph"><i class="ti ti-news"></i></div>'}</div>
         <div class="blog-card-body">
-          <div class="blog-card-title">${escapeAttr(p.title)}${p.status === 'draft' ? ' <span class="chip">Bozza</span>' : ''}</div>
+          <div>
+            <div class="blog-card-title">${escapeAttr(p.title)}${p.status === 'draft' ? ' <span class="chip">Bozza</span>' : ''}</div>
+            ${p.excerpt ? `<div class="blog-card-excerpt">${escapeAttr(p.excerpt)}</div>` : ''}
+          </div>
           ${p.author_name ? `<div class="blog-card-byline">${escapeAttr(p.author_name)}${p.author_assoc ? ` <span class="assoc-badge badge-${p.author_assoc.toLowerCase()}">${escapeAttr(p.author_assoc)}</span>` : ''}</div>` : ''}
-          ${p.excerpt ? `<div class="blog-card-excerpt">${escapeAttr(p.excerpt)}</div>` : ''}
         </div>
       </div>`).join('')
     : `<div style="text-align:center;padding:2rem;color:var(--muted)">${canManageBlog() ? 'Nessun articolo ancora — crea il primo con "Nuovo articolo"' : 'Nessun articolo ancora'}</div>`;
@@ -8036,6 +8032,22 @@ async function renderBpTagChips(selected) {
 function toggleBpTagChip(value, el) {
   if (bpSelectedTags.has(value)) { bpSelectedTags.delete(value); el.classList.remove('active'); }
   else { bpSelectedTags.add(value); el.classList.add('active'); }
+}
+
+// Popola la select Autore con gli utenti admin/editor (list_blog_authors,
+// SECURITY DEFINER: i profili altrui non sono leggibili via RLS se non
+// in contesti specifici, vedi commento in supabase_schema.sql). Nome e
+// associazione vengono letti dalle option (data-name/data-assoc) al
+// salvataggio, invece che digitati a mano.
+async function loadBlogAuthorOptions(selectedId) {
+  const sel = document.getElementById('bp-author-id');
+  if (!sel) return;
+  const { data, error } = await sb.rpc('list_blog_authors');
+  if (error) { console.warn('list_blog_authors', error); return; }
+  sel.innerHTML = '<option value="">— seleziona —</option>' + (data || []).map(u =>
+    `<option value="${u.id}" data-name="${escapeAttr(u.full_name || '')}" data-assoc="${escapeAttr(u.assoc || '')}">${escapeAttr(u.full_name || 'Senza nome')}${u.assoc ? ' · ' + escapeAttr(u.assoc) : ''}</option>`
+  ).join('');
+  sel.value = selectedId || '';
 }
 
 async function showBlogPostDetail(id) {
@@ -8058,13 +8070,16 @@ async function showBlogPostDetail(id) {
   }
   document.getElementById('bp-title-nav').textContent = post ? post.title : 'Nuovo articolo';
   document.getElementById('bp-delete-btn').style.display = (isAdmin && post) ? '' : 'none';
+  bpPreviewMode = false;
+  const previewBtn = document.getElementById('bp-preview-btn');
+  previewBtn.style.display = (isAdmin && post) ? '' : 'none';
+  previewBtn.innerHTML = '<i class="ti ti-eye"></i>Visualizza';
 
   if (isAdmin) {
     viewBody.style.display = 'none';
     editBody.style.display = '';
     document.getElementById('bp-title').value = post?.title || '';
-    document.getElementById('bp-author').value = post?.author_name || (post ? '' : (currentUser.name || ''));
-    document.getElementById('bp-author-assoc').value = post?.author_assoc || (post ? '' : (currentUser.assoc || ''));
+    await loadBlogAuthorOptions(post?.author_id || (post ? '' : currentUser.id));
     document.getElementById('bp-excerpt').value = post?.excerpt || '';
     document.getElementById('bp-body').value = post?.body || '';
     document.getElementById('bp-status').value = post?.status || 'draft';
@@ -8073,12 +8088,38 @@ async function showBlogPostDetail(id) {
   } else {
     editBody.style.display = 'none';
     viewBody.style.display = '';
-    viewBody.innerHTML = `
-      ${post.cover_image_url ? `<img src="${post.cover_image_url}" style="width:100%;border-radius:10px;margin-bottom:1rem" alt="">` : ''}
-      <p style="font-size:11px;color:var(--muted);margin-bottom:10px;display:flex;align-items:center;gap:5px;flex-wrap:wrap">${post.author_name ? `<span>${escapeAttr(post.author_name)}</span>${post.author_assoc ? `<span class="assoc-badge badge-${post.author_assoc.toLowerCase()}">${escapeAttr(post.author_assoc)}</span>` : ''}<span>·</span>` : ''}<span>${apFmtDate(post.published_at || post.created_at)}</span></p>
-      ${(post.tags || []).length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${post.tags.map(t => `<span class="chip">${escapeAttr(t)}</span>`).join('')}</div>` : ''}
-      <div style="font-size:13.5px;color:var(--ink);line-height:1.7;white-space:pre-wrap">${post.body || ''}</div>
-    `;
+    viewBody.innerHTML = renderBlogPublicView(post);
+  }
+}
+
+// Markup della vista di lettura, condiviso tra il lettore pubblico e
+// l'anteprima "Visualizza" che admin/editor usano dal form di modifica
+// per controllare il risultato finale senza dover uscire dall'account.
+function renderBlogPublicView(post) {
+  return `
+    ${post.cover_image_url ? `<img src="${post.cover_image_url}" style="width:100%;border-radius:10px;margin-bottom:1rem" alt="">` : ''}
+    <p style="font-size:11px;color:var(--muted);margin-bottom:10px;display:flex;align-items:center;gap:5px;flex-wrap:wrap">${post.author_name ? `<span>${escapeAttr(post.author_name)}</span>${post.author_assoc ? `<span class="assoc-badge badge-${post.author_assoc.toLowerCase()}">${escapeAttr(post.author_assoc)}</span>` : ''}<span>·</span>` : ''}<span>${apFmtDate(post.published_at || post.created_at)}</span></p>
+    ${(post.tags || []).length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${post.tags.map(t => `<span class="chip">${escapeAttr(t)}</span>`).join('')}</div>` : ''}
+    <div style="font-size:13.5px;color:var(--ink);line-height:1.7;white-space:pre-wrap">${post.body || ''}</div>
+  `;
+}
+
+let bpPreviewMode = false;
+function toggleBlogPreview() {
+  if (!currentBlogPostData) return;
+  bpPreviewMode = !bpPreviewMode;
+  const viewBody = document.getElementById('bp-view-body');
+  const editBody = document.getElementById('bp-edit-body');
+  const btn = document.getElementById('bp-preview-btn');
+  if (bpPreviewMode) {
+    editBody.style.display = 'none';
+    viewBody.style.display = '';
+    viewBody.innerHTML = renderBlogPublicView(currentBlogPostData);
+    btn.innerHTML = '<i class="ti ti-pencil"></i>Modifica';
+  } else {
+    viewBody.style.display = 'none';
+    editBody.style.display = '';
+    btn.innerHTML = '<i class="ti ti-eye"></i>Visualizza';
   }
 }
 
@@ -8108,10 +8149,13 @@ async function saveBlogPost() {
   const title = g('bp-title');
   if (!title) { toastErr('Il titolo è obbligatorio'); return; }
   const status = document.getElementById('bp-status').value;
+  const authorSel = document.getElementById('bp-author-id');
+  const authorOpt = authorSel?.options[authorSel.selectedIndex];
   const row = {
     title, body: g('bp-body'), status,
-    author_name: g('bp-author'),
-    author_assoc: document.getElementById('bp-author-assoc')?.value || null,
+    author_id: authorSel?.value || null,
+    author_name: authorOpt?.dataset.name || null,
+    author_assoc: authorOpt?.dataset.assoc || null,
     excerpt: g('bp-excerpt'),
     tags: [...bpSelectedTags],
     published_at: status === 'published' ? (currentBlogPostData?.published_at || new Date().toISOString()) : null,
@@ -9179,7 +9223,7 @@ Object.assign(window, {
   showConfigListsScreen, selectConfigList, addConfigListValue, removeConfigListValue,
   showApprofondisciScreen, showApBlogScreen, showApEnologiaScreen, setApEnologiaView,
   showBlogPostDetail, saveBlogPost, deleteBlogPost, uploadBlogCover, toggleBpTagChip,
-  toggleBlogTagMenu, toggleBlogStatusMenu, toggleBlogSortMenu,
+  toggleBlogTagMenu, toggleBlogStatusMenu, toggleBlogSortMenu, toggleBlogPreview,
   showGrapeVarietyDetail, saveGrapeVariety, deleteGrapeVariety, searchGrapeVarieties, toggleApColorFilter,
   showDenominationDetail, saveDenomination, deleteDenomination, searchDenominations, toggleApTypeFilter, toggleDenomRegionMenu, toggleDnVersionChip, toggleDenomSortMenu,
   cycleDnGrapeBound, updateDnGrapePct, removeDnGrapeTag,

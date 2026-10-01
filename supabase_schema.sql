@@ -2747,3 +2747,36 @@ alter table public.blog_posts add column if not exists author_name text;
 -- profiles per restare indipendente da chi pubblica la riga.
 -- ════════════════════════════════════════════════════════════════
 alter table public.blog_posts add column if not exists author_assoc text;
+
+-- ════════════════════════════════════════════════════════════════
+-- Autore selezionato dalla lista utenti (admin/editor) invece di
+-- testo libero: author_id è il riferimento vero, author_name/
+-- author_assoc restano come "fotografia" del nome/associazione al
+-- momento della scelta (letti da tutti via la RLS di blog_posts,
+-- senza dover rendere leggibile il profilo a chiunque). La RPC sotto
+-- serve solo a chi scrive l'articolo (admin/editor) per popolare
+-- l'elenco da cui scegliere, dato che leggere i profili altrui non è
+-- permesso in RLS se non in contesti specifici (vedi profiles RLS).
+-- ════════════════════════════════════════════════════════════════
+alter table public.blog_posts add column if not exists author_id uuid references public.profiles(id);
+
+create or replace function public.list_blog_authors()
+returns table (id uuid, full_name text, assoc text)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  if not (public.is_admin() or public.is_editor()) then
+    raise exception 'not authorized';
+  end if;
+  return query
+    select p.id, p.full_name, p.assoc
+    from public.profiles p
+    where p.is_admin or p.is_editor
+    order by p.full_name;
+end;
+$$;
+revoke all on function public.list_blog_authors() from public, anon;
+grant execute on function public.list_blog_authors() to authenticated;
