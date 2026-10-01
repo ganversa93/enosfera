@@ -767,6 +767,22 @@
       font-size: 12.5px; color: var(--ink); line-height: 1.5;
       display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
     }
+    /* ── BLOG ── */
+    .blog-card {
+      display: flex; gap: 12px; background: var(--bg); border: 0.5px solid var(--border);
+      border-radius: 14px; padding: 10px; margin-bottom: 10px; cursor: pointer;
+      transition: transform .15s, border-color .15s;
+    }
+    .blog-card:hover { border-color: var(--wine); transform: translateY(-2px); }
+    .blog-card-img { width: 42%; flex-shrink: 0; aspect-ratio: 4 / 3; border-radius: 10px; overflow: hidden; background: var(--wine-pale); }
+    .blog-card-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .blog-card-img-ph { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: var(--wine); font-size: 22px; }
+    .blog-card-body { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
+    .blog-card-title { font-family: 'Cormorant Garamond', serif; font-size: 17px; color: var(--ink); line-height: 1.25; }
+    .blog-card-excerpt {
+      font-size: 12px; color: var(--muted); line-height: 1.45;
+      display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+    }
     .event-fav-btn {
       position: absolute; top: .85rem; right: .85rem; background: none; border: 0; cursor: pointer;
       font-size: 19px; color: var(--border); padding: 4px; line-height: 1; z-index: 1;
@@ -1699,6 +1715,7 @@
     <div id="bp-view-body"></div>
     <div id="bp-edit-body" style="display:none">
       <div class="fg"><label>Titolo *</label><input type="text" id="bp-title" placeholder="Titolo dell'articolo"></div>
+      <div class="fg"><label>Breve descrizione</label><textarea id="bp-excerpt" rows="2" placeholder="Anteprima mostrata nell'elenco articoli…"></textarea></div>
       <div class="fg"><label>Copertina</label>
         <div id="bp-cover-preview"></div>
         <input type="file" accept="image/*" onchange="uploadBlogCover(this)">
@@ -7920,15 +7937,17 @@ function canManageBlog() {
 async function loadBlogPosts() {
   const list = document.getElementById('ap-blog-list');
   list.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--muted)">Caricamento…</div>';
-  const { data, error } = await sb.from('blog_posts').select('id,title,status,tags').order('created_at', { ascending: false }).limit(50);
+  const { data, error } = await sb.from('blog_posts').select('id,title,status,tags,excerpt,cover_image_url').order('created_at', { ascending: false }).limit(50);
   if (error) { list.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--muted)">Errore caricamento</div>'; return; }
   list.innerHTML = data?.length
     ? data.map(p => `
-      <div class="winery-row" onclick="showBlogPostDetail('${p.id}')">
-        <div class="winery-row-name"><i class="ti ti-news"></i>${escapeAttr(p.title)}${p.status === 'draft' ? ' <span class="chip">Bozza</span>' : ''}
-          ${(p.tags || []).map(t => `<span class="chip">${escapeAttr(t)}</span>`).join('')}
+      <div class="blog-card" onclick="showBlogPostDetail('${p.id}')">
+        <div class="blog-card-img">${p.cover_image_url ? `<img src="${p.cover_image_url}" alt="">` : '<div class="blog-card-img-ph"><i class="ti ti-news"></i></div>'}</div>
+        <div class="blog-card-body">
+          <div class="blog-card-title">${escapeAttr(p.title)}${p.status === 'draft' ? ' <span class="chip">Bozza</span>' : ''}</div>
+          ${(p.tags || []).length ? `<div style="display:flex;gap:4px;flex-wrap:wrap">${p.tags.map(t => `<span class="chip">${escapeAttr(t)}</span>`).join('')}</div>` : ''}
+          ${p.excerpt ? `<div class="blog-card-excerpt">${escapeAttr(p.excerpt)}</div>` : ''}
         </div>
-        <i class="ti ti-chevron-right"></i>
       </div>`).join('')
     : `<div style="text-align:center;padding:2rem;color:var(--muted)">${canManageBlog() ? 'Nessun articolo ancora — crea il primo con "Nuovo articolo"' : 'Nessun articolo ancora'}</div>`;
 }
@@ -7973,6 +7992,7 @@ async function showBlogPostDetail(id) {
     viewBody.style.display = 'none';
     editBody.style.display = '';
     document.getElementById('bp-title').value = post?.title || '';
+    document.getElementById('bp-excerpt').value = post?.excerpt || '';
     document.getElementById('bp-body').value = post?.body || '';
     document.getElementById('bp-status').value = post?.status || 'draft';
     document.getElementById('bp-cover-preview').innerHTML = post?.cover_image_url ? `<img src="${post.cover_image_url}" style="max-width:100%;border-radius:8px;display:block" alt="">` : '';
@@ -8017,6 +8037,7 @@ async function saveBlogPost() {
   const status = document.getElementById('bp-status').value;
   const row = {
     title, body: g('bp-body'), status,
+    excerpt: g('bp-excerpt'),
     tags: [...bpSelectedTags],
     published_at: status === 'published' ? (currentBlogPostData?.published_at || new Date().toISOString()) : null,
     updated_at: new Date().toISOString(),

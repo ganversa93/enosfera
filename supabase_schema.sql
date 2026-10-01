@@ -2721,3 +2721,10 @@ create policy "wine-labels: admin o editor aggiorna le copertine blog"
   on storage.objects for update to authenticated
   using (bucket_id = 'wine-labels' and (storage.foldername(name))[1] = 'blog' and (public.is_admin() or public.is_editor()))
   with check (bucket_id = 'wine-labels' and (storage.foldername(name))[1] = 'blog' and (public.is_admin() or public.is_editor()));
+
+-- ════════════════════════════════════════════════════════════════
+-- Breve descrizione per l'anteprima dell'articolo nell'elenco blog
+-- (titolo + immagine + queste due righe), distinta dal corpo
+-- completo mostrato nel dettaglio.
+-- ════════════════════════════════════════════════════════════════
+alter table public.blog_posts add column if not exists excerpt text;
