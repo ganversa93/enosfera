@@ -244,16 +244,18 @@
     .dn-list-head, .dn-list-row { display: flex; align-items: center; gap: 12px; padding: 10px 4px; border-bottom: 0.5px solid var(--border); }
     .dn-list-row { cursor: pointer; }
     .dn-list-head { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 500; }
-    .dn-list-name { flex: 1.3; min-width: 0; font-size: 13.5px; color: var(--ink); text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .dn-list-region { flex: 1; min-width: 0; font-size: 12.5px; color: var(--muted); text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .dn-list-head .dn-list-name, .dn-list-head .dn-list-region { color: var(--muted); font-size: 10px; }
-    .dn-list-tags { flex: 1.3; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-start; }
-    @media (max-width: 560px) {
+    .dn-list-name { flex: 1.8; min-width: 0; font-size: 13.5px; color: var(--ink); text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dn-list-region { flex: 0.9; min-width: 0; font-size: 12.5px; color: var(--muted); text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dn-list-type { flex: 0.5; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-start; }
+    .dn-list-head .dn-list-name, .dn-list-head .dn-list-region, .dn-list-head .dn-list-type { color: var(--muted); font-size: 10px; }
+    .dn-list-tags { flex: 0.9; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-start; }
+    @media (max-width: 620px) {
       .dn-list-head { display: none; }
       .dn-list-row { flex-wrap: wrap; }
       .dn-list-name { flex: 1 1 100%; white-space: normal; }
       .dn-list-region { order: 2; }
-      .dn-list-tags { order: 3; justify-content: flex-end; }
+      .dn-list-type { order: 3; }
+      .dn-list-tags { order: 4; justify-content: flex-end; }
     }
     .winfo { padding: 11px 13px; }
     .wname { font-family: 'Cormorant Garamond', serif; font-size: 14px; font-weight: 500; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -9163,15 +9165,16 @@ function searchDenominations() {
       ? `<div class="dn-list-head">
           <div class="dn-list-name">Denominazione</div>
           <div class="dn-list-region">Regione</div>
+          <div class="dn-list-type">Tipo</div>
           <div class="dn-list-tags">Tag</div>
         </div>` +
         data.map(d => `
         <div class="dn-list-row" onclick="showDenominationDetail('${d.id}')">
           <div class="dn-list-name">${escapeAttr(d.name)}</div>
           <div class="dn-list-region">${d.region ? escapeAttr(d.region) : '—'}</div>
+          <div class="dn-list-type">${d.type ? `<span class="${d.type === 'DOCG' ? 'premium-pill' : 'chip'}">${d.type}</span>` : ''}</div>
           <div class="dn-list-tags">
             ${(d.versions || []).map(v => `<span class="gbadge ${denomVersionBadgeClass(v)}">${escapeAttr(v)}</span>`).join('')}
-            ${d.type ? `<span class="${d.type === 'DOCG' ? 'premium-pill' : 'chip'}">${d.type}</span>` : ''}
           </div>
         </div>`).join('')
       : '<div style="text-align:center;padding:2rem;color:var(--muted)">Nessuna denominazione trovata</div>';
