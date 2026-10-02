@@ -233,6 +233,12 @@
        .wbadge (bb/bro/br/bs, riferiti al tipo vino) ma senza position:
        absolute, adatti a una riga di lista invece che a una card. */
     .gbadge { display: inline-flex; align-items: center; font-size: 10px; font-weight: 600; padding: 3px 9px; border-radius: 20px; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.25); white-space: nowrap; }
+    /* Vista di lettura Denominazione/Vitigno — tabella etichetta/valore a
+       righe, invece di un blocco titolo+paragrafo per ogni campo. */
+    .dn-table { border-top: 0.5px solid var(--border); margin-top: .9rem; }
+    .dn-row { display: flex; gap: 14px; padding: 9px 0; border-bottom: 0.5px solid var(--border); font-size: 12.5px; }
+    .dn-row-label { flex: 0 0 112px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .03em; padding-top: 1px; display: flex; align-items: center; gap: 4px; }
+    .dn-row-val { flex: 1; min-width: 0; color: var(--ink); white-space: pre-wrap; line-height: 1.5; }
     .winfo { padding: 11px 13px; }
     .wname { font-family: 'Cormorant Garamond', serif; font-size: 14px; font-weight: 500; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .wprod { font-size: 11px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1730,6 +1736,7 @@
     <div class="nav" style="margin-bottom:1.1rem">
       <button class="btn sm" onclick="showScreen('screen-ap-enologia')"><i class="ti ti-arrow-left"></i>Enologia Italiana</button>
       <span id="dn-title" style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--ink)">Denominazione</span>
+      <button class="btn sm" id="dn-preview-btn" style="display:none" onclick="toggleDenomPreview()"><i class="ti ti-eye"></i>Visualizza</button>
     </div>
     <div id="dn-view-body"></div>
     <div id="dn-edit-body" style="display:none">
@@ -8556,6 +8563,7 @@ let apDenomSearchTimer = null;
 let apDenomTypeFilters = new Set();
 let currentGrapeVarietyId = null;
 let currentDenominationId = null;
+let currentDenominationData = null;
 let currentBlogPostId = null;
 let currentBlogPostData = null;
 let pendingBlogCoverUrl = null;
@@ -9171,6 +9179,7 @@ function toggleDnVersionChip(value, el) {
 
 async function showDenominationDetail(id) {
   currentDenominationId = id;
+  currentDenominationData = null;
   showScreen('screen-denom-detail');
   const viewBody = document.getElementById('dn-view-body');
   const editBody = document.getElementById('dn-edit-body');
@@ -9180,12 +9189,17 @@ async function showDenominationDetail(id) {
     const { data, error } = await sb.from('wine_denominations').select('*').eq('id', id).maybeSingle();
     if (error || !data) { toastErr('Denominazione non trovata'); showScreen('screen-ap-enologia'); return; }
     dn = data;
+    currentDenominationData = data;
   } else if (!isAdmin) {
     showScreen('screen-ap-enologia');
     return;
   }
   document.getElementById('dn-title').textContent = dn ? dn.name : 'Nuova denominazione';
   document.getElementById('dn-delete-btn').style.display = (isAdmin && dn) ? '' : 'none';
+  dnPreviewMode = false;
+  const dnPreviewBtn = document.getElementById('dn-preview-btn');
+  dnPreviewBtn.style.display = (isAdmin && dn) ? '' : 'none';
+  dnPreviewBtn.innerHTML = '<i class="ti ti-eye"></i>Visualizza';
 
   if (isAdmin) {
     viewBody.style.display = 'none';
@@ -9210,24 +9224,47 @@ async function showDenominationDetail(id) {
   } else {
     editBody.style.display = 'none';
     viewBody.style.display = '';
-    viewBody.innerHTML = `
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem">
-        ${(dn.versions || []).map(v => `<span class="gbadge ${denomVersionBadgeClass(v)}">${escapeAttr(v)}</span>`).join('')}
-        ${dn.type ? `<span class="${dn.type === 'DOCG' ? 'premium-pill' : 'chip'}">${dn.type}</span>` : ''}
-      </div>
-      ${dn.region ? `<p style="font-size:12.5px;color:var(--muted)"><i class="ti ti-map-pin"></i> ${escapeAttr(dn.region)}</p>` : ''}
-      ${dn.grapes ? `<div style="margin-top:1rem"><div class="stitle" style="font-size:12px"><i class="ti ti-leaf"></i>Vitigni</div><p style="font-size:13px;color:var(--ink);margin-top:6px;white-space:pre-wrap">${escapeAttr(dn.grapes)}</p></div>` : ''}
-      ${dn.aging ? `<div style="margin-top:1rem"><div class="stitle" style="font-size:12px"><i class="ti ti-clock"></i>Affinamento</div><p style="font-size:13px;color:var(--ink);margin-top:6px;white-space:pre-wrap">${escapeAttr(dn.aging)}</p></div>` : ''}
-      ${DN_PARAM_KEYS.some(k => dn[k]) ? `
-        <div style="margin-top:1rem">
-          <div class="stitle" style="font-size:12px"><i class="ti ti-chart-bar"></i>Profilo</div>
-          <div style="margin-top:6px">
-            ${DN_PARAM_KEYS.map(k => `<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:12.5px;color:var(--ink)"><span>${DN_PARAM_LABELS[k]}</span><span>${dnParamDots(dn[k])}</span></div>`).join('')}
-          </div>
-        </div>` : ''}
-      ${dn.aromas ? `<div style="margin-top:1rem"><div class="stitle" style="font-size:12px"><i class="ti ti-droplet"></i>Sentori principali</div><p style="font-size:13px;color:var(--ink);margin-top:6px;white-space:pre-wrap">${escapeAttr(dn.aromas)}</p></div>` : ''}
-      ${dn.characteristics ? `<div style="margin-top:1rem"><div class="stitle" style="font-size:12px"><i class="ti ti-list-details"></i>Note da disciplinare</div><p style="font-size:13px;color:var(--ink);margin-top:6px;white-space:pre-wrap">${escapeAttr(dn.characteristics)}</p></div>` : ''}
-    `;
+    viewBody.innerHTML = renderDenomPublicView(dn);
+  }
+}
+
+// Markup della vista di lettura, in forma tabellare (etichetta a sinistra,
+// valore a destra, una riga per campo) — condiviso tra il lettore pubblico
+// e l'anteprima "Visualizza" che l'admin usa dal form di modifica per
+// controllare il risultato finale senza uscire dalla modalità admin.
+function renderDenomPublicView(dn) {
+  const rows = [];
+  if (dn.region) rows.push(['Regione', escapeAttr(dn.region)]);
+  if (dn.grapes) rows.push(['Vitigni', escapeAttr(dn.grapes)]);
+  if (dn.aging) rows.push(['Affinamento', escapeAttr(dn.aging)]);
+  DN_PARAM_KEYS.forEach(k => { if (dn[k]) rows.push([DN_PARAM_LABELS[k], dnParamDots(dn[k])]); });
+  if (dn.aromas) rows.push(['Sentori principali', escapeAttr(dn.aromas)]);
+  if (dn.characteristics) rows.push(['Note da disciplinare', escapeAttr(dn.characteristics)]);
+  return `
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem">
+      ${(dn.versions || []).map(v => `<span class="gbadge ${denomVersionBadgeClass(v)}">${escapeAttr(v)}</span>`).join('')}
+      ${dn.type ? `<span class="${dn.type === 'DOCG' ? 'premium-pill' : 'chip'}">${dn.type}</span>` : ''}
+    </div>
+    ${rows.length ? `<div class="dn-table">${rows.map(([l, v]) => `<div class="dn-row"><div class="dn-row-label">${l}</div><div class="dn-row-val">${v}</div></div>`).join('')}</div>` : ''}
+  `;
+}
+
+let dnPreviewMode = false;
+function toggleDenomPreview() {
+  if (!currentDenominationData) return;
+  dnPreviewMode = !dnPreviewMode;
+  const viewBody = document.getElementById('dn-view-body');
+  const editBody = document.getElementById('dn-edit-body');
+  const btn = document.getElementById('dn-preview-btn');
+  if (dnPreviewMode) {
+    editBody.style.display = 'none';
+    viewBody.style.display = '';
+    viewBody.innerHTML = renderDenomPublicView(currentDenominationData);
+    btn.innerHTML = '<i class="ti ti-pencil"></i>Modifica';
+  } else {
+    viewBody.style.display = 'none';
+    editBody.style.display = '';
+    btn.innerHTML = '<i class="ti ti-eye"></i>Visualizza';
   }
 }
 
@@ -10015,7 +10052,7 @@ Object.assign(window, {
   showBlogPostDetail, saveBlogPost, deleteBlogPost, uploadBlogCover, toggleBpTagChip,
   toggleBlogTagMenu, toggleBlogStatusMenu, toggleBlogSortMenu, toggleBlogPreview, updateBpAuthorAssocBadge,
   showGrapeVarietyDetail, saveGrapeVariety, deleteGrapeVariety, searchGrapeVarieties, toggleApColorFilter,
-  showDenominationDetail, saveDenomination, deleteDenomination, searchDenominations, toggleApTypeFilter, toggleDenomRegionMenu, toggleDnVersionChip, toggleDenomSortMenu,
+  showDenominationDetail, saveDenomination, deleteDenomination, searchDenominations, toggleApTypeFilter, toggleDenomRegionMenu, toggleDnVersionChip, toggleDenomSortMenu, toggleDenomPreview,
   cycleDnGrapeBound, updateDnGrapePct, removeDnGrapeTag,
   addDnAgingRow, updateDnAgingRow, removeDnAgingRow, updateDnParam
 });
