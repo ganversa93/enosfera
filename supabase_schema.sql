@@ -2780,3 +2780,15 @@ end;
 $$;
 revoke all on function public.list_blog_authors() from public, anon;
 grant execute on function public.list_blog_authors() to authenticated;
+
+-- ════════════════════════════════════════════════════════════════
+-- Scheda ONAV ufficiale (metodo combinato centesimale) come schema di
+-- degustazione a sé stante, affiancato ad ais/fisar/fisar_desc/free —
+-- prima ONAV era agganciata al metodo "ais" per analogia (vedi
+-- deg_schema), ora ha i suoi 14 parametri (Vista/Olfatto/Gusto/
+-- Giudizio complessivo, 18+30+44+8=100 pt) e il proprio punteggio.
+-- Stesso trattamento di fisar_params/fisar_score/fp_note.
+-- ════════════════════════════════════════════════════════════════
+alter table public.wines add column if not exists onav_params jsonb;
+alter table public.wines add column if not exists onav_score integer;
+alter table public.wines add column if not exists onv_note text;

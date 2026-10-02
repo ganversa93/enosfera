@@ -44,6 +44,8 @@
       --ais-pale: #EAF0FB;
       --fisar: #1A5C3A;
       --fisar-pale: #E8F5EE;
+      --onav: #7A3A10;
+      --onav-pale: #F5E9DC;
       --ink: #2F3133;       /* Grafite — testo primario brand */
       --muted: #6B6E72;
       --border: rgba(107,24,57,0.15);
@@ -66,6 +68,7 @@
         --wine-pale: #3A1826;
         --ais-pale: #0A1528;
         --fisar-pale: #0A1F14;
+        --onav-pale: #2A1B0A;
       }
     }
     /* Tema scuro scelto manualmente dal profilo (indipendente dal tema di
@@ -82,6 +85,7 @@
       --wine-pale: #3A1826;
       --ais-pale: #0A1528;
       --fisar-pale: #0A1F14;
+      --onav-pale: #2A1B0A;
     }
 
     html { font-size: 16px; }
@@ -144,7 +148,7 @@
     .assoc-badge { font-size: 10px; font-weight: 500; padding: 2px 8px; border-radius: 20px; }
     .badge-ais    { background: var(--ais-pale); color: var(--ais); }
     .badge-fisar  { background: var(--fisar-pale); color: var(--fisar); }
-    .badge-onav   { background: var(--wine-pale); color: #7A3A10; }
+    .badge-onav   { background: var(--onav-pale); color: var(--onav); }
     .badge-fis    { background: #F0EAF8; color: #5A2A7A; }
 
     /* ── STATS BAR ── */
@@ -651,6 +655,7 @@
     }
     .deg-tab.ais-act   { background: var(--ais-pale); color: var(--ais); border-color: var(--ais); }
     .deg-tab.fisar-act { background: var(--fisar-pale); color: var(--fisar); border-color: var(--fisar); }
+    .deg-tab.onav-act  { background: var(--onav-pale); color: var(--onav); border-color: var(--onav); }
     .deg-tab.free-act  { background: var(--wine-pale); color: var(--wine); border-color: var(--wine); }
     .deg-schema { display: none; }
     .deg-schema.active { display: block; }
@@ -673,6 +678,8 @@
     .score-max { font-size: 10px; color: var(--muted); }
     .score-circle.fisar { border-color: var(--fisar); background: var(--fisar-pale); }
     .score-circle.fisar .score-n { color: var(--fisar); }
+    .score-circle.onav { border-color: var(--onav); background: var(--onav-pale); }
+    .score-circle.onav .score-n { color: var(--onav); }
 
     /* ── DEGUSTAZIONE GUIDATA ── */
     .wizard-topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
@@ -839,13 +846,16 @@
     .deg-result-card { border-radius: 12px; padding: 1.1rem; margin-bottom: .9rem; }
     .deg-result-card.ais { background: var(--ais-pale); border: 0.5px solid rgba(26,58,107,.2); }
     .deg-result-card.fisar { background: var(--fisar-pale); border: 0.5px solid rgba(26,92,58,.2); }
+    .deg-result-card.onav { background: var(--onav-pale); border: 0.5px solid rgba(122,58,16,.2); }
     .deg-result-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: .9rem; }
     .deg-result-label { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: .08em; display: flex; align-items: center; gap: 4px; }
     .deg-result-label.ais { color: var(--ais); }
     .deg-result-label.fisar { color: var(--fisar); }
+    .deg-result-label.onav { color: var(--onav); }
     .deg-score-big { font-size: 24px; font-family: 'Cormorant Garamond', serif; font-weight: 500; }
     .deg-score-big.ais { color: var(--ais); }
     .deg-score-big.fisar { color: var(--fisar); }
+    .deg-score-big.onav { color: var(--onav); }
     .deg-bar-wrap { margin-bottom: 5px; }
     .deg-bar-label { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-bottom: 2px; }
     .deg-bar { height: 5px; background: rgba(0,0,0,.08); border-radius: 3px; overflow: hidden; }
@@ -895,6 +905,21 @@
     }
     .fisar-sel:focus { outline: none; border-color: var(--fisar); }
     .fisar-sel.filled { border-color: var(--fisar); background: var(--fisar-pale); color: var(--fisar); font-weight: 500; }
+    /* ── ONAV qualitative selects — stesse .fisar-row/.fisar-field/.fisar-label
+       generiche, solo select e badge hanno una variante colore propria. ── */
+    .onav-pt-badge {
+      font-size: 10px; font-weight: 600; color: var(--onav);
+      background: var(--onav-pale); padding: 1px 6px; border-radius: 10px;
+      white-space: nowrap; flex-shrink: 0; margin-left: 6px;
+    }
+    .onav-sel {
+      width: 100%; font-family: 'Inter', sans-serif; font-size: 12px;
+      padding: 7px 10px; border-radius: 8px;
+      border: 0.5px solid var(--border); background: var(--bg); color: var(--ink);
+      cursor: pointer;
+    }
+    .onav-sel:focus { outline: none; border-color: var(--onav); }
+    .onav-sel.filled { border-color: var(--onav); background: var(--onav-pale); color: var(--onav); font-weight: 500; }
     @media (max-width: 520px) { .fisar-row { grid-template-columns: 1fr; } }
     /* Selects della scheda analitico-descrittiva AIS: stesso layout, colore brand AIS */
     .fisar-sel.ais-sel:focus { border-color: var(--ais); }
@@ -2796,6 +2821,233 @@
         </div>
       </div>
 
+      <!-- ONAV — scheda ufficiale centesimale (vista/olfatto/gusto/giudizio) -->
+      <div class="deg-schema" id="deg-onav">
+        <div style="text-align:center;margin-bottom:1.1rem">
+          <div class="score-circle onav"><span class="score-n" id="onav-tot">—</span><span class="score-max">/100</span></div>
+          <div style="font-size:11px;color:var(--muted)">Vista /18 · Olfatto /30 · Gusto /44 · Giudizio /8</div>
+        </div>
+
+        <!-- VISTA -->
+        <div class="param-group" data-wiz="onav:1">
+          <div class="pg-title" style="color:var(--onav)"><i class="ti ti-eye" style="font-size:12px;vertical-align:-1px;margin-right:4px"></i>Vista <span style="font-weight:400;color:var(--muted)">(max 18 pt)</span> — <span id="onav-vista-pts" style="color:var(--onav);font-weight:600">0</span> pt</div>
+        <div class="fisar-row">
+        <div class="fisar-field">
+          <label class="fisar-label">Limpidezza <span class="onav-pt-badge" id="b-onv-v-limp">— pt</span></label>
+          <select class="onav-sel" id="onv-v-limp" onchange="calcONAV()">
+          <option value="">— Seleziona —</option>
+          <option value="6">Eccellente (6 pt)</option>
+          <option value="5">Ottimo (5 pt)</option>
+          <option value="4">Buono (4 pt)</option>
+          <option value="3">Sufficiente (3 pt)</option>
+          <option value="2">Insufficiente (2 pt)</option>
+          <option value="1">Scadente (1 pt)</option>
+          <option value="0">Negativo (0 pt)</option>
+          </select>
+        </div>
+        <div class="fisar-field">
+          <label class="fisar-label">Tonalità <span class="onav-pt-badge" id="b-onv-v-ton">— pt</span></label>
+          <select class="onav-sel" id="onv-v-ton" onchange="calcONAV()">
+          <option value="">— Seleziona —</option>
+          <option value="6">Eccellente (6 pt)</option>
+          <option value="5">Ottimo (5 pt)</option>
+          <option value="4">Buono (4 pt)</option>
+          <option value="3">Sufficiente (3 pt)</option>
+          <option value="2">Insufficiente (2 pt)</option>
+          <option value="1">Scadente (1 pt)</option>
+          <option value="0">Negativo (0 pt)</option>
+          </select>
+        </div>
+        </div>
+        <div class="fisar-row">
+        <div class="fisar-field">
+          <label class="fisar-label">Intensità <span class="onav-pt-badge" id="b-onv-v-int">— pt</span></label>
+          <select class="onav-sel" id="onv-v-int" onchange="calcONAV()">
+          <option value="">— Seleziona —</option>
+          <option value="6">Eccellente (6 pt)</option>
+          <option value="5">Ottimo (5 pt)</option>
+          <option value="4">Buono (4 pt)</option>
+          <option value="3">Sufficiente (3 pt)</option>
+          <option value="2">Insufficiente (2 pt)</option>
+          <option value="1">Scadente (1 pt)</option>
+          <option value="0">Negativo (0 pt)</option>
+          </select>
+        </div>
+        </div>
+        </div>
+
+        <!-- OLFATTO -->
+        <div class="param-group" data-wiz="onav:2">
+          <div class="pg-title" style="color:var(--onav)"><i class="ti ti-wind" style="font-size:12px;vertical-align:-1px;margin-right:4px"></i>Olfatto <span style="font-weight:400;color:var(--muted)">(max 30 pt)</span> — <span id="onav-olfatto-pts" style="color:var(--onav);font-weight:600">0</span> pt</div>
+        <div class="fisar-row">
+        <div class="fisar-field">
+          <label class="fisar-label">Franchezza <span class="onav-pt-badge" id="b-onv-o-fra">— pt</span></label>
+          <select class="onav-sel" id="onv-o-fra" onchange="calcONAV()">
+          <option value="">— Seleziona —</option>
+          <option value="6">Eccellente (6 pt)</option>
+          <option value="5">Ottimo (5 pt)</option>
+          <option value="4">Buono (4 pt)</option>
+          <option value="3">Sufficiente (3 pt)</option>
+          <option value="2">Insufficiente (2 pt)</option>
+          <option value="1">Scadente (1 pt)</option>
+          <option value="0">Negativo (0 pt)</option>
+          </select>
+        </div>
+        <div class="fisar-field">
+          <label class="fisar-label">Intensità <span class="onav-pt-badge" id="b-onv-o-int">— pt</span></label>
+          <select class="onav-sel" id="onv-o-int" onchange="calcONAV()">
+          <option value="">— Seleziona —</option>
+          <option value="8">Eccellente (8 pt)</option>
+          <option value="7">Ottimo (7 pt)</option>
+          <option value="6">Buono (6 pt)</option>
+          <option value="5">Sufficiente (5 pt)</option>
+          <option value="4">Insufficiente (4 pt)</option>
+          <option value="2">Scadente (2 pt)</option>
+          <option value="0">Negativo (0 pt)</option>
+          </select>
+        </div>
+        </div>
+        <div class="fisar-row">
+        <div class="fisar-field">
+          <label class="fisar-label">Finezza <span class="onav-pt-badge" id="b-onv-o-fin">— pt</span></label>
+          <select class="onav-sel" id="onv-o-fin" onchange="calcONAV()">
+          <option value="">— Seleziona —</option>
+          <option value="8">Eccellente (8 pt)</option>
+          <option value="7">Ottimo (7 pt)</option>
+          <option value="6">Buono (6 pt)</option>
+          <option value="5">Sufficiente (5 pt)</option>
+          <option value="4">Insufficiente (4 pt)</option>
+          <option value="2">Scadente (2 pt)</option>
+          <option value="0">Negativo (0 pt)</option>
+          </select>
+        </div>
+        <div class="fisar-field">
+          <label class="fisar-label">Armonia <span class="onav-pt-badge" id="b-onv-o-arm">— pt</span></label>
+          <select class="onav-sel" id="onv-o-arm" onchange="calcONAV()">
+          <option value="">— Seleziona —</option>
+          <option value="8">Eccellente (8 pt)</option>
+          <option value="7">Ottimo (7 pt)</option>
+          <option value="6">Buono (6 pt)</option>
+          <option value="5">Sufficiente (5 pt)</option>
+          <option value="4">Insufficiente (4 pt)</option>
+          <option value="2">Scadente (2 pt)</option>
+          <option value="0">Negativo (0 pt)</option>
+          </select>
+        </div>
+        </div>
+        </div>
+
+        <!-- GUSTO / GUSTO OLFATTO -->
+        <div class="param-group" data-wiz="onav:3">
+          <div class="pg-title" style="color:var(--onav)"><i class="ti ti-droplet" style="font-size:12px;vertical-align:-1px;margin-right:4px"></i>Gusto <span style="font-weight:400;color:var(--muted)">(max 44 pt)</span> — <span id="onav-gusto-pts" style="color:var(--onav);font-weight:600">0</span> pt</div>
+        <div class="fisar-row">
+        <div class="fisar-field">
+          <label class="fisar-label">Franchezza <span class="onav-pt-badge" id="b-onv-g-fra">— pt</span></label>
+          <select class="onav-sel" id="onv-g-fra" onchange="calcONAV()">
+          <option value="">— Seleziona —</option>
+          <option value="6">Eccellente (6 pt)</option>
+          <option value="5">Ottimo (5 pt)</option>
+          <option value="4">Buono (4 pt)</option>
+          <option value="3">Sufficiente (3 pt)</option>
+          <option value="2">Insufficiente (2 pt)</option>
+          <option value="1">Scadente (1 pt)</option>
+          <option value="0">Negativo (0 pt)</option>
+          </select>
+        </div>
+        <div class="fisar-field">
+          <label class="fisar-label">Intensità <span class="onav-pt-badge" id="b-onv-g-int">— pt</span></label>
+          <select class="onav-sel" id="onv-g-int" onchange="calcONAV()">
+          <option value="">— Seleziona —</option>
+          <option value="8">Eccellente (8 pt)</option>
+          <option value="7">Ottimo (7 pt)</option>
+          <option value="6">Buono (6 pt)</option>
+          <option value="5">Sufficiente (5 pt)</option>
+          <option value="4">Insufficiente (4 pt)</option>
+          <option value="2">Scadente (2 pt)</option>
+          <option value="0">Negativo (0 pt)</option>
+          </select>
+        </div>
+        </div>
+        <div class="fisar-row">
+        <div class="fisar-field">
+          <label class="fisar-label">Corpo <span class="onav-pt-badge" id="b-onv-g-corpo">— pt</span></label>
+          <select class="onav-sel" id="onv-g-corpo" onchange="calcONAV()">
+          <option value="">— Seleziona —</option>
+          <option value="8">Eccellente (8 pt)</option>
+          <option value="7">Ottimo (7 pt)</option>
+          <option value="6">Buono (6 pt)</option>
+          <option value="5">Sufficiente (5 pt)</option>
+          <option value="4">Insufficiente (4 pt)</option>
+          <option value="2">Scadente (2 pt)</option>
+          <option value="0">Negativo (0 pt)</option>
+          </select>
+        </div>
+        <div class="fisar-field">
+          <label class="fisar-label">Armonia <span class="onav-pt-badge" id="b-onv-g-arm">— pt</span></label>
+          <select class="onav-sel" id="onv-g-arm" onchange="calcONAV()">
+          <option value="">— Seleziona —</option>
+          <option value="8">Eccellente (8 pt)</option>
+          <option value="7">Ottimo (7 pt)</option>
+          <option value="6">Buono (6 pt)</option>
+          <option value="5">Sufficiente (5 pt)</option>
+          <option value="4">Insufficiente (4 pt)</option>
+          <option value="2">Scadente (2 pt)</option>
+          <option value="0">Negativo (0 pt)</option>
+          </select>
+        </div>
+        </div>
+        <div class="fisar-row">
+        <div class="fisar-field">
+          <label class="fisar-label">Persistenza <span class="onav-pt-badge" id="b-onv-g-pers">— pt</span></label>
+          <select class="onav-sel" id="onv-g-pers" onchange="calcONAV()">
+          <option value="">— Seleziona —</option>
+          <option value="8">Eccellente (8 pt)</option>
+          <option value="7">Ottimo (7 pt)</option>
+          <option value="6">Buono (6 pt)</option>
+          <option value="5">Sufficiente (5 pt)</option>
+          <option value="4">Insufficiente (4 pt)</option>
+          <option value="2">Scadente (2 pt)</option>
+          <option value="0">Negativo (0 pt)</option>
+          </select>
+        </div>
+        <div class="fisar-field">
+          <label class="fisar-label">Retrogusto <span class="onav-pt-badge" id="b-onv-g-retro">— pt</span></label>
+          <select class="onav-sel" id="onv-g-retro" onchange="calcONAV()">
+          <option value="">— Seleziona —</option>
+          <option value="6">Eccellente (6 pt)</option>
+          <option value="5">Ottimo (5 pt)</option>
+          <option value="4">Buono (4 pt)</option>
+          <option value="3">Sufficiente (3 pt)</option>
+          <option value="2">Insufficiente (2 pt)</option>
+          <option value="1">Scadente (1 pt)</option>
+          <option value="0">Negativo (0 pt)</option>
+          </select>
+        </div>
+        </div>
+        </div>
+
+        <!-- GIUDIZIO COMPLESSIVO + NOTE -->
+        <div class="param-group" data-wiz="onav:4">
+          <div class="pg-title" style="color:var(--onav)"><i class="ti ti-clipboard-check" style="font-size:12px;vertical-align:-1px;margin-right:4px"></i>Giudizio complessivo <span style="font-weight:400;color:var(--muted)">(max 8 pt)</span></div>
+        <div class="fisar-row">
+        <div class="fisar-field">
+          <label class="fisar-label">Giudizio complessivo <span class="onav-pt-badge" id="b-onv-giud">— pt</span></label>
+          <select class="onav-sel" id="onv-giud" onchange="calcONAV()">
+          <option value="">— Seleziona —</option>
+          <option value="8">Eccellente (8 pt)</option>
+          <option value="7">Ottimo (7 pt)</option>
+          <option value="6">Buono (6 pt)</option>
+          <option value="5">Sufficiente (5 pt)</option>
+          <option value="4">Insufficiente (4 pt)</option>
+          <option value="2">Scadente (2 pt)</option>
+          <option value="0">Negativo (0 pt)</option>
+          </select>
+        </div>
+        </div>
+          <div class="fg" style="margin-top:8px"><label>Note</label><textarea id="onv-note" placeholder="Difetti riscontrati (biologici, chimico-fisici, accidentali, congeniti), considerazioni, abbinamenti…"></textarea></div>
+        </div>
+      </div>
+
       <!-- LIBERO -->
       <div class="deg-schema" id="deg-free">
         <div class="param-row" style="margin-bottom:14px">
@@ -3862,6 +4114,9 @@ async function loadWines() {
       aisDescParams: row.ais_desc_params,
       aisScore:    row.ais_score,
       fisarScore:  row.fisar_score,
+      onavParams:  row.onav_params,
+      onavScore:   row.onav_score,
+      onvNote:     row.onv_note,
       olfNote:     row.olf_note,
       gustNote:    row.gust_note,
       fpNote:      row.fp_note,
@@ -4129,6 +4384,9 @@ async function dbSaveWine(wine) {
     fisar_desc_params: wine.fisarDescParams || null,
     fisar_score:  wine.fisarScore   || null,
     fp_note:      wine.fpNote       || null,
+    onav_params:  wine.onavParams   || null,
+    onav_score:   wine.onavScore    || null,
+    onv_note:     wine.onvNote      || null,
     score:        wine.score        || null,
     notes:        wine.notes        || null,
     tags:         wine.tags         || null,
@@ -5626,6 +5884,8 @@ function degSchemaTag(w) {
     ? `<span style="font-size:10px;padding:2px 6px;border-radius:10px;background:var(--ais-pale);color:var(--ais)">AIS</span>`
     : (w.degSchema === 'fisar' || w.degSchema === 'fisar_desc')
     ? `<span style="font-size:10px;padding:2px 6px;border-radius:10px;background:var(--fisar-pale);color:var(--fisar)">FISAR</span>`
+    : (w.degSchema === 'onav')
+    ? `<span style="font-size:10px;padding:2px 6px;border-radius:10px;background:var(--onav-pale);color:var(--onav)">ONAV</span>`
     : '';
 }
 function wineQtyBadge(w) {
@@ -5796,6 +6056,12 @@ function showAdd() {
     const el = document.getElementById(id);
     if (el) { el.value = id === 'fp-eff' ? '-1' : '0'; el.classList.remove('filled'); }
   });
+  // Reset ONAV selects
+  Object.keys(ONAV_FIELDS).forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.value = ''; el.classList.remove('filled'); }
+  });
+  const onvNote = document.getElementById('onv-note'); if (onvNote) onvNote.value = '';
   const fscore = document.getElementById('f-score'); if (fscore) fscore.value = 88;
   document.getElementById('score-free').textContent = '88';
   fScoreManuallySet = false;
@@ -5804,7 +6070,7 @@ function showAdd() {
   document.getElementById('prev-front').innerHTML = '<i class="ti ti-photo-up" aria-hidden="true"></i><p><b>Carica</b> o scatta foto</p>';
   document.getElementById('prev-back').innerHTML  = '<i class="ti ti-photo-up" aria-hidden="true"></i><p><b>Carica</b> o scatta foto</p>';
   renderDegTabs();
-  calcAIS(); calcFISAR();
+  calcAIS(); calcFISAR(); calcONAV();
   showScreen('screen-add');
 }
 /* Returns which deg tabs to show based on user association */
@@ -5812,13 +6078,14 @@ function availableDegTabs() {
   const assoc = (currentUser?.assoc || '').toUpperCase();
   const assocTab = assoc === 'AIS'   ? 'ais'
                  : assoc === 'FISAR' ? (currentUser?.fisarMethod === 'descrittiva' ? 'fisar_desc' : 'fisar')
-                 : assoc === 'ONAV'  ? 'ais'   // ONAV usa metodo simile ad AIS
-                 : assoc === 'FIS'   ? 'ais'
+                 : assoc === 'ONAV'  ? 'onav'  // scheda ufficiale ONAV, centesimale
+                 : assoc === 'FIS'   ? 'ais'   // FIS non ha ancora una scheda propria, usa quella AIS
                  : null;
   // Always show the association tab (if any) + free; never show the other association tab
   if (assocTab === 'ais')        return ['ais',        'free'];
   if (assocTab === 'fisar')      return ['fisar',       'free'];
   if (assocTab === 'fisar_desc') return ['fisar_desc',  'free'];
+  if (assocTab === 'onav')       return ['onav',        'free'];
   // Nessuna associazione: solo degustazione libera (AIS/FISAR riservate ai rispettivi iscritti)
   return ['free'];
 }
@@ -5827,9 +6094,10 @@ function renderDegTabs() {
   const tabs = availableDegTabs();
   const assoc = (currentUser?.assoc || '').toUpperCase();
   const labels = {
-    ais:   { icon: 'ti-award', label: assoc === 'ONAV' ? 'Metodo ONAV' : assoc === 'FIS' ? 'Metodo FIS' : 'Metodo AIS',   cls: 'ais-act'   },
+    ais:   { icon: 'ti-award', label: assoc === 'FIS' ? 'Metodo FIS' : 'Metodo AIS',   cls: 'ais-act'   },
     fisar: { icon: 'ti-award', label: 'Metodo FISAR', cls: 'fisar-act' },
     fisar_desc: { icon: 'ti-note', label: 'Metodo FISAR (descrittiva)', cls: 'fisar-act' },
+    onav:  { icon: 'ti-award', label: 'Metodo ONAV',  cls: 'onav-act'  },
     free:  { icon: 'ti-note',  label: 'Libero',       cls: 'free-act'  }
   };
   const container = document.getElementById('deg-tabs-container');
@@ -5844,14 +6112,14 @@ function renderDegTabs() {
 
 function switchDeg(t) {
   activeDeg = t;
-  const map = { ais: 'ais-act', fisar: 'fisar-act', fisar_desc: 'fisar-act', free: 'free-act' };
+  const map = { ais: 'ais-act', fisar: 'fisar-act', fisar_desc: 'fisar-act', onav: 'onav-act', free: 'free-act' };
   // Update tab buttons (only those rendered)
   availableDegTabs().forEach(tab => {
     const btn = document.getElementById('dtab-' + tab);
     if (btn) btn.className = 'deg-tab' + (tab === t ? ' ' + map[tab] : '');
   });
   // Show/hide panels
-  ['ais','fisar','fisar_desc','free'].forEach(tab => {
+  ['ais','fisar','fisar_desc','onav','free'].forEach(tab => {
     const pnl = document.getElementById('deg-' + tab);
     if (pnl) pnl.className = 'deg-schema' + (tab === t ? ' active' : '');
   });
@@ -5864,7 +6132,8 @@ function switchDeg(t) {
   // si sceglie esplicitamente un punteggio diverso.
   if (t === 'free' && !fScoreManuallySet) {
     const assoc = (currentUser?.assoc || '').toUpperCase();
-    const linkedScore = (assoc === 'AIS' || assoc === 'ONAV' || assoc === 'FIS') ? recalcAIS()
+    const linkedScore = assoc === 'ONAV' ? recalcONAV()
+                       : (assoc === 'AIS' || assoc === 'FIS') ? recalcAIS()
                        : (assoc === 'FISAR' && currentUser?.fisarMethod !== 'descrittiva') ? recalcFISAR()
                        : null;
     if (linkedScore != null) {
@@ -5968,6 +6237,55 @@ function calcFISAR() {
 }
 
 function recalcFISAR() { return calcFISAR(); }
+
+/* ── ONAV — scheda ufficiale centesimale ──
+   Ogni campo è un voto qualitativo (Eccellente…Negativo) il cui punteggio
+   varia per campo: 6-5-4-3-2-1-0 per i campi "da 6", 8-7-6-5-4-2-0 (salta
+   il 3) per i campi "da 8" — fedele alla scheda ufficiale ONAV, non una
+   scala lineare arbitraria. I 4 sottogruppi sommano esattamente a 100
+   (18+30+44+8), quindi il totale è una somma diretta, senza normalizzare
+   come invece serve per AIS (vedi recalcAIS, /53*100). */
+const ONAV_FIELDS = {
+  'onv-v-limp':  { b:'b-onv-v-limp',  sec:'vista'    },
+  'onv-v-ton':   { b:'b-onv-v-ton',   sec:'vista'    },
+  'onv-v-int':   { b:'b-onv-v-int',   sec:'vista'    },
+  'onv-o-fra':   { b:'b-onv-o-fra',   sec:'olfatto'  },
+  'onv-o-int':   { b:'b-onv-o-int',   sec:'olfatto'  },
+  'onv-o-fin':   { b:'b-onv-o-fin',   sec:'olfatto'  },
+  'onv-o-arm':   { b:'b-onv-o-arm',   sec:'olfatto'  },
+  'onv-g-fra':   { b:'b-onv-g-fra',   sec:'gusto'    },
+  'onv-g-int':   { b:'b-onv-g-int',   sec:'gusto'    },
+  'onv-g-corpo': { b:'b-onv-g-corpo', sec:'gusto'    },
+  'onv-g-arm':   { b:'b-onv-g-arm',   sec:'gusto'    },
+  'onv-g-pers':  { b:'b-onv-g-pers',  sec:'gusto'    },
+  'onv-g-retro': { b:'b-onv-g-retro', sec:'gusto'    },
+  'onv-giud':    { b:'b-onv-giud',    sec:'giudizio' },
+};
+
+function calcONAV() {
+  let vista = 0, olfatto = 0, gusto = 0, giudizio = 0;
+  Object.entries(ONAV_FIELDS).forEach(([id, cfg]) => {
+    const el = document.getElementById(id);
+    const b  = document.getElementById(cfg.b);
+    if (!el) return;
+    const touched = el.value !== '';
+    const v = touched ? parseInt(el.value) : 0;
+    el.classList.toggle('filled', touched);
+    if (b) b.textContent = touched ? v + ' pt' : '— pt';
+    if (cfg.sec === 'vista')        vista += v;
+    else if (cfg.sec === 'olfatto') olfatto += v;
+    else if (cfg.sec === 'gusto')   gusto += v;
+    else if (cfg.sec === 'giudizio') giudizio += v;
+  });
+  const total = Math.min(100, vista + olfatto + gusto + giudizio);
+  const setText = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  setText('onav-vista-pts', vista);
+  setText('onav-olfatto-pts', olfatto);
+  setText('onav-gusto-pts', gusto);
+  setText('onav-tot', total || '—');
+  return total;
+}
+function recalcONAV() { return calcONAV(); }
 
 /* ── IMAGES ── */
 function renderAiBanner() {
@@ -6257,7 +6575,8 @@ async function saveWine() {
   if (!name) { toast('Inserisci il nome del vino'); return; }
   const aisScore   = recalcAIS();
   const fisarScore = recalcFISAR();
-  const finalScore = activeDeg === 'ais' ? aisScore : activeDeg === 'fisar' ? fisarScore : activeDeg === 'fisar_desc' ? +document.getElementById('fd-score')?.value || 0 : +document.getElementById('f-score')?.value || 88;
+  const onavScore  = recalcONAV();
+  const finalScore = activeDeg === 'ais' ? aisScore : activeDeg === 'fisar' ? fisarScore : activeDeg === 'onav' ? onavScore : activeDeg === 'fisar_desc' ? +document.getElementById('fd-score')?.value || 0 : +document.getElementById('f-score')?.value || 88;
   const getAP = () => { const r = [...document.querySelectorAll('.ais-r')]; return { limp:+r[0]?.value, col:+r[1]?.value, cons:+r[2]?.value, oint:+r[3]?.value, ocomp:+r[4]?.value, oqual:+r[5]?.value, gstr:+r[6]?.value, geq:+r[7]?.value, gigo:+r[8]?.value, gpai:+r[9]?.value, gqual:+r[10]?.value, stato: document.getElementById('ap-stato')?.value, arm:+r[11]?.value }; };
   const getFPDesc = () => ({
     limpidezza: g('fd-limpidezza'), trasparenza: g('fd-trasparenza'), tonalita: g('fd-tonalita'), intensitaColore: g('fd-intensita-colore'),
@@ -6275,6 +6594,15 @@ async function saveWine() {
       fr: fv('fp-fr'), pint: fv('fp-pint'), pers: fv('fp-pers'), qual: fv('fp-qual'), arm: fv('fp-arm'), tip: fv('fp-tip'),
       gfr: fv('fp-gfr'), gst: fv('fp-gst'), morb: fv('fp-morb'), dur: fv('fp-dur'), pai: fv('fp-pai'),
       garm: fv('fp-garm'), gtip: fv('fp-gtip'), gqual: fv('fp-gqual'), evol: fv('fp-evol'), ecc: fv('fp-ecc')
+    };
+  };
+  const getONAVParams = () => {
+    const fv = id => { const v = document.getElementById(id)?.value; return v === '' || v == null ? null : parseInt(v); };
+    return {
+      vLimp: fv('onv-v-limp'), vTon: fv('onv-v-ton'), vInt: fv('onv-v-int'),
+      oFra: fv('onv-o-fra'), oInt: fv('onv-o-int'), oFin: fv('onv-o-fin'), oArm: fv('onv-o-arm'),
+      gFra: fv('onv-g-fra'), gInt: fv('onv-g-int'), gCorpo: fv('onv-g-corpo'), gArm: fv('onv-g-arm'), gPers: fv('onv-g-pers'), gRetro: fv('onv-g-retro'),
+      giud: fv('onv-giud'),
     };
   };
   const g = id => document.getElementById(id)?.value || '';
@@ -6309,6 +6637,9 @@ async function saveWine() {
     fisarDescParams: activeDeg === 'fisar_desc' ? getFPDesc() : null,
     fisarScore:  activeDeg === 'fisar' ? fisarScore : null,
     fpNote:   activeDeg === 'fisar' ? g('fp-note') : '',
+    onavParams: activeDeg === 'onav' ? getONAVParams() : null,
+    onavScore:  activeDeg === 'onav' ? onavScore : null,
+    onvNote:  activeDeg === 'onav' ? g('onv-note') : '',
     score: finalScore, notes: activeDeg === 'free' ? g('f-notes') : '', tags: g('f-tags'),
     frontImg, backImg,
     cellarPositions: selectedWinePositions.slice()
@@ -6486,6 +6817,26 @@ function showDetail(id) {
         <div style="text-align:center;padding:8px;background:var(--bg);border-radius:8px;border:0.5px solid var(--border)"><div style="font-size:18px;font-weight:500;color:var(--fisar)">${Math.round((gu/50)*50)}</div><div style="font-size:10px;color:var(--muted)">Gusto /50</div></div>
       </div>
       ${w.fpNote ? `<div class="deg-note">${w.fpNote}</div>` : ''}
+    </div>`;
+  } else if (w.degSchema === 'onav' && w.onavParams) {
+    const p = w.onavParams;
+    const sum = (...vals) => vals.reduce((a,b) => a + (b || 0), 0);
+    const vista = sum(p.vLimp, p.vTon, p.vInt);
+    const olfatto = sum(p.oFra, p.oInt, p.oFin, p.oArm);
+    const gusto = sum(p.gFra, p.gInt, p.gCorpo, p.gArm, p.gPers, p.gRetro);
+    const giudizio = p.giud || 0;
+    degHTML = `<div class="deg-result-card onav">
+      <div class="deg-result-header">
+        <span class="deg-result-label onav"><i class="ti ti-award"></i>Scheda ONAV</span>
+        <span class="deg-score-big onav">${w.onavScore || '—'}<span style="font-size:13px;color:var(--muted)">/100</span></span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:.75rem">
+        <div style="text-align:center;padding:8px;background:var(--bg);border-radius:8px;border:0.5px solid var(--border)"><div style="font-size:18px;font-weight:500;color:var(--onav)">${vista}</div><div style="font-size:10px;color:var(--muted)">Vista /18</div></div>
+        <div style="text-align:center;padding:8px;background:var(--bg);border-radius:8px;border:0.5px solid var(--border)"><div style="font-size:18px;font-weight:500;color:var(--onav)">${olfatto}</div><div style="font-size:10px;color:var(--muted)">Olfatto /30</div></div>
+        <div style="text-align:center;padding:8px;background:var(--bg);border-radius:8px;border:0.5px solid var(--border)"><div style="font-size:18px;font-weight:500;color:var(--onav)">${gusto}</div><div style="font-size:10px;color:var(--muted)">Gusto /44</div></div>
+        <div style="text-align:center;padding:8px;background:var(--bg);border-radius:8px;border:0.5px solid var(--border)"><div style="font-size:18px;font-weight:500;color:var(--onav)">${giudizio}</div><div style="font-size:10px;color:var(--muted)">Giudizio /8</div></div>
+      </div>
+      ${w.onvNote ? `<div class="deg-note">${w.onvNote}</div>` : ''}
     </div>`;
   } else if (w.degSchema === 'fisar_desc' && w.fisarDescParams) {
     const p = w.fisarDescParams;
@@ -6762,6 +7113,12 @@ function editWine() {
     Object.entries(fmap).forEach(([id, v]) => { const el = document.getElementById(id); if (el && v != null) { el.value = v; el.classList.toggle('filled', v > 0); } });
     set('fp-note', w.fpNote);
     calcFISAR();
+  } else if (deg === 'onav' && w.onavParams) {
+    const p = w.onavParams;
+    const omap = { 'onv-v-limp':p.vLimp, 'onv-v-ton':p.vTon, 'onv-v-int':p.vInt, 'onv-o-fra':p.oFra, 'onv-o-int':p.oInt, 'onv-o-fin':p.oFin, 'onv-o-arm':p.oArm, 'onv-g-fra':p.gFra, 'onv-g-int':p.gInt, 'onv-g-corpo':p.gCorpo, 'onv-g-arm':p.gArm, 'onv-g-pers':p.gPers, 'onv-g-retro':p.gRetro, 'onv-giud':p.giud };
+    Object.entries(omap).forEach(([id, v]) => { const el = document.getElementById(id); if (el) { el.value = (v == null ? '' : v); el.classList.toggle('filled', v != null); } });
+    set('onv-note', w.onvNote);
+    calcONAV();
   } else if (deg === 'fisar_desc' && w.fisarDescParams) {
     const p = w.fisarDescParams;
     const dmap = {
@@ -6845,6 +7202,12 @@ const WIZARD_STEPS = {
     { title: 'Esame gustativo', icon: 'ti-droplet' },
     { title: 'Sensazioni retro-olfattive', icon: 'ti-arrow-back-up' },
     { title: 'Stato evolutivo e considerazioni finali', icon: 'ti-clipboard-check' }
+  ],
+  onav: [
+    { title: 'Vista', icon: 'ti-eye' },
+    { title: 'Olfatto', icon: 'ti-wind' },
+    { title: 'Gusto', icon: 'ti-droplet' },
+    { title: 'Giudizio complessivo', icon: 'ti-clipboard-check' }
   ],
   free: [
     { title: 'Degustazione libera', icon: 'ti-notes' }
@@ -8918,6 +9281,7 @@ async function loadNetworkFeed() {
 
   networkWinesCache = wines.map(row => ({
     ...row, aisParams: row.ais_params, fisarParams: row.fisar_params, aisScore: row.ais_score, fisarScore: row.fisar_score,
+    onavParams: row.onav_params, onavScore: row.onav_score, onvNote: row.onv_note,
     olfNote: row.olf_note, gustNote: row.gust_note, fpNote: row.fp_note, degSchema: row.deg_schema,
     frontImg: row.front_img, backImg: row.back_img, wineryId: row.winery_id || null, ownerName: profMap[row.user_id]?.full_name || 'Utente',
     ownerAvatar: profMap[row.user_id]?.avatar_base64 || '', ownerAssoc: profMap[row.user_id]?.assoc || ''
