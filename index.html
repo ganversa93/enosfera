@@ -246,6 +246,7 @@
     .dn-list-head { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 500; }
     .dn-list-name { flex: 1.8; min-width: 0; font-size: 13.5px; color: var(--ink); text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .dn-list-region { flex: 0.9; min-width: 0; font-size: 12.5px; color: var(--muted); text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dn-region-extra { display: inline-block; font-size: 10px; font-weight: 600; color: var(--wine); background: var(--wine-pale); padding: 1px 6px; border-radius: 10px; vertical-align: middle; }
     .dn-list-type { flex: 0.5; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-start; }
     .dn-list-head .dn-list-name, .dn-list-head .dn-list-region, .dn-list-head .dn-list-type { color: var(--muted); font-size: 10px; }
     .dn-list-tags { flex: 0.9; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-start; }
@@ -1770,6 +1771,8 @@
         <div id="dn-version-chips" style="display:flex;gap:8px;flex-wrap:wrap"></div>
       </div>
       <div class="fg" style="position:relative"><label>Regione</label><input type="text" id="dn-region" placeholder="es. Toscana" autocomplete="off"></div>
+      <div class="fg" style="position:relative"><label>Regione 2 <small style="color:var(--muted)">(se interregionale)</small></label><input type="text" id="dn-region2" placeholder="opzionale" autocomplete="off"></div>
+      <div class="fg" style="position:relative"><label>Regione 3 <small style="color:var(--muted)">(se interregionale)</small></label><input type="text" id="dn-region3" placeholder="opzionale" autocomplete="off"></div>
       <div class="fg" style="position:relative">
         <label>Vitigni</label>
         <input type="text" id="dn-grapes-input" placeholder="Scrivi per cercare un vitigno…" autocomplete="off">
@@ -9121,6 +9124,14 @@ function denomVersionBadgeClass(v) {
   return 'bgy';
 }
 
+// Denominazioni interregionali: region resta la principale (mostrata per
+// intero), region2/region3 opzionali — in elenco (spazio stretto) si
+// mostra solo il numero di regioni aggiuntive, il nome completo è nel
+// title del badge e per esteso nella vista di dettaglio.
+function denomRegionsExtra(d) {
+  return [d.region2, d.region3].filter(Boolean).length;
+}
+
 function toggleApTypeFilter(type, el) {
   if (apDenomTypeFilters.has(type)) { apDenomTypeFilters.delete(type); el.classList.remove('active'); }
   else { apDenomTypeFilters.add(type); el.classList.add('active'); }
@@ -9134,7 +9145,7 @@ function searchDenominations() {
     const list = document.getElementById('ap-denom-list');
     list.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--muted)">Caricamento…</div>';
     const regionFilter = apDenomRegionValue;
-    let req = sb.from('wine_denominations').select('id,name,region,versions,type').limit(60);
+    let req = sb.from('wine_denominations').select('id,name,region,region2,region3,versions,type').limit(60);
     // Ordina sempre anche per nome come criterio secondario, tranne
     // quando il nome è già il criterio primario — così "per regione" o
     // "per versione" restano comunque alfabetici a parità di gruppo.
@@ -9146,17 +9157,20 @@ function searchDenominations() {
       // così digitando "toscana" o "sangiovese" o "docg" si trova comunque
       // la denominazione, senza dover per forza usare i filtri a parte.
       const qSafe = q.replace(/,/g, ' ');
-      req = req.or(`name.ilike.%${qSafe}%,region.ilike.%${qSafe}%,type.ilike.%${qSafe}%,grapes.ilike.%${qSafe}%`);
+      req = req.or(`name.ilike.%${qSafe}%,region.ilike.%${qSafe}%,region2.ilike.%${qSafe}%,region3.ilike.%${qSafe}%,type.ilike.%${qSafe}%,grapes.ilike.%${qSafe}%`);
     }
     if (apDenomTypeFilters.size) req = req.in('type', [...apDenomTypeFilters]);
     if (regionFilter) {
+      // Una denominazione interregionale può avere la regione cercata in
+      // region2/region3 invece che in region (la principale) — il filtro
+      // deve trovarla comunque, non solo chi la elenca per prima.
       // "Trentino-Alto Adige" non compare mai testualmente nella fonte
       // dati (l'elenco MASAF usa le due province autonome per nome) —
       // unico caso che serve un OR invece di un ilike diretto.
       if (regionFilter === 'Trentino-Alto Adige') {
-        req = req.or('region.ilike.%trent%,region.ilike.%bolzano%');
+        req = req.or('region.ilike.%trent%,region.ilike.%bolzano%,region2.ilike.%trent%,region2.ilike.%bolzano%,region3.ilike.%trent%,region3.ilike.%bolzano%');
       } else {
-        req = req.ilike('region', `%${regionFilter}%`);
+        req = req.or(`region.ilike.%${regionFilter}%,region2.ilike.%${regionFilter}%,region3.ilike.%${regionFilter}%`);
       }
     }
     const { data, error } = await req;
@@ -9171,7 +9185,7 @@ function searchDenominations() {
         data.map(d => `
         <div class="dn-list-row" onclick="showDenominationDetail('${d.id}')">
           <div class="dn-list-name">${escapeAttr(d.name)}</div>
-          <div class="dn-list-region">${d.region ? escapeAttr(d.region) : '—'}</div>
+          <div class="dn-list-region">${d.region ? escapeAttr(d.region) : '—'}${denomRegionsExtra(d) ? ` <span class="dn-region-extra" title="${[d.region2, d.region3].filter(Boolean).map(escapeAttr).join(', ')}">+${denomRegionsExtra(d)}</span>` : ''}</div>
           <div class="dn-list-type">${d.type ? `<span class="${d.type === 'DOCG' ? 'premium-pill' : 'chip'}">${d.type}</span>` : ''}</div>
           <div class="dn-list-tags">
             ${(d.versions || []).map(v => `<span class="gbadge ${denomVersionBadgeClass(v)}">${escapeAttr(v)}</span>`).join('')}
@@ -9233,6 +9247,8 @@ async function showDenominationDetail(id) {
     document.getElementById('dn-type').value = dn?.type || '';
     await renderDnVersionChips(dn?.versions || []);
     document.getElementById('dn-region').value = dn?.region || '';
+    document.getElementById('dn-region2').value = dn?.region2 || '';
+    document.getElementById('dn-region3').value = dn?.region3 || '';
     loadGrapeVarietyNamesCache();
     applyDnGrapesFromString(dn?.grapes || '');
     applyDnAgingFromString(dn?.aging || '');
@@ -9259,7 +9275,8 @@ async function showDenominationDetail(id) {
 // controllare il risultato finale senza uscire dalla modalità admin.
 function renderDenomPublicView(dn) {
   const rows = [];
-  if (dn.region) rows.push(['Regione', escapeAttr(dn.region)]);
+  const regions = [dn.region, dn.region2, dn.region3].filter(Boolean).map(escapeAttr);
+  if (regions.length) rows.push([regions.length > 1 ? 'Regioni' : 'Regione', regions.join(', ')]);
   if (dn.grapes) rows.push(['Vitigni', escapeAttr(dn.grapes)]);
   if (dn.aging) rows.push(['Affinamento', escapeAttr(dn.aging)]);
   DN_PARAM_KEYS.forEach(k => { if (dn[k]) rows.push([DN_PARAM_LABELS[k], dnParamDots(dn[k])]); });
@@ -9303,6 +9320,8 @@ async function saveDenomination() {
     type: g('dn-type'),
     versions: [...dnSelectedVersions],
     region: g('dn-region'),
+    region2: g('dn-region2'),
+    region3: g('dn-region3'),
     grapes: dnGrapesToString() || null,
     aging: dnAgingToString() || null,
     aromas: g('dn-aromas'),
@@ -10007,6 +10026,8 @@ attachAutocomplete('f-doc',      () => docSuggestions);
 // sulle regioni italiane, stesso elenco GEO_REGIONS.Italia già usato
 // per eventi (ev-region) e vino (f-region).
 attachAutocomplete('dn-region',  () => GEO_REGIONS['Italia'] || []);
+attachAutocomplete('dn-region2', () => GEO_REGIONS['Italia'] || []);
+attachAutocomplete('dn-region3', () => GEO_REGIONS['Italia'] || []);
 attachAutocomplete('p-delegazione', () => DELEGAZIONI[document.getElementById('p-assoc')?.value] || []);
 document.getElementById('p-delegazione')?.addEventListener('blur', e => {
   e.target.value = normalizeDelegazione(e.target.value, document.getElementById('p-assoc')?.value || '');

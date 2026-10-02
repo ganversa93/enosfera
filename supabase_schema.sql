@@ -2803,3 +2803,13 @@ alter table public.wines add column if not exists onv_note text;
 -- (riusa la colonna "score" generica, nessuna nuova colonna punteggio).
 -- ════════════════════════════════════════════════════════════════
 alter table public.wines add column if not exists fis_params jsonb;
+
+-- ════════════════════════════════════════════════════════════════
+-- Denominazioni interregionali (es. una DOC che attraversa 2-3
+-- regioni): region resta la regione principale (usata da ricerca,
+-- filtro e ordinamento come già oggi), region2/region3 sono
+-- aggiuntive e opzionali — niente migrazione ad array per non
+-- riscrivere ilike/order già funzionanti su region.
+-- ════════════════════════════════════════════════════════════════
+alter table public.wine_denominations add column if not exists region2 text;
+alter table public.wine_denominations add column if not exists region3 text;
