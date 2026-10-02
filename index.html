@@ -1751,7 +1751,7 @@
       <div class="fg"><label>Versione</label>
         <div id="dn-version-chips" style="display:flex;gap:8px;flex-wrap:wrap"></div>
       </div>
-      <div class="fg"><label>Regione</label><input type="text" id="dn-region" placeholder="es. Toscana"></div>
+      <div class="fg" style="position:relative"><label>Regione</label><input type="text" id="dn-region" placeholder="es. Toscana" autocomplete="off"></div>
       <div class="fg" style="position:relative">
         <label>Vitigni</label>
         <input type="text" id="dn-grapes-input" placeholder="Scrivi per cercare un vitigno…" autocomplete="off">
@@ -9977,6 +9977,11 @@ function attachAutocomplete(inputId, getSuggestions, onSelect) {
 attachAutocomplete('f-region',   () => regionSuggestions);
 attachAutocomplete('f-province', () => provinceSuggestions);
 attachAutocomplete('f-doc',      () => docSuggestions);
+// Le denominazioni DOC/DOCG sono per definizione italiane (nessun
+// selettore paese, a differenza del form vino): suggerimenti fissi
+// sulle regioni italiane, stesso elenco GEO_REGIONS.Italia già usato
+// per eventi (ev-region) e vino (f-region).
+attachAutocomplete('dn-region',  () => GEO_REGIONS['Italia'] || []);
 attachAutocomplete('p-delegazione', () => DELEGAZIONI[document.getElementById('p-assoc')?.value] || []);
 document.getElementById('p-delegazione')?.addEventListener('blur', e => {
   e.target.value = normalizeDelegazione(e.target.value, document.getElementById('p-assoc')?.value || '');
