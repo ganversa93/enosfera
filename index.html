@@ -1706,11 +1706,16 @@
         <div style="position:relative">
           <button type="button" class="chip" id="ap-denom-sort-btn" onclick="toggleDenomSortMenu()"><i class="ti ti-arrows-sort" style="font-size:12px;margin-right:3px;vertical-align:-1px"></i>Nome (A-Z)</button>
         </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <label for="ap-denom-perpage" style="font-size:11px;color:var(--muted)">Per pagina</label>
+          <input type="number" id="ap-denom-perpage" value="60" min="10" max="500" step="10" style="width:62px;padding:7px 8px;border-radius:20px;border:0.5px solid var(--border);background:var(--bg);color:var(--ink);font-size:12px" onchange="searchDenominations()">
+        </div>
       </div>
       <div id="ap-denom-admin-bar" style="display:none;margin-bottom:10px">
         <button class="btn sm" onclick="showDenominationDetail(null)"><i class="ti ti-plus"></i>Aggiungi denominazione</button>
       </div>
       <div id="ap-denom-list"></div>
+      <div id="ap-denom-pagination" style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px"></div>
     </div>
   </div>
 
@@ -8581,6 +8586,7 @@ let apEnologiaView = 'vitigni';
 let apVitigniSearchTimer = null;
 let apVitigniColorFilters = new Set();
 let apDenomSearchTimer = null;
+let apDenomPage = 0;
 let apDenomTypeFilters = new Set();
 let currentGrapeVarietyId = null;
 let currentDenominationId = null;
@@ -9138,14 +9144,17 @@ function toggleApTypeFilter(type, el) {
   searchDenominations();
 }
 
-function searchDenominations() {
+function searchDenominations(resetPage = true) {
   clearTimeout(apDenomSearchTimer);
+  if (resetPage) apDenomPage = 0;
   apDenomSearchTimer = setTimeout(async () => {
     const q = document.getElementById('ap-denom-search').value.trim();
     const list = document.getElementById('ap-denom-list');
     list.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--muted)">Caricamento…</div>';
     const regionFilter = apDenomRegionValue;
-    let req = sb.from('wine_denominations').select('id,name,region,region2,region3,versions,type').limit(60);
+    const perPage = Math.min(500, Math.max(10, parseInt(document.getElementById('ap-denom-perpage')?.value) || 60));
+    const from = apDenomPage * perPage;
+    let req = sb.from('wine_denominations').select('id,name,region,region2,region3,versions,type', { count: 'exact' }).range(from, from + perPage - 1);
     // Ordina sempre anche per nome come criterio secondario, tranne
     // quando il nome è già il criterio primario — così "per regione" o
     // "per versione" restano comunque alfabetici a parità di gruppo.
@@ -9173,8 +9182,13 @@ function searchDenominations() {
         req = req.or(`region.ilike.%${regionFilter}%,region2.ilike.%${regionFilter}%,region3.ilike.%${regionFilter}%`);
       }
     }
-    const { data, error } = await req;
-    if (error) { list.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--muted)">Errore ricerca</div>'; return; }
+    const { data, error, count } = await req;
+    if (error) {
+      list.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--muted)">Errore ricerca</div>';
+      document.getElementById('ap-denom-pagination').innerHTML = '';
+      return;
+    }
+    renderDenomPagination(count || 0, perPage);
     list.innerHTML = data?.length
       ? `<div class="dn-list-head">
           <div class="dn-list-name">Denominazione</div>
@@ -9193,6 +9207,25 @@ function searchDenominations() {
         </div>`).join('')
       : '<div style="text-align:center;padding:2rem;color:var(--muted)">Nessuna denominazione trovata</div>';
   }, 300);
+}
+
+function renderDenomPagination(total, perPage) {
+  const box = document.getElementById('ap-denom-pagination');
+  if (!box) return;
+  const totalPages = Math.max(1, Math.ceil(total / perPage));
+  const current = apDenomPage + 1;
+  box.innerHTML = `
+    <span style="font-size:11px;color:var(--muted)">${total} risultat${total === 1 ? 'o' : 'i'} — pagina ${current} di ${totalPages}</span>
+    <div style="display:flex;gap:6px">
+      <button type="button" class="btn sm" ${apDenomPage <= 0 ? 'disabled' : ''} onclick="changeDenomPage(-1)"><i class="ti ti-chevron-left"></i></button>
+      <button type="button" class="btn sm" ${current >= totalPages ? 'disabled' : ''} onclick="changeDenomPage(1)"><i class="ti ti-chevron-right"></i></button>
+    </div>
+  `;
+}
+
+function changeDenomPage(delta) {
+  apDenomPage = Math.max(0, apDenomPage + delta);
+  searchDenominations(false);
 }
 
 // Le versioni ammesse (Bianco/Rosato/Rosso/Spumante/Dolce/Passito…) sono
@@ -10103,7 +10136,7 @@ Object.assign(window, {
   showBlogPostDetail, saveBlogPost, deleteBlogPost, uploadBlogCover, toggleBpTagChip,
   toggleBlogTagMenu, toggleBlogStatusMenu, toggleBlogSortMenu, toggleBlogPreview, updateBpAuthorAssocBadge,
   showGrapeVarietyDetail, saveGrapeVariety, deleteGrapeVariety, searchGrapeVarieties, toggleApColorFilter,
-  showDenominationDetail, saveDenomination, deleteDenomination, searchDenominations, toggleApTypeFilter, toggleDenomRegionMenu, toggleDnVersionChip, toggleDenomSortMenu, toggleDenomPreview,
+  showDenominationDetail, saveDenomination, deleteDenomination, searchDenominations, toggleApTypeFilter, toggleDenomRegionMenu, toggleDnVersionChip, toggleDenomSortMenu, toggleDenomPreview, changeDenomPage,
   cycleDnGrapeBound, updateDnGrapePct, removeDnGrapeTag,
   addDnAgingRow, updateDnAgingRow, removeDnAgingRow, updateDnParam
 });
