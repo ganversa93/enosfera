@@ -239,6 +239,22 @@
     .dn-row { display: flex; gap: 14px; padding: 9px 0; border-bottom: 0.5px solid var(--border); font-size: 12.5px; }
     .dn-row-label { flex: 0 0 112px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .03em; padding-top: 1px; display: flex; align-items: center; gap: 4px; }
     .dn-row-val { flex: 1; min-width: 0; color: var(--ink); white-space: pre-wrap; line-height: 1.5; }
+    /* Elenco Denominazioni — tabella a 3 colonne (Denominazione/Regione/Tag,
+       tutte allineate a sinistra) invece della riga nome+badge+chevron. */
+    .dn-list-head, .dn-list-row { display: flex; align-items: center; gap: 12px; padding: 10px 4px; border-bottom: 0.5px solid var(--border); }
+    .dn-list-row { cursor: pointer; }
+    .dn-list-head { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 500; }
+    .dn-list-name { flex: 1.3; min-width: 0; font-size: 13.5px; color: var(--ink); text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dn-list-region { flex: 1; min-width: 0; font-size: 12.5px; color: var(--muted); text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dn-list-head .dn-list-name, .dn-list-head .dn-list-region { color: var(--muted); font-size: 10px; }
+    .dn-list-tags { flex: 1.3; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-start; }
+    @media (max-width: 560px) {
+      .dn-list-head { display: none; }
+      .dn-list-row { flex-wrap: wrap; }
+      .dn-list-name { flex: 1 1 100%; white-space: normal; }
+      .dn-list-region { order: 2; }
+      .dn-list-tags { order: 3; justify-content: flex-end; }
+    }
     .winfo { padding: 11px 13px; }
     .wname { font-family: 'Cormorant Garamond', serif; font-size: 14px; font-weight: 500; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .wprod { font-size: 11px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -9116,7 +9132,7 @@ function searchDenominations() {
     const list = document.getElementById('ap-denom-list');
     list.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--muted)">Caricamento…</div>';
     const regionFilter = apDenomRegionValue;
-    let req = sb.from('wine_denominations').select('id,name,versions,type').limit(60);
+    let req = sb.from('wine_denominations').select('id,name,region,versions,type').limit(60);
     // Ordina sempre anche per nome come criterio secondario, tranne
     // quando il nome è già il criterio primario — così "per regione" o
     // "per versione" restano comunque alfabetici a parità di gruppo.
@@ -9144,13 +9160,19 @@ function searchDenominations() {
     const { data, error } = await req;
     if (error) { list.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--muted)">Errore ricerca</div>'; return; }
     list.innerHTML = data?.length
-      ? data.map(d => `
-        <div class="winery-row" onclick="showDenominationDetail('${d.id}')">
-          <div class="winery-row-name"><i class="ti ti-map-pin"></i>${escapeAttr(d.name)}
-            ${(d.versions || []).map(v => `<span class="gbadge ${denomVersionBadgeClass(v)}">${escapeAttr(v)}</span>`).join(' ')}
+      ? `<div class="dn-list-head">
+          <div class="dn-list-name">Denominazione</div>
+          <div class="dn-list-region">Regione</div>
+          <div class="dn-list-tags">Tag</div>
+        </div>` +
+        data.map(d => `
+        <div class="dn-list-row" onclick="showDenominationDetail('${d.id}')">
+          <div class="dn-list-name">${escapeAttr(d.name)}</div>
+          <div class="dn-list-region">${d.region ? escapeAttr(d.region) : '—'}</div>
+          <div class="dn-list-tags">
+            ${(d.versions || []).map(v => `<span class="gbadge ${denomVersionBadgeClass(v)}">${escapeAttr(v)}</span>`).join('')}
             ${d.type ? `<span class="${d.type === 'DOCG' ? 'premium-pill' : 'chip'}">${d.type}</span>` : ''}
           </div>
-          <i class="ti ti-chevron-right"></i>
         </div>`).join('')
       : '<div style="text-align:center;padding:2rem;color:var(--muted)">Nessuna denominazione trovata</div>';
   }, 300);
