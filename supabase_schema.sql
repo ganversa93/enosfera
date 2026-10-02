@@ -2792,3 +2792,14 @@ grant execute on function public.list_blog_authors() to authenticated;
 alter table public.wines add column if not exists onav_params jsonb;
 alter table public.wines add column if not exists onav_score integer;
 alter table public.wines add column if not exists onv_note text;
+
+-- ════════════════════════════════════════════════════════════════
+-- Scheda ufficiale FIS ("Scheda per l'analisi sensoriale del vino",
+-- Fondazione Italiana Sommelier/BIBENDA) come schema di degustazione
+-- a sé stante — prima FIS era agganciata al metodo "ais" per
+-- analogia. A differenza di ONAV, la scheda FIS è puramente
+-- descrittiva (termini qualitativi, nessuna griglia a punti): stesso
+-- trattamento già riservato a "fisar_desc" — punteggio libero
+-- (riusa la colonna "score" generica, nessuna nuova colonna punteggio).
+-- ════════════════════════════════════════════════════════════════
+alter table public.wines add column if not exists fis_params jsonb;
