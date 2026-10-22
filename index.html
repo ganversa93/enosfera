@@ -6158,8 +6158,14 @@ function showLoadingOverlay(show) {
     showScreen('screen-login');
     // Arrivo dalla landing page (link "Registrati gratis" con ?register=1):
     // apre subito la scheda di registrazione invece di quella di accesso.
-    if (new URLSearchParams(window.location.search).get('register')) {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('register')) {
       switchLTab('reg');
+      history.replaceState(null, '', window.location.pathname);
+    } else if (urlParams.get('login')) {
+      // Arrivo da un link "Accedi"/"Torna al login" (?login=1): nessuna
+      // azione oltre a mostrare il login, serve solo a bypassare il
+      // redirect verso la landing per i visitatori senza sessione.
       history.replaceState(null, '', window.location.pathname);
     }
   }
