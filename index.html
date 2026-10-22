@@ -6055,6 +6055,11 @@ function showLoadingOverlay(show) {
 
 /* ── SESSION RESTORE on page load ── */
 (async () => {
+  // Catturato subito, prima che qualunque ramo sotto possa ripulire
+  // l'URL con history.replaceState — altrimenti un link con intento
+  // esplicito (OAuth, magic link scaduto, ?register=1...) perderebbe il
+  // segnale e finirebbe scambiato per una visita "nuda" al dominio.
+  const hadUrlIntent = window.location.hash !== '' || window.location.search !== '';
   // Se l'utente arriva da un link email scaduto o non valido, Supabase
   // mette l'errore nell'URL (es. #error=access_denied&error_code=otp_expired).
   // Lo intercettiamo per mostrare un messaggio comprensibile invece di
@@ -6088,6 +6093,16 @@ function showLoadingOverlay(show) {
   if (session?.user) {
     await loadProfile(session.user);
   } else {
+    // Chi digita il dominio nudo (niente sessione, niente query/hash, niente
+    // app installata) vede la landing page marketing invece del solo form di
+    // login: molto più contenuto per la ricerca organica. Chi arriva con un
+    // intento esplicito (link di un'email, OAuth, ?register=1...) o ha
+    // installato l'app come PWA vede sempre e solo il login, come prima.
+    const isStandaloneApp = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    if (!isStandaloneApp && !hadUrlIntent) {
+      window.location.replace('landing.html');
+      return;
+    }
     showScreen('screen-login');
     // Arrivo dalla landing page (link "Registrati gratis" con ?register=1):
     // apre subito la scheda di registrazione invece di quella di accesso.
