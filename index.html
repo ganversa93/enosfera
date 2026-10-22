@@ -3591,9 +3591,11 @@
     </div>
     <div class="fsec" id="wc-form-sec">
       <div class="stitle" id="wc-form-title"><i class="ti ti-address-book"></i>Nuovo contatto</div>
-      <input type="file" id="wcl-bizcard-input" accept="image/*" capture="environment" style="display:none" onchange="scanBusinessCard(this, 'wcl')">
-      <button type="button" class="btn sm" style="margin-bottom:12px" onclick="document.getElementById('wcl-bizcard-input').click()"><i class="ti ti-camera"></i>Scansiona biglietto da visita</button>
-      <div class="spin-wrap" id="wcl-bizcard-spin"><div class="spin"></div><span style="font-size:12px;color:var(--muted)">Lettura biglietto in corso…</span></div>
+      <div id="wcl-bizcard-wrap" style="display:none">
+        <input type="file" id="wcl-bizcard-input" accept="image/*" capture="environment" style="display:none" onchange="scanBusinessCard(this, 'wcl')">
+        <button type="button" class="btn gold sm" style="margin-bottom:12px" onclick="document.getElementById('wcl-bizcard-input').click()"><i class="ti ti-sparkles"></i>Scansiona biglietto da visita</button>
+        <div class="spin-wrap" id="wcl-bizcard-spin"><div class="spin"></div><span style="font-size:12px;color:var(--muted)">Lettura biglietto in corso…</span></div>
+      </div>
       <div class="fg" style="position:relative">
         <label>Cantina</label>
         <input type="text" id="wcl-winery-name" placeholder="Cerca o scrivi il nome della cantina…" autocomplete="off">
@@ -5108,9 +5110,10 @@ function renderWineryContactsSection(wineryId, contacts, editId) {
     <div class="fsec" style="margin-top:1.25rem">
       <div class="stitle"><i class="ti ti-address-book"></i>I miei contatti per questa cantina</div>
       <div id="wy-contacts-list">${listHtml}</div>
+      ${currentUser?.aiScanEnabled ? `
       <input type="file" id="wy-contact-bizcard-input" accept="image/*" capture="environment" style="display:none" onchange="scanBusinessCard(this, 'wy-contact')">
-      <button type="button" class="btn sm" style="margin-top:10px" onclick="document.getElementById('wy-contact-bizcard-input').click()"><i class="ti ti-camera"></i>Scansiona biglietto da visita</button>
-      <div class="spin-wrap" id="wy-contact-bizcard-spin"><div class="spin"></div><span style="font-size:12px;color:var(--muted)">Lettura biglietto in corso…</span></div>
+      <button type="button" class="btn gold sm" style="margin-top:10px" onclick="document.getElementById('wy-contact-bizcard-input').click()"><i class="ti ti-sparkles"></i>Scansiona biglietto da visita</button>
+      <div class="spin-wrap" id="wy-contact-bizcard-spin"><div class="spin"></div><span style="font-size:12px;color:var(--muted)">Lettura biglietto in corso…</span></div>` : ''}
       <div class="frow" style="margin-top:10px">
         <div class="fg"><label>Referente</label><input type="text" id="wy-contact-referente" placeholder="es. Marco Rossi" value="${editing ? escapeAttr(editing.referente || '') : ''}"></div>
         <div class="fg"><label>Dove/occasione</label><input type="text" id="wy-contact-luogo" placeholder="es. Vinitaly 2026, stand 12" value="${editing ? escapeAttr(editing.luogo || '') : ''}"></div>
@@ -5163,6 +5166,11 @@ async function deleteWineryContactInline(wineryId, id) {
 async function showWineryContactsScreen() {
   showScreen('screen-winery-contacts');
   cancelEditWineryContactQuick();
+  // La scansione del biglietto da visita riusa la stessa funzione AI premium
+  // della scansione etichette: va mostrata solo a chi ha ai_scan_enabled,
+  // stesso trattamento del banner AI nel form vino (vedi renderAiBanner).
+  const bizcardWrap = document.getElementById('wcl-bizcard-wrap');
+  if (bizcardWrap) bizcardWrap.style.display = currentUser?.aiScanEnabled ? '' : 'none';
   const box = document.getElementById('wcl-list');
   if (box) box.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted)">Caricamento…</div>';
   const { data, error } = await sb.from('winery_contacts')
