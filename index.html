@@ -428,7 +428,7 @@
     .btn-add-wine { display: flex; margin: 0 0 1rem auto; }
     .adv-filter-toggle-btn {
       display: flex; align-items: center; gap: 5px; justify-content: center;
-      margin: 0 0 1rem auto; cursor: pointer;
+      flex-shrink: 0; white-space: nowrap; cursor: pointer;
     }
     .adv-filter-toggle-btn.active { background: var(--wine-pale); color: var(--wine); border-color: var(--wine); }
 
@@ -637,9 +637,17 @@
     }
     .adv-filter-panel {
       display: none; background: var(--bg); border: 0.5px solid var(--border);
-      border-radius: 12px; padding: 1rem; margin-bottom: 1rem;
+      border-radius: 14px; padding: 1.1rem 1rem; margin-bottom: 1.25rem;
     }
     .adv-filter-panel.open { display: block; }
+    .adv-filter-group { margin-bottom: 14px; }
+    .adv-filter-group-label {
+      display: block; font-size: 10.5px; font-weight: 500; color: var(--muted);
+      text-transform: uppercase; letter-spacing: .04em; margin-bottom: 7px;
+    }
+    .adv-filter-group .sort-bar { margin: 0; }
+    .filter-chip-row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .adv-filter-divider { height: 1px; background: var(--border); margin: 4px 0 14px; }
     .adv-filter-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
     .adv-filter-field { flex: 1; min-width: 130px; }
     .adv-filter-field label { display: block; font-size: 11px; font-weight: 500; color: var(--muted); margin-bottom: 4px; }
@@ -1927,29 +1935,41 @@
     <div class="stat-row" id="stats-bar"></div>
     <div class="filter-bar">
       <input type="text" id="search-input" placeholder="Cerca nome, produttore, regione, abbinamento…" oninput="renderGrid()">
-      <div class="chip active" data-f="all" onclick="setFilter('all',this)">Tutti</div>
-      <div class="chip" data-f="Rosso"     onclick="setFilter('Rosso',this)">Rosso</div>
-      <div class="chip" data-f="Bianco"    onclick="setFilter('Bianco',this)">Bianco</div>
-      <div class="chip" data-f="Rosato"    onclick="setFilter('Rosato',this)">Rosato</div>
-      <div class="chip" data-f="Spumante"  onclick="setFilter('Spumante',this)">Spumante</div>
+      <div id="adv-filter-toggle" class="btn adv-filter-toggle-btn" onclick="toggleAdvFilters()"><i class="ti ti-filter"></i>Filtri<span id="adv-filter-badge" style="display:none"></span></div>
     </div>
-    <div class="filter-bar" style="margin-top:-.5rem">
-      <div class="chip active" data-qf="all" onclick="setQtyFilter('all',this)"><i class="ti ti-bottle" style="font-size:11px;vertical-align:-1px;margin-right:3px"></i>Tutte</div>
-      <div class="chip" data-qf="owned" onclick="setQtyFilter('owned',this)"><i class="ti ti-building-warehouse" style="font-size:11px;vertical-align:-1px;margin-right:3px"></i>In cantina</div>
-      <div class="chip" data-qf="tasted" onclick="setQtyFilter('tasted',this)"><i class="ti ti-glass-full" style="font-size:11px;vertical-align:-1px;margin-right:3px"></i>Solo degustati</div>
-    </div>
-    <div class="sort-bar">
-      <select id="sort-field" onchange="setSortField(this.value)">
-        <option value="created">Ordina per: data di aggiunta</option>
-        <option value="vintage">Ordina per: annata</option>
-        <option value="price">Ordina per: valore</option>
-        <option value="score">Ordina per: valutazione</option>
-        <option value="type">Ordina per: tipologia</option>
-      </select>
-      <button class="btn sm" id="sort-dir-btn" onclick="toggleSortDir()" title="Inverti ordine"><i class="ti ti-sort-descending"></i></button>
-    </div>
-    <div id="adv-filter-toggle" class="btn adv-filter-toggle-btn" onclick="toggleAdvFilters()"><i class="ti ti-filter"></i>Filtri<span id="adv-filter-badge" style="display:none"></span></div>
     <div class="adv-filter-panel" id="adv-filter-panel">
+      <div class="adv-filter-group">
+        <label class="adv-filter-group-label">Tipologia</label>
+        <div class="filter-chip-row">
+          <div class="chip active" data-f="all" onclick="setFilter('all',this)">Tutti</div>
+          <div class="chip" data-f="Rosso"     onclick="setFilter('Rosso',this)">Rosso</div>
+          <div class="chip" data-f="Bianco"    onclick="setFilter('Bianco',this)">Bianco</div>
+          <div class="chip" data-f="Rosato"    onclick="setFilter('Rosato',this)">Rosato</div>
+          <div class="chip" data-f="Spumante"  onclick="setFilter('Spumante',this)">Spumante</div>
+        </div>
+      </div>
+      <div class="adv-filter-group">
+        <label class="adv-filter-group-label">Stato</label>
+        <div class="filter-chip-row">
+          <div class="chip active" data-qf="all" onclick="setQtyFilter('all',this)"><i class="ti ti-bottle" style="font-size:11px;vertical-align:-1px;margin-right:3px"></i>Tutte</div>
+          <div class="chip" data-qf="owned" onclick="setQtyFilter('owned',this)"><i class="ti ti-building-warehouse" style="font-size:11px;vertical-align:-1px;margin-right:3px"></i>In cantina</div>
+          <div class="chip" data-qf="tasted" onclick="setQtyFilter('tasted',this)"><i class="ti ti-glass-full" style="font-size:11px;vertical-align:-1px;margin-right:3px"></i>Solo degustati</div>
+        </div>
+      </div>
+      <div class="adv-filter-group">
+        <label class="adv-filter-group-label">Ordina per</label>
+        <div class="sort-bar">
+          <select id="sort-field" onchange="setSortField(this.value)">
+            <option value="created">Data di aggiunta</option>
+            <option value="vintage">Annata</option>
+            <option value="price">Valore</option>
+            <option value="score">Valutazione</option>
+            <option value="type">Tipologia</option>
+          </select>
+          <button class="btn sm" id="sort-dir-btn" onclick="toggleSortDir()" title="Inverti ordine"><i class="ti ti-sort-descending"></i></button>
+        </div>
+      </div>
+      <div class="adv-filter-divider"></div>
       <div class="adv-filter-row">
         <div class="adv-filter-field">
           <label>Paese</label>
@@ -1989,7 +2009,7 @@
             <input type="number" id="af-price-max" placeholder="Max" min="0" step="1" oninput="renderGrid()" style="width:70px">
           </div>
         </div>
-        <button class="btn sm" onclick="resetAdvFilters()"><i class="ti ti-x"></i>Azzera</button>
+        <button class="btn sm" onclick="resetAdvFilters()"><i class="ti ti-x"></i>Azzera tutto</button>
       </div>
     </div>
     <button class="btn primary btn-add-wine" id="btn-add-wine" onclick="showAdd()"><i class="ti ti-plus"></i>Aggiungi vino</button>
@@ -6205,7 +6225,9 @@ function resetAdvFilters() {
 }
 
 function updateAdvFilterBadge() {
-  const n = ['af-country','af-region','af-pairing','af-grape','af-shopcat','af-price-min','af-price-max'].filter(id => document.getElementById(id)?.value).length;
+  let n = ['af-country','af-region','af-pairing','af-grape','af-shopcat','af-price-min','af-price-max'].filter(id => document.getElementById(id)?.value).length;
+  if (currentFilter !== 'all') n++;
+  if (currentQtyFilter !== 'all') n++;
   const badge = document.getElementById('adv-filter-badge');
   const toggle = document.getElementById('adv-filter-toggle');
   if (n > 0) { badge.textContent = n; badge.style.display = 'inline-flex'; toggle.classList.add('active'); }
