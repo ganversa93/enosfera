@@ -157,8 +157,16 @@
     .badge-fis    { background: var(--fis-pale); color: var(--fis); }
 
     /* ── STATS BAR ── */
+    .cantina-heading {
+      font-family: 'Cormorant Garamond', serif; font-size: 21px; font-weight: 500;
+      color: var(--ink); margin: 0 0 1rem;
+    }
+    .cantina-heading::after {
+      content: ''; display: block; width: 28px; height: 1px;
+      background: var(--gold); margin-top: 8px;
+    }
     .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 1.25rem; }
-    .stat { background: var(--bg); border: 0.5px solid var(--border); border-radius: 10px; padding: 10px 13px; }
+    .stat { background: var(--bg); border: 0.5px solid var(--border); border-radius: 12px; padding: 10px 13px; }
     .stat-n { font-size: 22px; font-weight: 500; font-family: 'Cormorant Garamond', serif; color: var(--wine); }
     .stat-l { font-size: 11px; color: var(--muted); margin-top: 2px; }
 
@@ -200,10 +208,19 @@
     .wine-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
     .wcard {
       background: var(--bg); border: 0.5px solid var(--border);
-      border-radius: 12px; overflow: hidden; cursor: pointer;
-      transition: border-color .15s, transform .1s;
+      border-radius: 14px; overflow: hidden; cursor: pointer; position: relative;
+      transition: border-color .2s ease, transform .2s ease, box-shadow .2s ease;
     }
-    .wcard:hover { border-color: var(--wine); transform: translateY(-1px); }
+    .wcard::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, var(--gold-l), var(--wine)); z-index: 2;
+      transform: scaleX(0); transform-origin: left; transition: transform .25s ease;
+    }
+    .wcard:hover {
+      border-color: var(--gold-l); transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(0,0,0,.08);
+    }
+    .wcard:hover::before { transform: scaleX(1); }
     .wimg {
       height: 170px; background: var(--wine-pale);
       display: flex; align-items: center; justify-content: center;
@@ -260,10 +277,10 @@
       .dn-list-tags { order: 4; justify-content: flex-end; }
     }
     .winfo { padding: 11px 13px; }
-    .wname { font-family: 'Cormorant Garamond', serif; font-size: 14px; font-weight: 500; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .wname { font-family: 'Cormorant Garamond', serif; font-size: 14.5px; font-weight: 500; letter-spacing: .01em; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .wprod { font-size: 11px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .wmeta { display: flex; justify-content: space-between; margin-top: 7px; font-size: 11px; color: var(--muted); align-items: center; }
-    .wscore { font-weight: 500; color: var(--gold); }
+    .wscore { font-weight: 600; color: var(--gold); }
     .stars { color: var(--gold); font-size: 10px; letter-spacing: -1px; }
 
     .wowner-row { display: flex; align-items: center; gap: 6px; margin-top: 8px; padding-top: 8px; border-top: 0.5px solid var(--border); }
@@ -1905,6 +1922,7 @@
         <button class="btn sm danger" onclick="doLogout()" title="Esci"><i class="ti ti-logout"></i></button>
       </div>
     </div>
+    <div class="cantina-heading">La tua cantina</div>
     <div class="cellar-selector" id="cellar-selector"></div>
     <div class="stat-row" id="stats-bar"></div>
     <div class="filter-bar">
