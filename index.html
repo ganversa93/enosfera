@@ -338,7 +338,7 @@
     .ltabs { display: flex; margin-bottom: 1.25rem; border: 0.5px solid var(--border); border-radius: 9px; overflow: hidden; }
     .ltab { flex: 1; padding: 9px; text-align: center; font-size: 13px; cursor: pointer; color: var(--muted); background: var(--surf); transition: all .15s; }
     .ltab.active { background: var(--wine); color: #fff; font-weight: 500; }
-    .lcard { background: var(--bg); border: 0.5px solid var(--border); border-radius: 12px; padding: 1.5rem; }
+    .lcard { background: var(--bg); border: 0.5px solid var(--border); border-radius: 16px; padding: 1.5rem; }
     .lfield { margin-bottom: 1rem; }
     .lfield:last-of-type { margin-bottom: 0; }
     .lfield label { display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin-bottom: 5px; }
@@ -374,7 +374,7 @@
     /* ── FORM ── */
     .fhdr { display: flex; align-items: center; gap: 12px; margin-bottom: 1.25rem; }
     .fhdr h2 { font-family: 'Cormorant Garamond', serif; font-size: 20px; color: var(--ink); }
-    .fsec { background: var(--bg); border: 0.5px solid var(--border); border-radius: 12px; padding: 1.25rem; margin-bottom: .9rem; }
+    .fsec { background: var(--bg); border: 0.5px solid var(--border); border-radius: 14px; padding: 1.25rem; margin-bottom: .9rem; }
     .stitle { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: .9rem; display: flex; align-items: center; gap: 5px; }
 
     /* ── ACCORDION (sezioni del form vino) ── */
@@ -886,10 +886,19 @@
     /* ── EVENTI ── */
     .event-card {
       background: var(--bg); border: 0.5px solid var(--border); border-radius: 14px;
-      padding: 1rem 1.1rem; margin-bottom: 10px; cursor: pointer; position: relative;
-      transition: transform .15s, border-color .15s;
+      padding: 1rem 1.1rem; margin-bottom: 10px; cursor: pointer; position: relative; overflow: hidden;
+      transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease;
     }
-    .event-card:hover { border-color: var(--wine); transform: translateY(-2px); }
+    .event-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, var(--gold-l), var(--wine)); z-index: 1;
+      transform: scaleX(0); transform-origin: left; transition: transform .25s ease;
+    }
+    .event-card:hover {
+      border-color: var(--gold-l); transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(0,0,0,.08);
+    }
+    .event-card:hover::before { transform: scaleX(1); }
     .event-card-name { font-family: 'Cormorant Garamond', serif; font-size: 18px; color: var(--ink); margin-bottom: 3px; }
     .event-card-loc { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 4px; margin-bottom: 6px; }
     .event-card-desc {
@@ -899,10 +908,19 @@
     /* ── BLOG ── */
     .blog-card {
       display: flex; gap: 12px; background: var(--bg); border: 0.5px solid var(--border);
-      border-radius: 14px; padding: 10px; margin-bottom: 10px; cursor: pointer;
-      transition: transform .15s, border-color .15s;
+      border-radius: 14px; padding: 10px; margin-bottom: 10px; cursor: pointer; position: relative; overflow: hidden;
+      transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease;
     }
-    .blog-card:hover { border-color: var(--wine); transform: translateY(-2px); }
+    .blog-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, var(--gold-l), var(--wine)); z-index: 1;
+      transform: scaleX(0); transform-origin: left; transition: transform .25s ease;
+    }
+    .blog-card:hover {
+      border-color: var(--gold-l); transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(0,0,0,.08);
+    }
+    .blog-card:hover::before { transform: scaleX(1); }
     .blog-card-img { width: 42%; flex-shrink: 0; aspect-ratio: 4 / 3; border-radius: 10px; overflow: hidden; background: var(--wine-pale); }
     .blog-card-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .blog-card-img-ph { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: var(--wine); font-size: 22px; }
@@ -991,7 +1009,7 @@
     .tag { font-size: 11px; padding: 3px 9px; border-radius: 20px; background: #fff; color: var(--wine); font-weight: 500; }
 
     /* ── EXPORT ── */
-    .export-card { background: var(--bg); border: 0.5px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: .9rem; }
+    .export-card { background: var(--bg); border: 0.5px solid var(--border); border-radius: 14px; overflow: hidden; margin-bottom: .9rem; }
     .export-row { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 0.5px solid var(--border); }
     .export-row:last-child { border-bottom: none; }
     .export-info { display: flex; align-items: flex-start; gap: 12px; flex: 1; }
@@ -1375,24 +1393,20 @@
     <div class="stitle" style="margin:0 0 .75rem .1rem"><i class="ti ti-bottle-filled"></i>Ultimi vini da chi segui</div>
     <div class="filter-bar">
       <input type="text" id="network-feed-search" placeholder="Cerca nome, produttore, regione, abbinamento…" oninput="renderNetworkFeed()">
-      <div class="chip active" data-nf="all" onclick="setNetworkFilter('all',this)">Tutti</div>
-      <div class="chip" data-nf="Rosso"     onclick="setNetworkFilter('Rosso',this)">Rosso</div>
-      <div class="chip" data-nf="Bianco"    onclick="setNetworkFilter('Bianco',this)">Bianco</div>
-      <div class="chip" data-nf="Rosato"    onclick="setNetworkFilter('Rosato',this)">Rosato</div>
-      <div class="chip" data-nf="Spumante"  onclick="setNetworkFilter('Spumante',this)">Spumante</div>
+      <div id="nf-adv-filter-toggle" class="btn adv-filter-toggle-btn" onclick="toggleNetworkAdvFilters()"><i class="ti ti-filter"></i>Filtri<span id="nf-adv-filter-badge" style="display:none"></span></div>
     </div>
-    <div class="sort-bar">
-      <select id="nf-sort-field" onchange="setNetworkSortField(this.value)">
-        <option value="created">Ordina per: data di aggiunta</option>
-        <option value="vintage">Ordina per: annata</option>
-        <option value="price">Ordina per: valore</option>
-        <option value="score">Ordina per: valutazione</option>
-        <option value="type">Ordina per: tipologia</option>
-      </select>
-      <button class="btn sm" id="nf-sort-dir-btn" onclick="toggleNetworkSortDir()" title="Inverti ordine"><i class="ti ti-sort-descending"></i></button>
-    </div>
-    <div id="nf-adv-filter-toggle" class="btn adv-filter-toggle-btn" onclick="toggleNetworkAdvFilters()"><i class="ti ti-filter"></i>Filtri<span id="nf-adv-filter-badge" style="display:none"></span></div>
     <div class="adv-filter-panel" id="nf-adv-filter-panel">
+      <div class="adv-filter-group">
+        <label class="adv-filter-group-label">Tipologia</label>
+        <div class="filter-chip-row">
+          <div class="chip active" data-nf="all" onclick="setNetworkFilter('all',this)">Tutti</div>
+          <div class="chip" data-nf="Rosso"     onclick="setNetworkFilter('Rosso',this)">Rosso</div>
+          <div class="chip" data-nf="Bianco"    onclick="setNetworkFilter('Bianco',this)">Bianco</div>
+          <div class="chip" data-nf="Rosato"    onclick="setNetworkFilter('Rosato',this)">Rosato</div>
+          <div class="chip" data-nf="Spumante"  onclick="setNetworkFilter('Spumante',this)">Spumante</div>
+        </div>
+      </div>
+      <div class="adv-filter-divider"></div>
       <div class="adv-filter-row">
         <div class="adv-filter-field">
           <label>Utente</label>
@@ -1432,8 +1446,22 @@
             <option value="">Tutti</option>
           </select>
         </div>
-        <button class="btn sm" onclick="resetNetworkFilters()"><i class="ti ti-x"></i>Azzera</button>
       </div>
+      <div class="adv-filter-divider"></div>
+      <div class="adv-filter-group">
+        <label class="adv-filter-group-label">Ordina per</label>
+        <div class="sort-bar">
+          <select id="nf-sort-field" onchange="setNetworkSortField(this.value)">
+            <option value="created">Data di aggiunta</option>
+            <option value="vintage">Annata</option>
+            <option value="price">Valore</option>
+            <option value="score">Valutazione</option>
+            <option value="type">Tipologia</option>
+          </select>
+          <button class="btn sm" id="nf-sort-dir-btn" onclick="toggleNetworkSortDir()" title="Inverti ordine"><i class="ti ti-sort-descending"></i></button>
+        </div>
+      </div>
+      <button class="btn sm" style="margin-top:4px" onclick="resetNetworkFilters()"><i class="ti ti-x"></i>Azzera tutto</button>
     </div>
     <div id="network-feed"><div class="empty"><i class="ti ti-users"></i><p>Segui qualche appassionato o sommelier per vedere qui i loro vini.</p></div></div>
   </div>
@@ -9930,7 +9958,8 @@ function resetNetworkFilters() {
 }
 
 function updateNetworkAdvFilterBadge() {
-  const n = ['nf-owner','nf-sommelier','nf-country','nf-region','nf-pairing','nf-grape'].filter(id => document.getElementById(id)?.value).length;
+  let n = ['nf-owner','nf-sommelier','nf-country','nf-region','nf-pairing','nf-grape'].filter(id => document.getElementById(id)?.value).length;
+  if (currentNetworkFilter !== 'all') n++;
   const badge  = document.getElementById('nf-adv-filter-badge');
   const toggle = document.getElementById('nf-adv-filter-toggle');
   if (n > 0) { badge.textContent = n; badge.style.display = 'inline-flex'; toggle.classList.add('active'); }
