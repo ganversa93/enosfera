@@ -206,26 +206,30 @@
     #screen-highlights .stat-row .stat { flex: 1 1 110px; }
     .hl-period-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 1rem; }
     .hl-period-bar select, .hl-period-bar input[type="date"] {
-      font-family: 'Inter', sans-serif; font-size: 12px; padding: 6px 10px; border-radius: 8px;
+      font-family: 'Inter', sans-serif; font-size: 12px; padding: 6px 10px; border-radius: 10px;
       border: 0.5px solid var(--border); background: var(--bg); color: var(--ink);
+      transition: border-color .15s ease;
     }
+    .hl-period-bar select:focus, .hl-period-bar input[type="date"]:focus { outline: none; border-color: var(--gold-l); }
     .hl-back-link { font-size: 11px; color: var(--wine); text-decoration: underline; display: inline-block; margin-bottom: 6px; }
 
     /* ── FILTERS ── */
     .filter-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1.25rem; align-items: center; }
     .filter-bar input {
       flex: 1; min-width: 140px; font-family: 'Inter', sans-serif;
-      font-size: 13px; padding: 7px 12px; border-radius: 8px;
+      font-size: 13px; padding: 7px 12px; border-radius: 10px;
       border: 0.5px solid var(--border); background: var(--bg); color: var(--ink);
+      transition: border-color .15s ease;
     }
-    .filter-bar input:focus { outline: none; border-color: var(--wine); }
+    .filter-bar input:focus { outline: none; border-color: var(--gold-l); }
     .sort-bar { display: flex; gap: 8px; align-items: center; margin: -0.25rem 0 1.25rem; }
     .sort-bar select {
       flex: 1; font-family: 'Inter', sans-serif; font-size: 13px;
-      padding: 7px 10px; border-radius: 8px; border: 0.5px solid var(--border);
+      padding: 7px 10px; border-radius: 10px; border: 0.5px solid var(--border);
       background: var(--bg); color: var(--ink);
+      transition: border-color .15s ease;
     }
-    .sort-bar select:focus { outline: none; border-color: var(--wine); }
+    .sort-bar select:focus { outline: none; border-color: var(--gold-l); }
     .sort-bar .btn.sm { flex-shrink: 0; padding: 7px 11px; }
     .chip {
       font-size: 12px; padding: 5px 12px; border-radius: 20px;
@@ -344,10 +348,11 @@
     .lfield label { display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin-bottom: 5px; }
     .lfield input, .lfield select, .lfield textarea {
       width: 100%; font-family: 'Inter', sans-serif; font-size: 13px;
-      padding: 9px 12px; border-radius: 8px;
+      padding: 9px 12px; border-radius: 10px;
       border: 0.5px solid var(--border); background: var(--bg); color: var(--ink);
+      transition: border-color .15s ease;
     }
-    .lfield input:focus, .lfield select:focus, .lfield textarea:focus { outline: none; border-color: var(--wine); }
+    .lfield input:focus, .lfield select:focus, .lfield textarea:focus { outline: none; border-color: var(--gold-l); }
     .lfield textarea { resize: vertical; }
     .lbtn {
       width: 100%; padding: 10px; font-size: 14px; font-weight: 500;
@@ -391,10 +396,11 @@
     .fg label { display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin-bottom: 5px; }
     .fg input, .fg select, .fg textarea {
       width: 100%; font-family: 'Inter', sans-serif; font-size: 13px;
-      padding: 8px 12px; border-radius: 8px;
+      padding: 8px 12px; border-radius: 10px;
       border: 0.5px solid var(--border); background: var(--bg); color: var(--ink);
+      transition: border-color .15s ease;
     }
-    .fg input:focus, .fg select:focus, .fg textarea:focus { outline: none; border-color: var(--wine); }
+    .fg input:focus, .fg select:focus, .fg textarea:focus { outline: none; border-color: var(--gold-l); }
     .fg textarea { resize: vertical; min-height: 75px; }
 
     .qty-stepper { display: flex; align-items: center; gap: 10px; }
@@ -422,7 +428,7 @@
     /* ── VISIBILITÀ NETWORK ── */
     .visibility-toggle {
       display: flex; align-items: center; justify-content: space-between; gap: 12px;
-      background: var(--bg); border: 0.5px solid var(--border); border-radius: 12px;
+      background: var(--bg); border: 0.5px solid var(--border); border-radius: 14px;
       padding: 12px 14px; margin-bottom: .9rem;
     }
     .visibility-toggle-label { font-size: 13px; font-weight: 500; color: var(--ink); }
@@ -683,9 +689,11 @@
     .adv-filter-field label { display: block; font-size: 11px; font-weight: 500; color: var(--muted); margin-bottom: 4px; }
     .adv-filter-field select, .adv-filter-field input {
       width: 100%; font-family: 'Inter', sans-serif; font-size: 13px;
-      padding: 7px 10px; border-radius: 8px; border: 0.5px solid var(--border);
+      padding: 7px 10px; border-radius: 10px; border: 0.5px solid var(--border);
       background: var(--bg); color: var(--ink);
+      transition: border-color .15s ease;
     }
+    .adv-filter-field select:focus, .adv-filter-field input:focus { outline: none; border-color: var(--gold-l); }
 
     /* ── AUTOCOMPLETE personalizzato (sostituisce datalist, poco affidabile su iOS) ── */
     .ac-box {
@@ -714,18 +722,18 @@
     .hl-chip.active { background: var(--wine); color: #fff; border-color: var(--wine); font-weight: 500; }
 
     .upload-z {
-      border: 1.5px dashed var(--border); border-radius: 10px;
+      border: 1.5px dashed var(--border); border-radius: 12px;
       padding: 1.25rem; text-align: center; cursor: pointer;
-      transition: all .15s; margin-bottom: 8px;
+      transition: all .2s ease; margin-bottom: 8px;
     }
-    .upload-z:hover { border-color: var(--wine); background: var(--wine-pale); }
+    .upload-z:hover { border-color: var(--gold-l); background: var(--wine-pale); }
     .upload-z i { font-size: 26px; color: var(--wine); opacity: .55; margin-bottom: 7px; display: block; }
     .upload-z p { font-size: 12px; color: var(--muted); }
     .upload-z b { color: var(--wine); }
 
     .ai-banner {
       background: var(--wine-pale); border: 0.5px solid rgba(107,30,46,.2);
-      border-radius: 10px; padding: 11px 15px; margin-bottom: .9rem;
+      border-radius: 12px; padding: 11px 15px; margin-bottom: .9rem;
       display: flex; align-items: center; gap: 11px; flex-wrap: wrap;
     }
     .ai-pill {
