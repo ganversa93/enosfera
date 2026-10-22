@@ -1591,8 +1591,8 @@
       <div class="stitle fsec-header" onclick="toggleSection('guide-2')"><i class="ti ti-award"></i>Schede di degustazione<i class="ti ti-chevron-down fsec-chevron"></i></div>
       <div class="fsec-body">
         <ul class="guide-list">
-          <li>Chi ha un'associazione impostata nel profilo (AIS o FISAR) vede il proprio metodo ufficiale + la modalità <b>Libera</b>.</li>
-          <li>Chi non ha nessuna associazione vede solo la modalità <b>Libera</b> — le schede AIS/FISAR sono riservate ai rispettivi iscritti.</li>
+          <li>Chi ha un'associazione impostata nel profilo (AIS, FISAR, ONAV o FIS) vede il proprio metodo ufficiale + la modalità <b>Libera</b>.</li>
+          <li>Chi non ha nessuna associazione vede solo la modalità <b>Libera</b> — le schede ufficiali sono riservate ai rispettivi iscritti.</li>
           <li>Il punteggio mostrato sulla card del vino viene calcolato automaticamente in base ai parametri della scheda scelta.</li>
         </ul>
       </div>
@@ -3798,7 +3798,7 @@
         <button class="btn primary sm" onclick="exportJSON()">Scarica JSON</button>
       </div>
       <div class="export-row">
-        <div class="export-info"><i class="ti ti-printer" aria-hidden="true"></i><div class="export-info-text"><span>Schede di degustazione</span><small>Pagine HTML stampabili con parametri AIS e FISAR</small></div></div>
+        <div class="export-info"><i class="ti ti-printer" aria-hidden="true"></i><div class="export-info-text"><span>Schede di degustazione</span><small>Pagine HTML stampabili con i parametri delle principali associazioni italiane</small></div></div>
         <button class="btn primary sm" onclick="exportTasting()">Genera schede</button>
       </div>
       <div class="export-row">
@@ -10145,7 +10145,7 @@ function exportJSON() {
 }
 function exportTasting() {
   const w = myWines().filter(x => x.degSchema !== 'free');
-  if (!w.length) { showExportMsg('Nessuna scheda AIS/FISAR trovata'); return; }
+  if (!w.length) { showExportMsg('Nessuna scheda di degustazione trovata'); return; }
   let html = `<!DOCTYPE html><html lang="it"><head><meta charset="utf-8"><title>Schede degustazione — ${currentUser.name}</title><style>body{font-family:Georgia,serif;max-width:720px;margin:auto;padding:2.5rem;color:#1A1410}h1{color:#6B1E2E;font-size:1.5rem}h2{font-size:1.1rem;color:#1A3A6B;margin:.5rem 0 .25rem}p{font-size:.85rem;line-height:1.7;margin:.25rem 0}.chip{display:inline-block;background:#F5ECE8;color:#6B1E2E;font-size:.75rem;padding:2px 8px;border-radius:10px;margin-right:4px}.bar{height:5px;background:#eee;border-radius:3px;margin:3px 0}.fill{height:100%;border-radius:3px}.fill.ais{background:#1A3A6B}.fill.fisar{background:#1A5C3A}.score{font-size:2rem;color:#6B1E2E;font-weight:bold}.meta{font-size:.75rem;color:#888}.divider{border:none;border-top:1px solid #ddd;margin:2rem 0}@media print{.divider{page-break-before:always}}</style></head><body>`;
   html += `<h1>Schede di degustazione</h1><p class="meta">${currentUser.name} · ${currentUser.assoc || 'Appassionato'} ${currentUser.card ? '· ' + currentUser.card : ''} · ${new Date().toLocaleDateString('it-IT')}</p>`;
   w.forEach(x => {
