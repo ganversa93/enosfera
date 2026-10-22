@@ -130,6 +130,7 @@
     .logo {
       display: flex; align-items: center; gap: 9px;
       background: var(--wine); border-radius: 24px; padding: 6px 14px 6px 6px;
+      box-shadow: 0 4px 14px rgba(107,24,57,.22);
     }
     .nav-logo-img {
       width: 28px; height: 28px; object-fit: contain; flex-shrink: 0;
@@ -478,22 +479,42 @@
     .cellar-chip.active { background: var(--wine); color: #fff; border-color: var(--wine); font-weight: 500; }
 
     /* ── HOME ── */
-    .home-welcome { font-family: 'Cormorant Garamond', serif; font-size: 22px; color: var(--ink); margin: 1.5rem 0 1.25rem; text-align: center; }
+    .home-welcome {
+      font-family: 'Cormorant Garamond', serif; font-size: 26px; font-weight: 500;
+      color: var(--ink); margin: 1.75rem 0 1.6rem; text-align: center;
+    }
+    .home-welcome::after {
+      content: ''; display: block; width: 34px; height: 1px;
+      background: var(--gold); margin: 13px auto 0;
+    }
     .home-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
     .home-card {
-      background: var(--bg); border: 0.5px solid var(--border); border-radius: 16px;
-      padding: 1.75rem 1.25rem; text-align: center; cursor: pointer;
-      transition: transform .15s, border-color .15s;
+      background: var(--bg); border: 0.5px solid var(--border); border-radius: 18px;
+      padding: 1.9rem 1.3rem; text-align: center; cursor: pointer; position: relative; overflow: hidden;
+      transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease;
     }
-    .home-card:hover { border-color: var(--wine); transform: translateY(-2px); }
-    .home-card i { font-size: 34px; color: var(--wine); margin-bottom: 10px; display: block; }
-    .home-card-title { font-family: 'Cormorant Garamond', serif; font-size: 18px; color: var(--ink); margin-bottom: 3px; }
-    .home-card-sub { font-size: 11px; color: var(--muted); }
+    .home-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, var(--gold-l), var(--wine));
+      transform: scaleX(0); transform-origin: left; transition: transform .25s ease;
+    }
+    .home-card:hover {
+      border-color: var(--gold-l); transform: translateY(-3px);
+      box-shadow: 0 10px 28px rgba(0,0,0,.08);
+    }
+    .home-card:hover::before { transform: scaleX(1); }
+    .home-card i {
+      font-size: 21px; color: var(--wine); width: 52px; height: 52px; border-radius: 50%;
+      background: var(--wine-pale); display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 14px;
+    }
+    .home-card-title { font-family: 'Cormorant Garamond', serif; font-size: 19px; font-weight: 500; color: var(--ink); margin-bottom: 4px; letter-spacing: .01em; }
+    .home-card-sub { font-size: 11px; color: var(--muted); letter-spacing: .01em; }
     .home-card-wide {
       grid-column: 1 / -1; display: flex; align-items: center; gap: 14px;
-      text-align: left; padding: 1.1rem 1.25rem;
+      text-align: left; padding: 1.15rem 1.3rem;
     }
-    .home-card-wide i { margin-bottom: 0; }
+    .home-card-wide i { margin: 0; }
     .home-admin-badge {
       background: var(--wine); color: #fff; font-size: 12px; font-weight: 700;
       min-width: 22px; height: 22px; border-radius: 12px; padding: 0 7px;
@@ -504,9 +525,9 @@
       flex: 1; display: flex; align-items: center; justify-content: center; gap: 10px;
       background: var(--bg); border: 0.5px solid var(--border); border-radius: 14px;
       padding: 14px 16px; text-decoration: none; cursor: pointer;
-      transition: transform .15s, border-color .15s;
+      transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease;
     }
-    .home-feedback-btn:hover { border-color: var(--wine); transform: translateY(-2px); }
+    .home-feedback-btn:hover { border-color: var(--gold-l); transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,.07); }
     .home-feedback-btn i { font-size: 22px; color: var(--wine); flex-shrink: 0; }
     .home-feedback-btn span { font-family: 'Inter', sans-serif; font-size: 12.5px; font-weight: 500; color: var(--ink); }
     @media (max-width: 380px) { .home-feedback-row { flex-direction: column; } }
