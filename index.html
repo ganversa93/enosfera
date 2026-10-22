@@ -903,6 +903,23 @@
     .winery-catalog-row .rm-btn:hover { opacity: 1; color: #c0392b; }
     .winery-catalog-row .edit-btn:hover { opacity: 1; }
 
+    /* ── CONTATTI CANTINA ── */
+    .wc-contact-row {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 12px 0; border-bottom: 0.5px solid var(--border);
+    }
+    .wc-contact-row:last-child { border-bottom: none; }
+    .wc-contact-row .rm-btn, .wc-contact-row .edit-btn { cursor: pointer; opacity: .7; font-size: 15px; line-height: 1; flex-shrink: 0; margin-top: 2px; }
+    .wc-contact-row .rm-btn { color: var(--muted); font-size: 16px; }
+    .wc-contact-row .edit-btn { color: var(--wine); }
+    .wc-contact-row .rm-btn:hover { opacity: 1; color: #c0392b; }
+    .wc-contact-row .edit-btn:hover { opacity: 1; }
+    .wc-contact-winery { font-family: 'Cormorant Garamond', serif; font-size: 15px; font-weight: 500; color: var(--ink); cursor: pointer; }
+    .wc-contact-winery:hover { text-decoration: underline; }
+    .wc-contact-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .wc-contact-note { font-size: 12.5px; color: var(--ink); margin-top: 5px; line-height: 1.5; font-style: italic; }
+    .wc-contact-date { font-size: 10.5px; color: var(--muted); margin-top: 5px; }
+
     /* ── EVENTI ── */
     .event-card {
       background: var(--bg); border: 0.5px solid var(--border); border-radius: 14px;
@@ -1362,6 +1379,11 @@
         <i class="ti ti-calendar-event"></i>
         <div class="home-card-title">Eventi</div>
         <div class="home-card-sub">Fiere e degustazioni</div>
+      </div>
+      <div class="home-card" onclick="showWineryContactsScreen()">
+        <i class="ti ti-address-book"></i>
+        <div class="home-card-title">Contatti cantine</div>
+        <div class="home-card-sub">Il tuo taccuino di fiera</div>
       </div>
       <div class="home-card" onclick="showNetworkScreen()">
         <i class="ti ti-users"></i>
@@ -3557,6 +3579,34 @@
     <div id="winery-detail-body"></div>
   </div>
 
+  <!-- ══ CONTATTI CANTINA (taccuino personale) ══ -->
+  <div id="screen-winery-contacts" class="screen">
+    <div class="nav" style="margin-bottom:1.1rem">
+      <button class="btn sm" onclick="showScreen('screen-home')"><i class="ti ti-arrow-left"></i>Home</button>
+      <span style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--ink)">I miei contatti</span>
+    </div>
+    <div class="fsec" id="wc-form-sec">
+      <div class="stitle" id="wc-form-title"><i class="ti ti-address-book"></i>Nuovo contatto</div>
+      <div class="fg" style="position:relative">
+        <label>Cantina</label>
+        <input type="text" id="wcl-winery-name" placeholder="Cerca o scrivi il nome della cantina…" autocomplete="off">
+      </div>
+      <div class="frow">
+        <div class="fg"><label>Referente</label><input type="text" id="wcl-referente" placeholder="es. Marco Rossi"></div>
+        <div class="fg"><label>Dove/occasione</label><input type="text" id="wcl-luogo" placeholder="es. Vinitaly 2026, stand 12"></div>
+      </div>
+      <div class="fg"><label>Note</label><textarea id="wcl-note" rows="3" placeholder="Impressioni, vini assaggiati, follow-up da fare…"></textarea></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn sm primary" onclick="saveWineryContactQuick()"><i class="ti ti-device-floppy"></i>Salva contatto</button>
+        <button class="btn sm" id="wcl-cancel-btn" style="display:none" onclick="cancelEditWineryContactQuick()">Annulla modifica</button>
+      </div>
+    </div>
+    <div class="filter-bar" style="margin-top:1.25rem">
+      <input type="text" id="wcl-search" placeholder="Cerca per cantina, referente, luogo…" oninput="renderWineryContactsList()">
+    </div>
+    <div id="wcl-list"></div>
+  </div>
+
   <!-- ══ ADMIN: CANTINE DA COMPLETARE ══ -->
   <div id="screen-admin-wineries" class="screen">
     <div class="nav" style="margin-bottom:.9rem">
@@ -3956,6 +4006,9 @@ let regType = 'person'; // 'person' | 'winery' — scelta nel form di registrazi
 let currentWineryId = null;  // cantina aperta sulla schermata scheda-cantina
 let currentWineryOwnerId = null; // owner_user_id della cantina aperta, per i permessi di modifica
 let wineryReturnScreen = 'screen-list'; // schermata da cui si è aperta la scheda-cantina
+let wineryContactsCache = [];       // tutti i contatti dell'utente (schermata "I miei contatti"), con join sul nome cantina
+let editingWineryContactId = null;  // contatto in modifica nella schermata elenco, null = nuovo
+let selectedContactWineryId = null; // cantina scelta via autocomplete nella schermata elenco, null = risolvi per nome al salvataggio
 let wineryRegionSuggestions = [];   // autocomplete regione nella scheda-cantina (admin), dipende dal paese scelto
 let wineryProvinceSuggestions = []; // autocomplete provincia nella scheda-cantina (admin), dipende dalla regione scelta
 let editingWineryWineId = null; // id del vino-catalogo in modifica nella riga di aggiunta, null = si sta aggiungendo
@@ -4994,6 +5047,174 @@ async function findOrCreateWinery(rawName) {
   return retry?.id || null;
 }
 
+function fmtShortDate(d) {
+  if (!d) return '';
+  try { return new Date(d).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' }); }
+  catch (e) { return ''; }
+}
+
+/* ══ CONTATTI CANTINA (taccuino personale, privato — RLS li riserva al
+   proprietario) ══
+   Pensato per annotare le cantine incontrate in fiera: referente,
+   dove/occasione e note. Riusa l'anagrafica wineries già esistente per
+   vini/claim (stesso autocomplete, stesso findOrCreateWinery), così un
+   vino e un contatto per la stessa cantina puntano allo stesso id,
+   nessun doppione. Due punti di accesso sullo stesso store: la sezione
+   dentro la scheda cantina (solo i contatti per quella cantina) e la
+   schermata "I miei contatti" (tutti, con ricerca). */
+
+let wineryContactsForCurrentWinery = []; // contatti caricati per la scheda-cantina aperta, riusati dai pulsanti modifica/annulla senza serializzarli nell'onclick
+
+async function loadWineryContactsSection(wineryId) {
+  const sec = document.getElementById('wy-contacts-section');
+  if (!sec) return;
+  const { data, error } = await sb.from('winery_contacts')
+    .select('id,referente,luogo,note,created_at')
+    .eq('winery_id', wineryId)
+    .order('created_at', { ascending: false });
+  if (error) { console.warn('loadWineryContactsSection', error); return; }
+  wineryContactsForCurrentWinery = data || [];
+  renderWineryContactsSection(wineryId, wineryContactsForCurrentWinery);
+}
+
+function renderWineryContactsSection(wineryId, contacts, editId) {
+  const sec = document.getElementById('wy-contacts-section');
+  if (!sec) return;
+  const editing = editId ? contacts.find(c => c.id === editId) : null;
+  const listHtml = contacts.length ? contacts.map(c => `
+      <div class="wc-contact-row">
+        <div style="flex:1;min-width:0">
+          <div class="wc-contact-meta">${[c.referente, c.luogo].filter(Boolean).map(escapeAttr).join(' · ') || '—'}</div>
+          ${c.note ? `<div class="wc-contact-note">${escapeAttr(c.note)}</div>` : ''}
+          <div class="wc-contact-date">${fmtShortDate(c.created_at)}</div>
+        </div>
+        <span class="edit-btn" onclick="renderWineryContactsSection('${wineryId}', wineryContactsForCurrentWinery, '${c.id}')" title="Modifica"><i class="ti ti-edit"></i></span>
+        <span class="rm-btn" onclick="deleteWineryContactInline('${wineryId}','${c.id}')">×</span>
+      </div>`).join('')
+    : `<div style="font-size:12px;color:var(--muted);padding:.5rem 0">Nessun contatto ancora salvato per questa cantina.</div>`;
+  sec.innerHTML = `
+    <div class="fsec" style="margin-top:1.25rem">
+      <div class="stitle"><i class="ti ti-address-book"></i>I miei contatti per questa cantina</div>
+      <div id="wy-contacts-list">${listHtml}</div>
+      <div class="frow" style="margin-top:10px">
+        <div class="fg"><label>Referente</label><input type="text" id="wy-contact-referente" placeholder="es. Marco Rossi" value="${editing ? escapeAttr(editing.referente || '') : ''}"></div>
+        <div class="fg"><label>Dove/occasione</label><input type="text" id="wy-contact-luogo" placeholder="es. Vinitaly 2026, stand 12" value="${editing ? escapeAttr(editing.luogo || '') : ''}"></div>
+      </div>
+      <div class="fg"><label>Note</label><textarea id="wy-contact-note" rows="2" placeholder="Impressioni, vini assaggiati, follow-up da fare…">${editing ? escapeAttr(editing.note || '') : ''}</textarea></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn sm primary" onclick="saveWineryContactInline('${wineryId}'${editing ? `,'${editing.id}'` : ''})"><i class="ti ti-${editing ? 'device-floppy' : 'plus'}"></i>${editing ? 'Salva modifiche' : 'Aggiungi contatto'}</button>
+        ${editing ? `<button class="btn sm" onclick="renderWineryContactsSection('${wineryId}', wineryContactsForCurrentWinery)">Annulla</button>` : ''}
+      </div>
+    </div>`;
+}
+
+async function saveWineryContactInline(wineryId, editId) {
+  const referente = document.getElementById('wy-contact-referente')?.value.trim() || null;
+  const luogo = document.getElementById('wy-contact-luogo')?.value.trim() || null;
+  const note = document.getElementById('wy-contact-note')?.value.trim() || null;
+  const row = { user_id: currentUser.id, winery_id: wineryId, referente, luogo, note };
+  const { error } = editId
+    ? await sb.from('winery_contacts').update(row).eq('id', editId)
+    : await sb.from('winery_contacts').insert(row);
+  if (error) { toastErr(error.message); return; }
+  toast(editId ? 'Contatto aggiornato' : 'Contatto salvato');
+  loadWineryContactsSection(wineryId);
+}
+
+async function deleteWineryContactInline(wineryId, id) {
+  if (!confirm('Eliminare questo contatto?')) return;
+  const { error } = await sb.from('winery_contacts').delete().eq('id', id);
+  if (error) { toastErr(error.message); return; }
+  loadWineryContactsSection(wineryId);
+}
+
+/* ── Schermata "I miei contatti": tutti i contatti dell'utente, con ricerca ── */
+async function showWineryContactsScreen() {
+  showScreen('screen-winery-contacts');
+  cancelEditWineryContactQuick();
+  const box = document.getElementById('wcl-list');
+  if (box) box.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted)">Caricamento…</div>';
+  const { data, error } = await sb.from('winery_contacts')
+    .select('id,winery_id,referente,luogo,note,created_at,wineries(name)')
+    .order('created_at', { ascending: false });
+  if (error) { console.warn('showWineryContactsScreen', error); wineryContactsCache = []; }
+  else wineryContactsCache = data || [];
+  renderWineryContactsList();
+}
+
+function renderWineryContactsList() {
+  const q = (document.getElementById('wcl-search')?.value || '').toLowerCase();
+  const list = wineryContactsCache.filter(c => matchesSearch(q, [c.wineries?.name, c.referente, c.luogo, c.note]));
+  const box = document.getElementById('wcl-list');
+  if (!box) return;
+  if (!list.length) {
+    box.innerHTML = `<div class="empty"><i class="ti ti-address-book"></i><p>${wineryContactsCache.length ? 'Nessun contatto corrisponde alla ricerca.' : 'Non hai ancora salvato contatti. Aggiungine uno qui sopra.'}</p></div>`;
+    return;
+  }
+  box.innerHTML = list.map(c => `
+    <div class="wc-contact-row">
+      <div style="flex:1;min-width:0">
+        <div class="wc-contact-winery" onclick="showWineryDetail('${c.winery_id}')">${escapeAttr(c.wineries?.name || 'Cantina')}</div>
+        <div class="wc-contact-meta">${[c.referente, c.luogo].filter(Boolean).map(escapeAttr).join(' · ') || '—'}</div>
+        ${c.note ? `<div class="wc-contact-note">${escapeAttr(c.note)}</div>` : ''}
+        <div class="wc-contact-date">${fmtShortDate(c.created_at)}</div>
+      </div>
+      <span class="edit-btn" onclick="editWineryContactQuick('${c.id}')" title="Modifica"><i class="ti ti-edit"></i></span>
+      <span class="rm-btn" onclick="deleteWineryContactQuick('${c.id}')">×</span>
+    </div>`).join('');
+}
+
+function editWineryContactQuick(id) {
+  const c = wineryContactsCache.find(x => x.id === id);
+  if (!c) return;
+  editingWineryContactId = id;
+  selectedContactWineryId = c.winery_id;
+  document.getElementById('wcl-winery-name').value = c.wineries?.name || '';
+  document.getElementById('wcl-referente').value = c.referente || '';
+  document.getElementById('wcl-luogo').value = c.luogo || '';
+  document.getElementById('wcl-note').value = c.note || '';
+  const title = document.getElementById('wc-form-title');
+  if (title) title.innerHTML = '<i class="ti ti-address-book"></i>Modifica contatto';
+  const cancelBtn = document.getElementById('wcl-cancel-btn');
+  if (cancelBtn) cancelBtn.style.display = '';
+  document.getElementById('wc-form-sec')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function cancelEditWineryContactQuick() {
+  editingWineryContactId = null;
+  selectedContactWineryId = null;
+  ['wcl-winery-name', 'wcl-referente', 'wcl-luogo', 'wcl-note'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  const title = document.getElementById('wc-form-title');
+  if (title) title.innerHTML = '<i class="ti ti-address-book"></i>Nuovo contatto';
+  const cancelBtn = document.getElementById('wcl-cancel-btn');
+  if (cancelBtn) cancelBtn.style.display = 'none';
+}
+
+async function saveWineryContactQuick() {
+  const typedName = document.getElementById('wcl-winery-name')?.value.trim();
+  if (!typedName) { toast('Indica il nome della cantina'); return; }
+  const referente = document.getElementById('wcl-referente')?.value.trim() || null;
+  const luogo = document.getElementById('wcl-luogo')?.value.trim() || null;
+  const note = document.getElementById('wcl-note')?.value.trim() || null;
+  const wineryId = selectedContactWineryId || await findOrCreateWinery(typedName);
+  if (!wineryId) { toast('Errore nel salvataggio della cantina'); return; }
+  const row = { user_id: currentUser.id, winery_id: wineryId, referente, luogo, note };
+  const { error } = editingWineryContactId
+    ? await sb.from('winery_contacts').update(row).eq('id', editingWineryContactId)
+    : await sb.from('winery_contacts').insert(row);
+  if (error) { toastErr(error.message); return; }
+  toast(editingWineryContactId ? 'Contatto aggiornato' : 'Contatto salvato');
+  loadWineriesCache();
+  showWineryContactsScreen();
+}
+
+async function deleteWineryContactQuick(id) {
+  if (!confirm('Eliminare questo contatto?')) return;
+  const { error } = await sb.from('winery_contacts').delete().eq('id', id);
+  if (error) { toastErr(error.message); return; }
+  showWineryContactsScreen();
+}
+
 async function showWineryDetail(id) {
   // Salvare la scheda o caricare il logo richiamano questa stessa funzione
   // per aggiornare la vista mentre si è già su screen-winery: in quel caso
@@ -5107,8 +5328,10 @@ async function showWineryDetail(id) {
       <div class="stitle"><i class="ti ti-bottle"></i>Vini degli utenti di questa cantina</div>
       <div class="winery-wine-list">${winesHtml}</div>
     </div>
+    <div id="wy-contacts-section"></div>
     ${adminForm}
   `;
+  loadWineryContactsSection(w.id);
 
   // Le select-autocomplete Paese/Regione/Provincia del form vino sono
   // agganciate una volta sola su input statici; qui gli input vengono
@@ -10283,6 +10506,17 @@ attachAutocomplete('wc-winery-name', () => wineriesCache.map(wineryLabel), sel =
 });
 document.getElementById('wc-winery-name')?.addEventListener('input', () => { selectedClaimWineryId = null; });
 
+// Stessa logica dell'autocomplete "Produttore"/"wc-winery-name": selezionando
+// un suggerimento il contatto si aggancia a quella cantina esatta, continuando
+// a scrivere liberamente se ne propone una nuova con quel nome al salvataggio
+// (vedi saveWineryContactQuick -> findOrCreateWinery).
+attachAutocomplete('wcl-winery-name', () => wineriesCache.map(wineryLabel), sel => {
+  const w = wineriesCache.find(x => wineryLabel(x) === sel);
+  document.getElementById('wcl-winery-name').value = w ? w.name : sel;
+  selectedContactWineryId = w ? w.id : null;
+});
+document.getElementById('wcl-winery-name')?.addEventListener('input', () => { selectedContactWineryId = null; });
+
 /* ── INIT ── */
 calcAIS(); calcFISAR();
 
@@ -10315,6 +10549,8 @@ Object.assign(window, {
   addWineryCatalogWine, removeWineryCatalogWine, useFaviconAsLogo,
   editWineryCatalogWine, cancelEditWineryCatalogWine, addWineryManually, importWineryCatalogFromShop, enrichWineryFromWebsite, enrichWineryCatalogGrapes,
   linkProducerToWinery, approveWineryClaim, rejectWineryClaim, submitWineryClaim, cancelWineryClaim, myWineryIds,
+  showWineryContactsScreen, renderWineryContactsList, saveWineryContactQuick, cancelEditWineryContactQuick, editWineryContactQuick, deleteWineryContactQuick,
+  renderWineryContactsSection, saveWineryContactInline, deleteWineryContactInline,
   showEventsScreen, showAddEventForm, showEventDetail, saveEvent, deleteEvent, duplicateEvent, setEventStatus,
   renderEventsList, updateEventsProvinceFilterOptions, toggleShowPastEvents, toggleEventFavorite,
   showConfigListsScreen, selectConfigList, addConfigListValue, removeConfigListValue,

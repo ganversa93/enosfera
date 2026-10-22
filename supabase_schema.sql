@@ -2813,3 +2813,35 @@ alter table public.wines add column if not exists fis_params jsonb;
 -- ════════════════════════════════════════════════════════════════
 alter table public.wine_denominations add column if not exists region2 text;
 alter table public.wine_denominations add column if not exists region3 text;
+
+-- ════════════════════════════════════════════════════════════════
+-- Contatti cantina: taccuino personale, privato per utente, per
+-- annotare le cantine incontrate (tipicamente in fiera) — referente,
+-- dove/occasione (testo libero, es. "Vinitaly 2026, stand 12") e
+-- note. Riusa l'anagrafica wineries già esistente per vini/claim
+-- (stesso autocomplete, stesso findOrCreateWinery): niente doppioni,
+-- un vino e un contatto per la stessa cantina puntano allo stesso id.
+-- Più contatti per la stessa cantina/utente sono ammessi (occasioni
+-- diverse nel tempo), nessun vincolo di unicità.
+-- ════════════════════════════════════════════════════════════════
+create table if not exists public.winery_contacts (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  winery_id uuid not null references public.wineries(id) on delete cascade,
+  referente text,
+  luogo text,
+  note text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists winery_contacts_user_id_idx on public.winery_contacts (user_id);
+create index if not exists winery_contacts_winery_id_idx on public.winery_contacts (winery_id);
+
+alter table public.winery_contacts enable row level security;
+
+-- Privati: solo il proprietario del contatto può leggerlo/modificarlo —
+-- nemmeno l'admin o chi gestisce la cantina (winery_claims) li vede.
+drop policy if exists "winery_contacts: solo il proprietario" on public.winery_contacts;
+create policy "winery_contacts: solo il proprietario"
+  on public.winery_contacts for all to authenticated
+  using (user_id = auth.uid()) with check (user_id = auth.uid());
