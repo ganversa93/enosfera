@@ -85,8 +85,9 @@ Deno.serve(async (req) => {
       }, 429);
     }
 
-    // ── 4. Leggi le immagini dal body della richiesta (fronte + eventuale retro) ──
-    const { images } = await req.json();
+    // ── 4. Leggi le immagini dal body della richiesta (fronte + eventuale retro,
+    //      oppure una singola foto di un biglietto da visita) ──
+    const { images, mode } = await req.json();
     if (!Array.isArray(images) || images.length === 0) {
       return json({ error: 'Immagine mancante' }, 400);
     }
@@ -97,7 +98,11 @@ Deno.serve(async (req) => {
     }));
 
     // ── 5. Chiama Anthropic (chiave segreta, mai esposta al client) ──
-    const promptText = images.length > 1
+    // "mode" sceglie lo schema: biglietto da visita (Contatti cantina) o
+    // etichetta di vino (default, comportamento storico invariato).
+    const promptText = mode === 'business_card'
+      ? 'Analizza questa foto di un biglietto da visita ed estrai le informazioni di contatto visibili. Rispondi SOLO con JSON valido, zero testo extra, zero markdown. Schema: {"referente":"","telefono":"","email":"","cantina":""}. "referente" è il nome della persona, "cantina" è il nome dell\'azienda/cantina stampato sul biglietto. Campi non visibili: stringa vuota o null.'
+      : images.length > 1
       ? 'Analizza queste due foto della stessa bottiglia di vino (fronte etichetta e controetichetta) ed estrai tutte le informazioni visibili, combinando i dati da entrambe le immagini — la controetichetta spesso contiene dettagli aggiuntivi come importatore, gradazione esatta, annata o denominazione estesa non presenti sul fronte. Rispondi SOLO con JSON valido, zero testo extra, zero markdown. Schema: {"name":"","producer":"","vintage":null,"type":"Rosso|Bianco|Rosato|Spumante|Dolce|Passito|Altro","doc":"","grapes":"","region":"","province":"","country":"","abv":null}. Campi non visibili in nessuna delle due foto: stringa vuota o null.'
       : 'Analizza questa etichetta di vino ed estrai tutte le informazioni visibili. Rispondi SOLO con JSON valido, zero testo extra, zero markdown. Schema: {"name":"","producer":"","vintage":null,"type":"Rosso|Bianco|Rosato|Spumante|Dolce|Passito|Altro","doc":"","grapes":"","region":"","province":"","country":"","abv":null}. Campi non visibili: stringa vuota o null.';
 

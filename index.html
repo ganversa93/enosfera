@@ -919,6 +919,10 @@
     .wc-contact-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
     .wc-contact-note { font-size: 12.5px; color: var(--ink); margin-top: 5px; line-height: 1.5; font-style: italic; }
     .wc-contact-date { font-size: 10.5px; color: var(--muted); margin-top: 5px; }
+    .wc-contact-links { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 4px; }
+    .wc-contact-link { font-size: 12px; color: var(--wine); text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
+    .wc-contact-link i { font-size: 12px; }
+    .wc-contact-link:hover { text-decoration: underline; }
 
     /* ── EVENTI ── */
     .event-card {
@@ -1390,7 +1394,7 @@
         <div class="home-card-title">Network</div>
         <div class="home-card-sub">Appassionati e Sommelier</div>
       </div>
-      <div class="home-card" onclick="showGuideScreen()">
+      <div class="home-card" style="grid-column:span 2" onclick="showGuideScreen()">
         <i class="ti ti-book"></i>
         <div class="home-card-title">Guida</div>
         <div class="home-card-sub">Come funziona Enoscrigno</div>
@@ -3587,6 +3591,9 @@
     </div>
     <div class="fsec" id="wc-form-sec">
       <div class="stitle" id="wc-form-title"><i class="ti ti-address-book"></i>Nuovo contatto</div>
+      <input type="file" id="wcl-bizcard-input" accept="image/*" capture="environment" style="display:none" onchange="scanBusinessCard(this, 'wcl')">
+      <button type="button" class="btn sm" style="margin-bottom:12px" onclick="document.getElementById('wcl-bizcard-input').click()"><i class="ti ti-camera"></i>Scansiona biglietto da visita</button>
+      <div class="spin-wrap" id="wcl-bizcard-spin"><div class="spin"></div><span style="font-size:12px;color:var(--muted)">Lettura biglietto in corso…</span></div>
       <div class="fg" style="position:relative">
         <label>Cantina</label>
         <input type="text" id="wcl-winery-name" placeholder="Cerca o scrivi il nome della cantina…" autocomplete="off">
@@ -3594,6 +3601,10 @@
       <div class="frow">
         <div class="fg"><label>Referente</label><input type="text" id="wcl-referente" placeholder="es. Marco Rossi"></div>
         <div class="fg"><label>Dove/occasione</label><input type="text" id="wcl-luogo" placeholder="es. Vinitaly 2026, stand 12"></div>
+      </div>
+      <div class="frow">
+        <div class="fg"><label>Telefono</label><input type="tel" id="wcl-telefono" placeholder="es. 345 1234567"></div>
+        <div class="fg"><label>Email</label><input type="email" id="wcl-email" placeholder="es. marco@cantina.it"></div>
       </div>
       <div class="fg"><label>Note</label><textarea id="wcl-note" rows="3" placeholder="Impressioni, vini assaggiati, follow-up da fare…"></textarea></div>
       <div style="display:flex;gap:8px">
@@ -5069,7 +5080,7 @@ async function loadWineryContactsSection(wineryId) {
   const sec = document.getElementById('wy-contacts-section');
   if (!sec) return;
   const { data, error } = await sb.from('winery_contacts')
-    .select('id,referente,luogo,note,created_at')
+    .select('id,referente,luogo,telefono,email,note,created_at')
     .eq('winery_id', wineryId)
     .order('created_at', { ascending: false });
   if (error) { console.warn('loadWineryContactsSection', error); return; }
@@ -5085,6 +5096,7 @@ function renderWineryContactsSection(wineryId, contacts, editId) {
       <div class="wc-contact-row">
         <div style="flex:1;min-width:0">
           <div class="wc-contact-meta">${[c.referente, c.luogo].filter(Boolean).map(escapeAttr).join(' · ') || '—'}</div>
+          ${wcContactLinksHtml(c)}
           ${c.note ? `<div class="wc-contact-note">${escapeAttr(c.note)}</div>` : ''}
           <div class="wc-contact-date">${fmtShortDate(c.created_at)}</div>
         </div>
@@ -5096,9 +5108,16 @@ function renderWineryContactsSection(wineryId, contacts, editId) {
     <div class="fsec" style="margin-top:1.25rem">
       <div class="stitle"><i class="ti ti-address-book"></i>I miei contatti per questa cantina</div>
       <div id="wy-contacts-list">${listHtml}</div>
+      <input type="file" id="wy-contact-bizcard-input" accept="image/*" capture="environment" style="display:none" onchange="scanBusinessCard(this, 'wy-contact')">
+      <button type="button" class="btn sm" style="margin-top:10px" onclick="document.getElementById('wy-contact-bizcard-input').click()"><i class="ti ti-camera"></i>Scansiona biglietto da visita</button>
+      <div class="spin-wrap" id="wy-contact-bizcard-spin"><div class="spin"></div><span style="font-size:12px;color:var(--muted)">Lettura biglietto in corso…</span></div>
       <div class="frow" style="margin-top:10px">
         <div class="fg"><label>Referente</label><input type="text" id="wy-contact-referente" placeholder="es. Marco Rossi" value="${editing ? escapeAttr(editing.referente || '') : ''}"></div>
         <div class="fg"><label>Dove/occasione</label><input type="text" id="wy-contact-luogo" placeholder="es. Vinitaly 2026, stand 12" value="${editing ? escapeAttr(editing.luogo || '') : ''}"></div>
+      </div>
+      <div class="frow">
+        <div class="fg"><label>Telefono</label><input type="tel" id="wy-contact-telefono" placeholder="es. 345 1234567" value="${editing ? escapeAttr(editing.telefono || '') : ''}"></div>
+        <div class="fg"><label>Email</label><input type="email" id="wy-contact-email" placeholder="es. marco@cantina.it" value="${editing ? escapeAttr(editing.email || '') : ''}"></div>
       </div>
       <div class="fg"><label>Note</label><textarea id="wy-contact-note" rows="2" placeholder="Impressioni, vini assaggiati, follow-up da fare…">${editing ? escapeAttr(editing.note || '') : ''}</textarea></div>
       <div style="display:flex;gap:8px">
@@ -5108,11 +5127,23 @@ function renderWineryContactsSection(wineryId, contacts, editId) {
     </div>`;
 }
 
+// Telefono/email come link cliccabili (tel:/mailto:) nelle righe contatto,
+// condiviso tra la sezione scheda-cantina e la schermata elenco.
+function wcContactLinksHtml(c) {
+  if (!c.telefono && !c.email) return '';
+  const parts = [];
+  if (c.telefono) parts.push(`<a href="tel:${escapeAttr(c.telefono)}" class="wc-contact-link"><i class="ti ti-phone"></i>${escapeAttr(c.telefono)}</a>`);
+  if (c.email) parts.push(`<a href="mailto:${escapeAttr(c.email)}" class="wc-contact-link"><i class="ti ti-mail"></i>${escapeAttr(c.email)}</a>`);
+  return `<div class="wc-contact-links">${parts.join('')}</div>`;
+}
+
 async function saveWineryContactInline(wineryId, editId) {
   const referente = document.getElementById('wy-contact-referente')?.value.trim() || null;
   const luogo = document.getElementById('wy-contact-luogo')?.value.trim() || null;
+  const telefono = document.getElementById('wy-contact-telefono')?.value.trim() || null;
+  const email = document.getElementById('wy-contact-email')?.value.trim() || null;
   const note = document.getElementById('wy-contact-note')?.value.trim() || null;
-  const row = { user_id: currentUser.id, winery_id: wineryId, referente, luogo, note };
+  const row = { user_id: currentUser.id, winery_id: wineryId, referente, luogo, telefono, email, note };
   const { error } = editId
     ? await sb.from('winery_contacts').update(row).eq('id', editId)
     : await sb.from('winery_contacts').insert(row);
@@ -5135,7 +5166,7 @@ async function showWineryContactsScreen() {
   const box = document.getElementById('wcl-list');
   if (box) box.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted)">Caricamento…</div>';
   const { data, error } = await sb.from('winery_contacts')
-    .select('id,winery_id,referente,luogo,note,created_at,wineries(name)')
+    .select('id,winery_id,referente,luogo,telefono,email,note,created_at,wineries(name)')
     .order('created_at', { ascending: false });
   if (error) { console.warn('showWineryContactsScreen', error); wineryContactsCache = []; }
   else wineryContactsCache = data || [];
@@ -5144,7 +5175,7 @@ async function showWineryContactsScreen() {
 
 function renderWineryContactsList() {
   const q = (document.getElementById('wcl-search')?.value || '').toLowerCase();
-  const list = wineryContactsCache.filter(c => matchesSearch(q, [c.wineries?.name, c.referente, c.luogo, c.note]));
+  const list = wineryContactsCache.filter(c => matchesSearch(q, [c.wineries?.name, c.referente, c.luogo, c.telefono, c.email, c.note]));
   const box = document.getElementById('wcl-list');
   if (!box) return;
   if (!list.length) {
@@ -5156,6 +5187,7 @@ function renderWineryContactsList() {
       <div style="flex:1;min-width:0">
         <div class="wc-contact-winery" onclick="showWineryDetail('${c.winery_id}')">${escapeAttr(c.wineries?.name || 'Cantina')}</div>
         <div class="wc-contact-meta">${[c.referente, c.luogo].filter(Boolean).map(escapeAttr).join(' · ') || '—'}</div>
+        ${wcContactLinksHtml(c)}
         ${c.note ? `<div class="wc-contact-note">${escapeAttr(c.note)}</div>` : ''}
         <div class="wc-contact-date">${fmtShortDate(c.created_at)}</div>
       </div>
@@ -5172,6 +5204,8 @@ function editWineryContactQuick(id) {
   document.getElementById('wcl-winery-name').value = c.wineries?.name || '';
   document.getElementById('wcl-referente').value = c.referente || '';
   document.getElementById('wcl-luogo').value = c.luogo || '';
+  document.getElementById('wcl-telefono').value = c.telefono || '';
+  document.getElementById('wcl-email').value = c.email || '';
   document.getElementById('wcl-note').value = c.note || '';
   const title = document.getElementById('wc-form-title');
   if (title) title.innerHTML = '<i class="ti ti-address-book"></i>Modifica contatto';
@@ -5183,7 +5217,7 @@ function editWineryContactQuick(id) {
 function cancelEditWineryContactQuick() {
   editingWineryContactId = null;
   selectedContactWineryId = null;
-  ['wcl-winery-name', 'wcl-referente', 'wcl-luogo', 'wcl-note'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  ['wcl-winery-name', 'wcl-referente', 'wcl-luogo', 'wcl-telefono', 'wcl-email', 'wcl-note'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   const title = document.getElementById('wc-form-title');
   if (title) title.innerHTML = '<i class="ti ti-address-book"></i>Nuovo contatto';
   const cancelBtn = document.getElementById('wcl-cancel-btn');
@@ -5195,10 +5229,12 @@ async function saveWineryContactQuick() {
   if (!typedName) { toast('Indica il nome della cantina'); return; }
   const referente = document.getElementById('wcl-referente')?.value.trim() || null;
   const luogo = document.getElementById('wcl-luogo')?.value.trim() || null;
+  const telefono = document.getElementById('wcl-telefono')?.value.trim() || null;
+  const email = document.getElementById('wcl-email')?.value.trim() || null;
   const note = document.getElementById('wcl-note')?.value.trim() || null;
   const wineryId = selectedContactWineryId || await findOrCreateWinery(typedName);
   if (!wineryId) { toast('Errore nel salvataggio della cantina'); return; }
-  const row = { user_id: currentUser.id, winery_id: wineryId, referente, luogo, note };
+  const row = { user_id: currentUser.id, winery_id: wineryId, referente, luogo, telefono, email, note };
   const { error } = editingWineryContactId
     ? await sb.from('winery_contacts').update(row).eq('id', editingWineryContactId)
     : await sb.from('winery_contacts').insert(row);
@@ -7199,6 +7235,56 @@ async function urlToBase64(url) {
     });
     return { media_type: blob.type || 'image/jpeg', base64 };
   } catch { return null; }
+}
+
+// Converte un File locale in base64 per l'analisi AI, senza caricarlo su
+// Storage: a differenza delle foto etichetta, la foto del biglietto da
+// visita serve solo da input per l'estrazione dati e non va conservata.
+async function fileToBase64Compressed(file) {
+  let blob = file;
+  try { blob = await compressImage(file, 1600, 0.82); } catch (e) { console.warn('compressImage fallita, uso il file originale', e); }
+  const base64 = await new Promise(resolve => {
+    const r = new FileReader();
+    r.onloadend = () => resolve(r.result.split(',')[1]);
+    r.readAsDataURL(blob);
+  });
+  return { media_type: blob.type || 'image/jpeg', base64 };
+}
+
+// Scansione AI del biglietto da visita (Contatti cantina) — riusa la stessa
+// Edge Function della scansione etichetta (scan-label) con mode:
+// 'business_card', quindi stesso gate Premium/ai_scan_enabled e stesso
+// conteggio mensile. "context" è 'wcl' (schermata elenco "Contatti") o
+// 'wy-contact' (sezione dentro la scheda cantina) — stesso prefisso usato
+// per gli id dei campi, così una sola funzione serve entrambi i form.
+async function scanBusinessCard(input, context) {
+  const file = input.files[0];
+  if (!file) return;
+  const spin = document.getElementById(`${context}-bizcard-spin`);
+  if (spin) spin.classList.add('show');
+  try {
+    const img = await fileToBase64Compressed(file);
+    const { data: result, error } = await sb.functions.invoke('scan-label', {
+      body: { images: [img], mode: 'business_card' }
+    });
+    if (error) {
+      toast('Lettura biglietto non riuscita — riprova o inserisci i dati a mano');
+    } else if (result?.error) {
+      toast(result.message || 'Limite scansioni raggiunto');
+    } else if (result?.data) {
+      const d = result.data;
+      const set = (id, v) => { const el = document.getElementById(id); if (el && v) el.value = v; };
+      set(`${context}-referente`, d.referente);
+      set(`${context}-telefono`, d.telefono);
+      set(`${context}-email`, d.email);
+      if (context === 'wcl' && d.cantina) { selectedContactWineryId = null; set('wcl-winery-name', d.cantina); }
+      toast('Biglietto letto! Controlla e completa i dati.');
+    }
+  } catch (err) {
+    toast('Lettura biglietto non riuscita — riprova o inserisci i dati a mano');
+  }
+  if (spin) spin.classList.remove('show');
+  input.value = '';
 }
 
 async function startPremiumCheckout() {
@@ -10550,7 +10636,7 @@ Object.assign(window, {
   editWineryCatalogWine, cancelEditWineryCatalogWine, addWineryManually, importWineryCatalogFromShop, enrichWineryFromWebsite, enrichWineryCatalogGrapes,
   linkProducerToWinery, approveWineryClaim, rejectWineryClaim, submitWineryClaim, cancelWineryClaim, myWineryIds,
   showWineryContactsScreen, renderWineryContactsList, saveWineryContactQuick, cancelEditWineryContactQuick, editWineryContactQuick, deleteWineryContactQuick,
-  renderWineryContactsSection, saveWineryContactInline, deleteWineryContactInline,
+  renderWineryContactsSection, saveWineryContactInline, deleteWineryContactInline, scanBusinessCard,
   showEventsScreen, showAddEventForm, showEventDetail, saveEvent, deleteEvent, duplicateEvent, setEventStatus,
   renderEventsList, updateEventsProvinceFilterOptions, toggleShowPastEvents, toggleEventFavorite,
   showConfigListsScreen, selectConfigList, addConfigListValue, removeConfigListValue,

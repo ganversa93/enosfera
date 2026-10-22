@@ -2845,3 +2845,13 @@ drop policy if exists "winery_contacts: solo il proprietario" on public.winery_c
 create policy "winery_contacts: solo il proprietario"
   on public.winery_contacts for all to authenticated
   using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+-- ════════════════════════════════════════════════════════════════
+-- Contatti cantina: telefono ed email del referente, più scansione AI
+-- del biglietto da visita (riusa l'Edge Function scan-label esistente
+-- con un parametro "mode" — stesso gate Premium/ai_scan_enabled e
+-- stesso conteggio mensile della scansione etichette, nessuna nuova
+-- infrastruttura). Vedi supabase/functions/scan-label/index.ts.
+-- ════════════════════════════════════════════════════════════════
+alter table public.winery_contacts add column if not exists telefono text;
+alter table public.winery_contacts add column if not exists email text;
