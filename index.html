@@ -1956,19 +1956,6 @@
           <div class="chip" data-qf="tasted" onclick="setQtyFilter('tasted',this)"><i class="ti ti-glass-full" style="font-size:11px;vertical-align:-1px;margin-right:3px"></i>Solo degustati</div>
         </div>
       </div>
-      <div class="adv-filter-group">
-        <label class="adv-filter-group-label">Ordina per</label>
-        <div class="sort-bar">
-          <select id="sort-field" onchange="setSortField(this.value)">
-            <option value="created">Data di aggiunta</option>
-            <option value="vintage">Annata</option>
-            <option value="price">Valore</option>
-            <option value="score">Valutazione</option>
-            <option value="type">Tipologia</option>
-          </select>
-          <button class="btn sm" id="sort-dir-btn" onclick="toggleSortDir()" title="Inverti ordine"><i class="ti ti-sort-descending"></i></button>
-        </div>
-      </div>
       <div class="adv-filter-divider"></div>
       <div class="adv-filter-row">
         <div class="adv-filter-field">
@@ -2009,8 +1996,22 @@
             <input type="number" id="af-price-max" placeholder="Max" min="0" step="1" oninput="renderGrid()" style="width:70px">
           </div>
         </div>
-        <button class="btn sm" onclick="resetAdvFilters()"><i class="ti ti-x"></i>Azzera tutto</button>
       </div>
+      <div class="adv-filter-divider"></div>
+      <div class="adv-filter-group">
+        <label class="adv-filter-group-label">Ordina per</label>
+        <div class="sort-bar">
+          <select id="sort-field" onchange="setSortField(this.value)">
+            <option value="created">Data di aggiunta</option>
+            <option value="vintage">Annata</option>
+            <option value="price">Valore</option>
+            <option value="score">Valutazione</option>
+            <option value="type">Tipologia</option>
+          </select>
+          <button class="btn sm" id="sort-dir-btn" onclick="toggleSortDir()" title="Inverti ordine"><i class="ti ti-sort-descending"></i></button>
+        </div>
+      </div>
+      <button class="btn sm" style="margin-top:4px" onclick="resetAdvFilters()"><i class="ti ti-x"></i>Azzera tutto</button>
     </div>
     <button class="btn primary btn-add-wine" id="btn-add-wine" onclick="showAdd()"><i class="ti ti-plus"></i>Aggiungi vino</button>
     <div class="wine-grid" id="wine-grid"></div>
