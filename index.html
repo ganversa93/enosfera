@@ -744,6 +744,20 @@
       display: flex; align-items: center; justify-content: center;
       font-size: 28px; overflow: hidden; flex-shrink: 0;
     }
+    img.dimg { cursor: zoom-in; }
+    /* ── Pop-up a schermo intero per le foto etichetta/controetichetta ── */
+    .img-lightbox-overlay {
+      display: none; position: fixed; inset: 0; z-index: 310;
+      background: rgba(0,0,0,.85); align-items: center; justify-content: center; padding: 1.5rem;
+      cursor: zoom-out;
+    }
+    .img-lightbox-overlay.open { display: flex; }
+    .img-lightbox-overlay img { max-width: 100%; max-height: 100%; border-radius: 10px; box-shadow: 0 12px 40px rgba(0,0,0,.45); cursor: default; }
+    .img-lightbox-close {
+      position: absolute; top: 18px; right: 18px; background: rgba(255,255,255,.12); border: none;
+      color: #fff; width: 38px; height: 38px; border-radius: 50%; font-size: 18px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
     .dvintage { font-size: 12px; color: var(--muted); font-weight: 400; margin-bottom: 2px; line-height: 1.4; }
     .dname { font-family: 'Cormorant Garamond', serif; font-size: 22px; font-weight: 500; color: var(--ink); margin-bottom: 3px; line-height: 1.2; }
     .dprod { font-size: 12px; color: var(--muted); margin-bottom: 2px; line-height: 1.4; }
@@ -3694,6 +3708,12 @@
   </div>
 </div>
 
+<!-- POP-UP FOTO A SCHERMO INTERO (etichetta/controetichetta) -->
+<div class="img-lightbox-overlay" id="img-lightbox" onclick="closeImageLightbox()">
+  <button class="img-lightbox-close" onclick="event.stopPropagation();closeImageLightbox()"><i class="ti ti-x"></i></button>
+  <img id="img-lightbox-img" src="" alt="" onclick="event.stopPropagation()">
+</div>
+
 <!-- POP-UP ACCETTAZIONE PRIVACY POLICY (chi si era già registrato prima che esistesse) -->
 <div class="public-prompt-overlay" id="privacy-prompt-overlay">
   <div class="public-prompt-card">
@@ -4234,6 +4254,15 @@ function dismissPublicPrompt() {
   document.getElementById('public-prompt-overlay')?.classList.remove('open');
   markPublicPromptSeen();
   maybeShowTutorial();
+}
+function openImageLightbox(src) {
+  if (!src) return;
+  document.getElementById('img-lightbox-img').src = src;
+  document.getElementById('img-lightbox')?.classList.add('open');
+}
+function closeImageLightbox() {
+  document.getElementById('img-lightbox')?.classList.remove('open');
+  document.getElementById('img-lightbox-img').src = '';
 }
 async function acceptPublicPrompt() {
   document.getElementById('public-prompt-overlay')?.classList.remove('open');
@@ -7199,8 +7228,8 @@ function showDetail(id) {
   document.getElementById('detail-content').innerHTML = `
     <div class="dhero">
       <div class="dimgs">
-        ${w.frontImg ? `<img src="${w.frontImg}" class="dimg" alt="Etichetta">` : `<div class="dimg"><i class="ti ti-bottle" style="font-size:28px;color:var(--wine);opacity:.3"></i></div>`}
-        ${w.backImg  ? `<img src="${w.backImg}"  class="dimg" alt="Controetichetta">` : ''}
+        ${w.frontImg ? `<img src="${w.frontImg}" class="dimg" alt="Etichetta" onclick="openImageLightbox('${w.frontImg}')">` : `<div class="dimg"><i class="ti ti-bottle" style="font-size:28px;color:var(--wine);opacity:.3"></i></div>`}
+        ${w.backImg  ? `<img src="${w.backImg}"  class="dimg" alt="Controetichetta" onclick="openImageLightbox('${w.backImg}')">` : ''}
       </div>
       <div class="dinfo" style="flex:1">
         ${w.visibility === false ? `<div style="font-size:10px;font-weight:600;color:var(--muted);background:var(--surf);border:0.5px solid var(--border);border-radius:20px;padding:2px 9px;display:inline-flex;align-items:center;gap:4px;margin-bottom:8px"><i class="ti ti-lock" style="font-size:10px"></i>Privato — non visibile nel Network</div>` : ''}
@@ -9861,8 +9890,8 @@ function showNetworkWinePreview(id) {
   document.getElementById('network-preview-content').innerHTML = `
     <div class="dhero">
       <div class="dimgs">
-        ${w.frontImg ? `<img src="${w.frontImg}" class="dimg" alt="Etichetta">` : `<div class="dimg"><i class="ti ti-bottle" style="font-size:28px;color:var(--wine);opacity:.3"></i></div>`}
-        ${w.backImg  ? `<img src="${w.backImg}"  class="dimg" alt="Controetichetta">` : ''}
+        ${w.frontImg ? `<img src="${w.frontImg}" class="dimg" alt="Etichetta" onclick="openImageLightbox('${w.frontImg}')">` : `<div class="dimg"><i class="ti ti-bottle" style="font-size:28px;color:var(--wine);opacity:.3"></i></div>`}
+        ${w.backImg  ? `<img src="${w.backImg}"  class="dimg" alt="Controetichetta" onclick="openImageLightbox('${w.backImg}')">` : ''}
       </div>
       <div class="dinfo" style="flex:1">
         <div class="dname">${w.name}</div>
@@ -10120,7 +10149,7 @@ Object.assign(window, {
   updateRegionOptions, updateProvinceOptions, dismissInstallBanner, triggerInstallPrompt, resetInstallBanner,
   dismissUpdateBanner, reloadApp, setTheme,
   setNetworkFilter, toggleNetworkAdvFilters, onNetworkCountryChange, resetNetworkFilters, renderNetworkFeed,
-  dismissPublicPrompt, acceptPublicPrompt, markFScoreManual, dismissAssocPrompt, saveAssocPrompt, acceptPrivacyPrompt,
+  dismissPublicPrompt, acceptPublicPrompt, markFScoreManual, dismissAssocPrompt, saveAssocPrompt, acceptPrivacyPrompt, openImageLightbox, closeImageLightbox,
   openTutorial, tutorialStep, skipTutorial,
   confirmSumDuplicateQty, confirmSaveDuplicateAsNew, closeDuplicateWinePrompt,
   addPosNode, removePosNode, addWinePosition, removeWinePosition, onPosL1Change, onPosL2Change, onPosL3Change,
