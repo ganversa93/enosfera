@@ -6273,8 +6273,12 @@ function eventCardHtml(e) {
       </div>
       ${formatEventDateRange(e.date_from, e.date_to) ? `<div class="event-card-loc"><i class="ti ti-calendar-event"></i>${formatEventDateRange(e.date_from, e.date_to)}</div>` : ''}
       ${(e.region || e.province) ? `<div class="event-card-loc"><i class="ti ti-map-pin"></i>${[e.region, e.province].filter(Boolean).join(', ')}</div>` : ''}
-      ${eventAttendeeCounts.get(e.id) ? `<div class="event-card-loc"><i class="ti ti-users"></i>${eventAttendeeCounts.get(e.id)} partecipant${eventAttendeeCounts.get(e.id) === 1 ? 'e' : 'i'}</div>` : ''}
       ${e.description ? `<div class="event-card-desc">${e.description}</div>` : ''}
+      ${currentUser ? `
+      <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:8px">
+        ${eventAttendeeCounts.get(e.id) ? `<span style="font-size:11px;color:var(--muted)"><i class="ti ti-users" style="font-size:11px"></i> ${eventAttendeeCounts.get(e.id)}</span>` : ''}
+        <button class="btn sm event-attend-btn${attendingEventIds.has(e.id) ? ' primary' : ''}" data-id="${e.id}" onclick="toggleEventAttending('${e.id}', event)"><i class="ti ${attendingEventIds.has(e.id) ? 'ti-circle-check-filled' : 'ti-circle-plus'}"></i>${attendingEventIds.has(e.id) ? 'Parteciperò ✓' : 'Parteciperò'}</button>
+      </div>` : ''}
     </div>`;
 }
 
