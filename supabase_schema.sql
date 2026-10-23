@@ -2907,3 +2907,130 @@ grant execute on function public.get_relationship_profile_brief(uuid[]) to authe
 
 drop policy if exists "profiles: visibili a chi ha una richiesta di follow con me" on public.profiles;
 drop policy if exists "profiles: visibili a chi condivide una cantina con me" on public.profiles;
+
+-- ════════════════════════════════════════════════════════════════
+-- Limiti di scansione AI configurabili dall'admin (sezione "Monitoraggio
+-- Scan AI") invece che fissi nel codice della Edge Function scan-label —
+-- riga singola (id sempre true, un solo check lo garantisce), letta lì
+-- ad ogni chiamata con fallback agli stessi valori di prima se la riga
+-- non esiste ancora (database non ancora migrato). Lettura e scrittura
+-- riservate all'admin: nessun altro ruolo ha bisogno di vedere o
+-- cambiare questi numeri.
+-- ════════════════════════════════════════════════════════════════
+create table if not exists public.scan_limits (
+  id boolean primary key default true,
+  per_user_monthly_limit integer not null default 40,
+  global_monthly_limit integer not null default 800,
+  updated_at timestamptz not null default now(),
+  constraint scan_limits_single_row check (id)
+);
+insert into public.scan_limits (id) values (true) on conflict (id) do nothing;
+alter table public.scan_limits enable row level security;
+
+drop policy if exists "scan_limits: solo admin legge" on public.scan_limits;
+create policy "scan_limits: solo admin legge"
+  on public.scan_limits for select to authenticated using (public.is_admin());
+
+drop policy if exists "scan_limits: solo admin scrive" on public.scan_limits;
+create policy "scan_limits: solo admin scrive"
+  on public.scan_limits for update to authenticated
+  using (public.is_admin()) with check (public.is_admin());
+
+-- ════════════════════════════════════════════════════════════════
+-- Statistiche per la nuova sezione "Statistiche" nella schermata admin
+-- (screen-admin-wineries): numeri aggregati su tutta l'app, non
+-- ottenibili dal client con le query normali perché profiles/wines
+-- hanno RLS per-utente — stesso principio già usato per
+-- get_unlinked_producers/get_pending_winery_claims. "wineries_incomplete"
+-- usa la stessa identica condizione già usata in loadWineriesToComplete()
+-- (index.html) per restare coerente col numero mostrato subito sotto,
+-- nella sezione "Cantine da completare".
+-- ════════════════════════════════════════════════════════════════
+create or replace function public.get_admin_stats()
+returns table (
+  total_users bigint,
+  new_users_7d bigint,
+  new_users_30d bigint,
+  public_profiles bigint,
+  premium_users bigint,
+  total_wines bigint,
+  total_wineries bigint,
+  wineries_incomplete bigint,
+  scan_usage_global_current integer,
+  scan_usage_global_limit integer
+)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_admin() then
+    raise exception 'not authorized';
+  end if;
+  return query
+    select
+      (select count(*) from public.profiles)::bigint,
+      (select count(*) from public.profiles where created_at >= now() - interval '7 days')::bigint,
+      (select count(*) from public.profiles where created_at >= now() - interval '30 days')::bigint,
+      (select count(*) from public.profiles where is_public = true)::bigint,
+      (select count(*) from public.profiles where ai_scan_enabled = true)::bigint,
+      (select count(*) from public.wines)::bigint,
+      (select count(*) from public.wineries)::bigint,
+      (select count(*) from public.wineries
+        where country is null and region is null and province is null
+          and website is null and description is null and logo_url is null)::bigint,
+      coalesce((select su.count from public.scan_usage su
+        where su.scope = 'global' and su.period = to_char(now(), 'YYYY-MM')), 0),
+      coalesce((select sl.global_monthly_limit from public.scan_limits sl where sl.id), 800);
+end;
+$$;
+revoke all on function public.get_admin_stats() from public, anon;
+grant execute on function public.get_admin_stats() to authenticated;
+
+-- ════════════════════════════════════════════════════════════════
+-- Elenco utenti con scansioni AI questo mese + azzeramento di un singolo
+-- contatore (utente o globale) — scan_usage è a "deny-all" per i client
+-- (solo la Edge Function con la service role key vi scrive/legge),
+-- quindi serve passare da una funzione SECURITY DEFINER come per tutte
+-- le altre viste cross-utente di questa schermata admin.
+-- ════════════════════════════════════════════════════════════════
+create or replace function public.get_scan_usage_this_month()
+returns table (user_id uuid, full_name text, count integer)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_admin() then
+    raise exception 'not authorized';
+  end if;
+  return query
+    select su.scope::uuid, p.full_name, su.count
+    from public.scan_usage su
+    join public.profiles p on p.id = su.scope::uuid
+    where su.scope <> 'global' and su.period = to_char(now(), 'YYYY-MM') and su.count > 0
+    order by su.count desc;
+end;
+$$;
+revoke all on function public.get_scan_usage_this_month() from public, anon;
+grant execute on function public.get_scan_usage_this_month() to authenticated;
+
+create or replace function public.reset_scan_usage(p_scope text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_admin() then
+    raise exception 'not authorized';
+  end if;
+  update public.scan_usage
+  set count = 0, updated_at = now()
+  where scope = p_scope and period = to_char(now(), 'YYYY-MM');
+end;
+$$;
+revoke all on function public.reset_scan_usage(text) from public, anon;
+grant execute on function public.reset_scan_usage(text) to authenticated;

@@ -6,7 +6,10 @@
 // (chiave tenuta segreta qui, mai esposta al browser) e restituisce
 // i dati del vino estratti.
 //
-// LIMITI DI SICUREZZA (modifica queste due costanti per cambiarli):
+// LIMITI DI SICUREZZA — letti dalla tabella scan_limits (riga singola),
+// modificabili dall'admin dalla sezione "Monitoraggio Scan AI" senza
+// bisogno di un redeploy. Se la riga non esiste ancora (database non
+// ancora migrato) si ricade sugli stessi valori che erano fissi prima:
 //   PER_USER_MONTHLY_LIMIT — quante scansioni può fare un singolo utente al mese
 //   GLOBAL_MONTHLY_LIMIT   — quante scansioni totali sono permesse a TUTTA l'app al mese
 //
@@ -16,8 +19,8 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const PER_USER_MONTHLY_LIMIT = 40;    // scansioni per utente al mese
-const GLOBAL_MONTHLY_LIMIT   = 800;   // scansioni totali per TUTTA l'app al mese
+const DEFAULT_PER_USER_MONTHLY_LIMIT = 40;    // scansioni per utente al mese
+const DEFAULT_GLOBAL_MONTHLY_LIMIT   = 800;   // scansioni totali per TUTTA l'app al mese
 
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')!;
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -65,6 +68,11 @@ Deno.serve(async (req) => {
     }
 
     // ── 3. Controlla i due limiti PRIMA di chiamare Anthropic ──
+    const { data: limitsRow } = await sbAdmin
+      .from('scan_limits').select('per_user_monthly_limit, global_monthly_limit').eq('id', true).maybeSingle();
+    const PER_USER_MONTHLY_LIMIT = limitsRow?.per_user_monthly_limit ?? DEFAULT_PER_USER_MONTHLY_LIMIT;
+    const GLOBAL_MONTHLY_LIMIT = limitsRow?.global_monthly_limit ?? DEFAULT_GLOBAL_MONTHLY_LIMIT;
+
     const { data: globalRow } = await sbAdmin
       .from('scan_usage').select('count').eq('scope', 'global').eq('period', period).maybeSingle();
     const globalCount = globalRow?.count || 0;

@@ -3632,6 +3632,34 @@
       <button class="btn sm primary" onclick="addWineryManually()"><i class="ti ti-plus"></i>Aggiungi cantina</button>
     </div>
 
+    <div class="fsec" id="admin-sec-stats">
+      <div class="stitle"><i class="ti ti-chart-bar"></i>Statistiche</div>
+      <div class="stat-row" id="admin-stats-grid">
+        <div class="stat"><div class="stat-n" id="admin-stat-users">—</div><div class="stat-l">Utenti totali</div></div>
+        <div class="stat"><div class="stat-n" id="admin-stat-new7">—</div><div class="stat-l">Nuovi (7gg)</div></div>
+        <div class="stat"><div class="stat-n" id="admin-stat-new30">—</div><div class="stat-l">Nuovi (30gg)</div></div>
+        <div class="stat"><div class="stat-n" id="admin-stat-public">—</div><div class="stat-l">Profili pubblici</div></div>
+        <div class="stat"><div class="stat-n" id="admin-stat-premium">—</div><div class="stat-l">Premium</div></div>
+        <div class="stat"><div class="stat-n" id="admin-stat-wines">—</div><div class="stat-l">Vini in app</div></div>
+        <div class="stat"><div class="stat-n" id="admin-stat-wineries">—</div><div class="stat-l">Cantine anagrafica</div></div>
+        <div class="stat"><div class="stat-n" id="admin-stat-scans">—</div><div class="stat-l">Scan AI (mese)</div></div>
+      </div>
+    </div>
+
+    <div class="fsec collapsible collapsed" id="admin-sec-scanlimits" style="margin-top:.9rem">
+      <div class="stitle fsec-header" onclick="toggleSection('admin-sec-scanlimits')"><i class="ti ti-scan"></i>Monitoraggio Scan AI<i class="ti ti-chevron-down fsec-chevron"></i></div>
+      <div class="fsec-body">
+        <div class="frow">
+          <div class="fg"><label>Limite per utente (al mese)</label><input type="number" id="admin-scan-limit-user" min="1"></div>
+          <div class="fg"><label>Limite globale (al mese)</label><input type="number" id="admin-scan-limit-global" min="1"></div>
+        </div>
+        <button class="btn sm primary" onclick="saveScanLimits()"><i class="ti ti-device-floppy"></i>Salva limiti</button>
+        <button class="btn sm" style="margin-left:8px" onclick="resetScanUsage('global')"><i class="ti ti-refresh"></i>Azzera contatore globale</button>
+        <div class="subhead" style="margin-top:1rem">Utilizzo di questo mese per utente</div>
+        <div id="admin-scan-usage-list" style="margin-top:8px"></div>
+      </div>
+    </div>
+
     <div class="fsec collapsible collapsed" id="admin-sec-search">
       <div class="stitle fsec-header" onclick="toggleSection('admin-sec-search')"><i class="ti ti-search"></i>Tutte le cantine<i class="ti ti-chevron-down fsec-chevron"></i></div>
       <div class="fsec-body">
@@ -5729,6 +5757,9 @@ async function showAdminWineriesScreen() {
   // varie chiamate sotto per capire se ritentare.
   await sb.auth.refreshSession().catch(() => {});
   showScreen('screen-admin-wineries');
+  loadAdminStats();
+  loadScanLimits();
+  loadScanUsageList();
   document.getElementById('admin-all-wineries-search').value = '';
   loadAllWineriesForAdmin('').then(renderAllWineriesList);
   const list = document.getElementById('admin-wineries-list');
@@ -5784,6 +5815,62 @@ async function showAdminWineriesScreen() {
         <i class="ti ti-chevron-right"></i>
       </div>`).join('')
     : '<div style="text-align:center;padding:1.5rem;color:var(--muted)">Nessun evento in attesa 🎉</div>';
+}
+
+async function loadAdminStats() {
+  const { data, error } = await sb.rpc('get_admin_stats');
+  if (error) { console.warn('loadAdminStats', error); return; }
+  const s = data?.[0];
+  if (!s) return;
+  document.getElementById('admin-stat-users').textContent = s.total_users;
+  document.getElementById('admin-stat-new7').textContent = s.new_users_7d;
+  document.getElementById('admin-stat-new30').textContent = s.new_users_30d;
+  document.getElementById('admin-stat-public').textContent = s.public_profiles;
+  document.getElementById('admin-stat-premium').textContent = s.premium_users;
+  document.getElementById('admin-stat-wines').textContent = s.total_wines;
+  document.getElementById('admin-stat-wineries').textContent = s.total_wineries;
+  document.getElementById('admin-stat-scans').textContent = `${s.scan_usage_global_current}/${s.scan_usage_global_limit}`;
+}
+
+/* ── Monitoraggio Scan AI: limiti configurabili + azzeramento contatori ── */
+async function loadScanLimits() {
+  const { data } = await sb.from('scan_limits').select('per_user_monthly_limit, global_monthly_limit').eq('id', true).maybeSingle();
+  document.getElementById('admin-scan-limit-user').value = data?.per_user_monthly_limit ?? 40;
+  document.getElementById('admin-scan-limit-global').value = data?.global_monthly_limit ?? 800;
+}
+
+async function saveScanLimits() {
+  const perUser = parseInt(document.getElementById('admin-scan-limit-user').value, 10);
+  const global = parseInt(document.getElementById('admin-scan-limit-global').value, 10);
+  if (!perUser || !global || perUser < 1 || global < 1) { toastErr('Inserisci valori validi (numeri maggiori di zero)'); return; }
+  const { error } = await sb.from('scan_limits')
+    .update({ per_user_monthly_limit: perUser, global_monthly_limit: global, updated_at: new Date().toISOString() })
+    .eq('id', true);
+  if (error) { toastErr('Errore salvataggio: ' + error.message); return; }
+  toast('✓ Limiti aggiornati');
+  loadAdminStats();
+}
+
+async function loadScanUsageList() {
+  const list = document.getElementById('admin-scan-usage-list');
+  const { data, error } = await sb.rpc('get_scan_usage_this_month');
+  if (error) { list.innerHTML = '<div style="font-size:12px;color:var(--muted)">Errore caricamento.</div>'; return; }
+  list.innerHTML = (data && data.length)
+    ? data.map(u => `
+      <div class="winery-row">
+        <div class="winery-row-name">${escapeAttr(u.full_name || 'Utente')} <span style="font-size:11px;color:var(--muted);font-weight:400">(${u.count} scansioni)</span></div>
+        <button class="btn sm" data-uid="${u.user_id}" onclick="resetScanUsage(this.dataset.uid)"><i class="ti ti-refresh"></i>Azzera</button>
+      </div>`).join('')
+    : '<div style="text-align:center;padding:1.5rem;color:var(--muted)">Nessuna scansione questo mese</div>';
+}
+
+async function resetScanUsage(scope) {
+  if (!confirm(scope === 'global' ? 'Azzerare il contatore globale di questo mese?' : 'Azzerare il contatore di questo utente per questo mese?')) return;
+  const { error } = await sb.rpc('reset_scan_usage', { p_scope: scope });
+  if (error) { toastErr('Errore: ' + error.message); return; }
+  toast('✓ Contatore azzerato');
+  loadAdminStats();
+  loadScanUsageList();
 }
 
 async function loadWineryClaims() {
@@ -10679,6 +10766,7 @@ Object.assign(window, {
   addPosNode, removePosNode, addWinePosition, removeWinePosition, onPosL1Change, onPosL2Change, onPosL3Change,
   addDetailPosition, removeDetailPosition, onDetailPosL1Change, onDetailPosL2Change, onDetailPosL3Change,
   showWineryDetail, toggleWineryPreview, saveWineryDetails, uploadWineryLogo, goBackFromWinery, showAdminWineriesScreen, deleteWinery, searchAllWineries,
+  saveScanLimits, resetScanUsage,
   addWineryCatalogWine, removeWineryCatalogWine, useFaviconAsLogo,
   editWineryCatalogWine, cancelEditWineryCatalogWine, addWineryManually, importWineryCatalogFromShop, enrichWineryFromWebsite, enrichWineryCatalogGrapes,
   linkProducerToWinery, approveWineryClaim, rejectWineryClaim, submitWineryClaim, cancelWineryClaim, myWineryIds,
