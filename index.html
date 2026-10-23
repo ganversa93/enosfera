@@ -5100,17 +5100,21 @@ async function cancelWineryClaim() {
   loadWineryClaimSection();
 }
 
-// Chi può vedere il form di modifica di un evento: l'admin per qualunque
-// evento, una cantina collegata solo per i propri (creazione compresa,
-// da qui ev=null quando si sta ancora scegliendo). A differenza della
-// semplice lettura (filtrata già dalle RLS), qui serve sapere DI CHI è
-// l'evento per non offrire il form di modifica su un evento approvato
-// di un'altra cantina che l'utente può comunque vedere nella lista.
+// Chi può vedere il form di modifica/proposta di un evento: l'admin per
+// qualunque evento, una cantina collegata per i propri, e ora anche
+// qualunque utente autenticato per proporne uno nuovo o gestire quelli
+// che ha proposto lui stesso (winery_id null, created_by proprio) — da
+// qui ev=null quando si sta ancora scegliendo/proponendo. A differenza
+// della semplice lettura (filtrata già dalle RLS), qui serve sapere DI
+// CHI è l'evento per non offrire il form di modifica su un evento
+// approvato di un'altra cantina/utente che si può comunque vedere nella
+// lista.
 function canManageEvent(ev) {
   if (currentUser?.isAdmin) return true;
-  const mine = myWineryIds();
-  if (!mine.length) return false;
-  return !ev || (ev.winery_id && mine.includes(ev.winery_id));
+  if (!currentUser) return false;
+  if (!ev) return true; // chiunque autenticato può proporre un nuovo evento
+  if (ev.winery_id) return myWineryIds().includes(ev.winery_id);
+  return ev.created_by === currentUser.id;
 }
 
 // Mostra/nasconde il link "Scopri di più" accanto al campo Produttore nel
@@ -6296,7 +6300,12 @@ async function showEventsScreen() {
   showScreen('screen-events');
   showPastEvents = false;
   const addBtn = document.getElementById('events-add-btn');
-  if (addBtn) addBtn.style.display = (currentUser?.isAdmin || myWineryIds().length) ? '' : 'none';
+  if (addBtn) {
+    addBtn.style.display = currentUser ? '' : 'none';
+    addBtn.innerHTML = currentUser?.isAdmin
+      ? '<i class="ti ti-plus"></i>Aggiungi evento'
+      : '<i class="ti ti-plus"></i>Proponi evento';
+  }
   const list = document.getElementById('events-list');
   list.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted)">Caricamento…</div>';
   let attendance;

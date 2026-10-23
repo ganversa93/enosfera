@@ -3119,3 +3119,56 @@ as $$
 $$;
 revoke all on function public.get_event_attendees(uuid) from public, anon;
 grant execute on function public.get_event_attendees(uuid) to authenticated;
+
+-- ════════════════════════════════════════════════════════════════
+-- "Proponi evento" per utenti non admin senza una cantina collegata:
+-- finora solo una cantina collegata (winery_id in proprietà) poteva
+-- inserire un evento in moderazione — ora può farlo chiunque sia
+-- autenticato, restando comunque "in attesa" (status pending) finché un
+-- admin non approva, esattamente come già succede per le cantine. Un
+-- evento proposto così ha winery_id null e created_by l'utente che l'ha
+-- proposto: le quattro policy sotto aggiungono questo caso (winery_id is
+-- null and created_by = auth.uid()) a fianco di quello già esistente
+-- per le cantine, senza toglierlo.
+-- ════════════════════════════════════════════════════════════════
+drop policy if exists "events: lettura" on public.events;
+create policy "events: lettura"
+  on public.events for select to authenticated
+  using (
+    status = 'approved'
+    or public.is_admin()
+    or (winery_id is not null and winery_id in (select id from public.wineries where owner_user_id = auth.uid()))
+    or (winery_id is null and created_by = auth.uid())
+  );
+
+drop policy if exists "events: inserimento" on public.events;
+create policy "events: inserimento"
+  on public.events for insert to authenticated
+  with check (
+    public.is_admin()
+    or (status = 'pending' and winery_id in (select id from public.wineries where owner_user_id = auth.uid()))
+    or (status = 'pending' and winery_id is null and created_by = auth.uid())
+  );
+
+drop policy if exists "events: modifica" on public.events;
+create policy "events: modifica"
+  on public.events for update to authenticated
+  using (
+    public.is_admin()
+    or (winery_id is not null and winery_id in (select id from public.wineries where owner_user_id = auth.uid()))
+    or (winery_id is null and created_by = auth.uid())
+  )
+  with check (
+    public.is_admin()
+    or (status = 'pending' and winery_id in (select id from public.wineries where owner_user_id = auth.uid()))
+    or (status = 'pending' and winery_id is null and created_by = auth.uid())
+  );
+
+drop policy if exists "events: eliminazione" on public.events;
+create policy "events: eliminazione"
+  on public.events for delete to authenticated
+  using (
+    public.is_admin()
+    or (winery_id is not null and winery_id in (select id from public.wineries where owner_user_id = auth.uid()))
+    or (winery_id is null and created_by = auth.uid())
+  );
