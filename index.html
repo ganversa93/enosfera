@@ -3581,6 +3581,8 @@
   <div id="screen-winery" class="screen">
     <div class="nav" style="margin-bottom:.9rem">
       <button class="btn sm" onclick="goBackFromWinery()"><i class="ti ti-arrow-left"></i>Indietro</button>
+      <span id="wy-title" style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--ink)"></span>
+      <button class="btn sm" id="wy-preview-btn" style="display:none" onclick="toggleWineryPreview()"><i class="ti ti-eye"></i>Visualizza</button>
     </div>
     <div id="winery-detail-body"></div>
   </div>
@@ -4021,6 +4023,8 @@ let regType = 'person'; // 'person' | 'winery' — scelta nel form di registrazi
 let currentWineryId = null;  // cantina aperta sulla schermata scheda-cantina
 let currentWineryOwnerId = null; // owner_user_id della cantina aperta, per i permessi di modifica
 let wineryReturnScreen = 'screen-list'; // schermata da cui si è aperta la scheda-cantina
+let wyPreviewMode = false; // toggle Visualizza/Modifica sulla scheda cantina (stesso pattern di dnPreviewMode/bpPreviewMode)
+let renderWineryBodyFn = null; // chiusura per ridisegnare la scheda cantina senza rifare le query al toggle
 let wineryContactsCache = [];       // tutti i contatti dell'utente (schermata "I miei contatti"), con join sul nome cantina
 let editingWineryContactId = null;  // contatto in modifica nella schermata elenco, null = nuovo
 let selectedContactWineryId = null; // cantina scelta via autocomplete nella schermata elenco, null = risolvi per nome al salvataggio
@@ -5283,6 +5287,37 @@ async function showWineryDetail(id) {
     .eq('winery_id', id)
     .order('vintage', { ascending: false });
 
+  const { data: catalog } = await sb.from('winery_wines').select('id,name,grapes,link').eq('winery_id', id).order('name');
+
+  document.getElementById('wy-title').textContent = w.name;
+  wyPreviewMode = false;
+  const previewBtn = document.getElementById('wy-preview-btn');
+  previewBtn.style.display = manage ? '' : 'none';
+  previewBtn.innerHTML = '<i class="ti ti-eye"></i>Visualizza';
+
+  // Chiusura riusata dal toggle Visualizza/Modifica: non rifà le query, si
+  // limita a ridisegnare con wyPreviewMode aggiornato — stesso dato già in
+  // memoria, stesso principio di toggleDenomPreview/toggleBlogPreview.
+  renderWineryBodyFn = () => renderWineryBody(w, wines || [], catalog || [], manage);
+  renderWineryBodyFn();
+}
+
+function toggleWineryPreview() {
+  if (!renderWineryBodyFn) return;
+  wyPreviewMode = !wyPreviewMode;
+  const btn = document.getElementById('wy-preview-btn');
+  btn.innerHTML = wyPreviewMode ? '<i class="ti ti-pencil"></i>Modifica' : '<i class="ti ti-eye"></i>Visualizza';
+  renderWineryBodyFn();
+}
+
+function renderWineryBody(w, wines, catalog, manage) {
+  const body = document.getElementById('winery-detail-body');
+  // "editMode" è ciò che decide quali controlli di modifica compaiono: un
+  // admin/owner in modalità Visualizza vede esattamente quello che vede un
+  // utente qualsiasi (manage=false), così da poter controllare il risultato
+  // finale senza uscire dai propri permessi.
+  const editMode = manage && !wyPreviewMode;
+
   const winesHtml = (wines && wines.length)
     ? wines.map(x => `
       <div class="winery-wine-row" onclick="showDetail('${x.id}')">
@@ -5295,7 +5330,6 @@ async function showWineryDetail(id) {
       </div>`).join('')
     : `<div style="font-size:12px;color:var(--muted);padding:.5rem 0">Nessun vino di questa cantina ancora visibile nel tuo Enoscrigno.</div>`;
 
-  const { data: catalog } = await sb.from('winery_wines').select('id,name,grapes,link').eq('winery_id', id).order('name');
   const catalogRowsHtml = (catalog && catalog.length)
     ? catalog.map(c => `
       <div class="winery-catalog-row">
@@ -5304,18 +5338,18 @@ async function showWineryDetail(id) {
           ${c.grapes ? `<div style="font-size:11px;color:var(--muted)">${c.grapes}</div>` : ''}
         </div>
         ${c.link ? `<a href="${c.link}" target="_blank" rel="noopener" class="winery-link" style="text-decoration:none" title="Apri il link"><i class="ti ti-external-link"></i></a>` : ''}
-        ${manage ? `<span class="edit-btn" onclick="editWineryCatalogWine('${c.id}')" title="Modifica"><i class="ti ti-edit"></i></span>` : ''}
-        ${manage ? `<span class="rm-btn" onclick="removeWineryCatalogWine('${c.id}')">×</span>` : ''}
+        ${editMode ? `<span class="edit-btn" onclick="editWineryCatalogWine('${c.id}')" title="Modifica"><i class="ti ti-edit"></i></span>` : ''}
+        ${editMode ? `<span class="rm-btn" onclick="removeWineryCatalogWine('${c.id}')">×</span>` : ''}
       </div>`).join('')
     : '';
   const catalogSection = `
     <div class="fsec" style="margin-top:1.25rem">
       <div class="stitle"><i class="ti ti-bottle-filled"></i>Vini prodotti da questa cantina</div>
-      ${manage ? `<button class="btn sm" style="margin-bottom:10px" onclick="importWineryCatalogFromShop()"><i class="ti ti-download"></i>Importa dal sito</button>` : ''}
-      ${currentUser?.isAdmin && catalog?.length ? `<button class="btn sm" id="wy-enrich-grapes-btn" style="margin-bottom:10px;margin-left:8px" onclick="enrichWineryCatalogGrapes()"><i class="ti ti-sparkles"></i>Completa vitigni con AI</button>` : ''}
+      ${editMode ? `<button class="btn sm" style="margin-bottom:10px" onclick="importWineryCatalogFromShop()"><i class="ti ti-download"></i>Importa dal sito</button>` : ''}
+      ${editMode && currentUser?.isAdmin && catalog?.length ? `<button class="btn sm" id="wy-enrich-grapes-btn" style="margin-bottom:10px;margin-left:8px" onclick="enrichWineryCatalogGrapes()"><i class="ti ti-sparkles"></i>Completa vitigni con AI</button>` : ''}
       <div class="winery-catalog-list">${catalogRowsHtml}</div>
-      ${!catalog?.length && !manage ? `<div style="font-size:12px;color:var(--muted);padding:.5rem 0">Nessun vino ancora catalogato per questa cantina.</div>` : ''}
-      ${manage ? `
+      ${!catalog?.length && !editMode ? `<div style="font-size:12px;color:var(--muted);padding:.5rem 0">Nessun vino ancora catalogato per questa cantina.</div>` : ''}
+      ${editMode ? `
         <div class="pos-add-row" style="margin-top:8px">
           <input type="text" id="wy-catalog-name" placeholder="Nome del vino" autocomplete="off">
           <input type="text" id="wy-catalog-grapes" placeholder="Uvaggio" autocomplete="off">
@@ -5325,7 +5359,7 @@ async function showWineryDetail(id) {
         </div>` : ''}
     </div>`;
 
-  const adminForm = manage ? `
+  const adminForm = editMode ? `
     <div class="fsec" style="margin-top:1.25rem">
       <div class="stitle"><i class="ti ti-edit"></i>${currentUser?.isAdmin ? 'Modifica scheda (admin)' : 'Modifica scheda'}</div>
       <div class="frow">
@@ -5369,7 +5403,7 @@ async function showWineryDetail(id) {
         ${w.website ? `<a href="${w.website}" target="_blank" rel="noopener" style="font-size:12.5px;color:var(--wine)"><i class="ti ti-world" style="font-size:12px"></i> ${w.website.replace(/^https?:\/\//,'')}</a>` : ''}
       </div>
     </div>
-    ${w.description ? `<p style="font-size:13px;color:var(--ink);line-height:1.6;margin-top:1rem">${w.description}</p>` : (!manage ? `<p style="font-size:12.5px;color:var(--muted);margin-top:1rem">Non ci sono ancora informazioni su questa cantina.</p>` : '')}
+    ${w.description ? `<p style="font-size:13px;color:var(--ink);line-height:1.6;margin-top:1rem">${w.description}</p>` : (!editMode ? `<p style="font-size:12.5px;color:var(--muted);margin-top:1rem">Non ci sono ancora informazioni su questa cantina.</p>` : '')}
     ${catalogSection}
     <div class="fsec" style="margin-top:1.25rem">
       <div class="stitle"><i class="ti ti-bottle"></i>Vini degli utenti di questa cantina</div>
@@ -5385,7 +5419,7 @@ async function showWineryDetail(id) {
   // ricreati a ogni render (l'HTML è rigenerato), quindi vanno riagganciati
   // ogni volta — stessa cascata Paese → Regione → Provincia del form vino
   // (province suggerite/visibili solo per l'Italia).
-  if (manage) {
+  if (editMode) {
     const countryEl = document.getElementById('wy-country');
     if (countryEl) countryEl.value = w.country || '';
     const onRegionChange = () => {
@@ -10642,7 +10676,7 @@ Object.assign(window, {
   confirmSumDuplicateQty, confirmSaveDuplicateAsNew, closeDuplicateWinePrompt,
   addPosNode, removePosNode, addWinePosition, removeWinePosition, onPosL1Change, onPosL2Change, onPosL3Change,
   addDetailPosition, removeDetailPosition, onDetailPosL1Change, onDetailPosL2Change, onDetailPosL3Change,
-  showWineryDetail, saveWineryDetails, uploadWineryLogo, goBackFromWinery, showAdminWineriesScreen, deleteWinery, searchAllWineries,
+  showWineryDetail, toggleWineryPreview, saveWineryDetails, uploadWineryLogo, goBackFromWinery, showAdminWineriesScreen, deleteWinery, searchAllWineries,
   addWineryCatalogWine, removeWineryCatalogWine, useFaviconAsLogo,
   editWineryCatalogWine, cancelEditWineryCatalogWine, addWineryManually, importWineryCatalogFromShop, enrichWineryFromWebsite, enrichWineryCatalogGrapes,
   linkProducerToWinery, approveWineryClaim, rejectWineryClaim, submitWineryClaim, cancelWineryClaim, myWineryIds,
