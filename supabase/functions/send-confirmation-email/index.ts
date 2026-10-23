@@ -20,6 +20,12 @@
 //      esiste o è già stata confermata.
 //
 // Un limite di 1 invio ogni 60 secondi per utente evita abusi/spam.
+//
+// Se il body contiene { newSignup: true } (solo le due chiamate fatte da
+// doRegister() subito dopo la creazione dell'account, mai dai pulsanti
+// "Rinvia"), dopo l'invio della conferma manda anche una breve notifica
+// all'indirizzo admin, per tenere traccia delle nuove iscrizioni — un
+// fallimento qui non deve mai far fallire la risposta all'utente.
 // ════════════════════════════════════════════════════════════════
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -29,6 +35,7 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
 const FROM_ADDRESS = 'Enoscrigno <noreply@enoscrigno.it>';
+const ADMIN_NOTIFICATION_EMAIL = 'enoscrigno@gmail.com';
 const SITE_URL = 'https://www.enoscrigno.it';
 const MIN_INTERVAL_SECONDS = 60;
 
@@ -64,6 +71,21 @@ function confirmationEmailHtml(link: string): string {
   </div>`;
 }
 
+function newSignupNotificationHtml(name: string, email: string, assoc: string, card: string): string {
+  return `
+  <div style="font-family: Inter, Arial, sans-serif; background:#F8F5F1; padding:32px;">
+    <div style="max-width:420px; margin:0 auto; background:#fff; border:1px solid #e3ded6; border-radius:16px; padding:28px;">
+      <h1 style="font-family: Georgia, serif; color:#6B1839; font-size:20px; margin:0 0 16px;">Nuova registrazione su Enoscrigno</h1>
+      <table style="width:100%; font-size:14px; color:#2A1B0A; border-collapse:collapse;">
+        <tr><td style="padding:4px 0; color:#8a7f6e;">Nome</td><td style="padding:4px 0; text-align:right;">${name || '—'}</td></tr>
+        <tr><td style="padding:4px 0; color:#8a7f6e;">Email</td><td style="padding:4px 0; text-align:right;">${email}</td></tr>
+        <tr><td style="padding:4px 0; color:#8a7f6e;">Associazione</td><td style="padding:4px 0; text-align:right;">${assoc || '—'}</td></tr>
+        <tr><td style="padding:4px 0; color:#8a7f6e;">Tessera</td><td style="padding:4px 0; text-align:right;">${card || '—'}</td></tr>
+      </table>
+    </div>
+  </div>`;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -72,6 +94,7 @@ Deno.serve(async (req) => {
   try {
     const sbAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
     const body = await req.json().catch(() => ({}));
+    const newSignup = body?.newSignup === true;
 
     let userId: string;
     let email: string;
@@ -100,7 +123,7 @@ Deno.serve(async (req) => {
     }
 
     const { data: profile } = await sbAdmin
-      .from('profiles').select('email_confirmed').eq('id', userId).maybeSingle();
+      .from('profiles').select('email_confirmed, full_name, assoc, card').eq('id', userId).maybeSingle();
     if (profile?.email_confirmed) {
       return json(GENERIC_OK);
     }
@@ -148,6 +171,26 @@ Deno.serve(async (req) => {
       const errText = await resendResp.text();
       console.error('Resend error:', errText);
       return json({ error: 'Invio email non riuscito' }, 502);
+    }
+
+    if (newSignup) {
+      try {
+        await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${RESEND_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from: FROM_ADDRESS,
+            to: [ADMIN_NOTIFICATION_EMAIL],
+            subject: 'Nuova registrazione — Enoscrigno',
+            html: newSignupNotificationHtml(profile?.full_name || '', email, profile?.assoc || '', profile?.card || ''),
+          }),
+        });
+      } catch (notifyErr) {
+        console.error('Notifica admin non riuscita:', notifyErr);
+      }
     }
 
     return json(GENERIC_OK);

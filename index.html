@@ -4272,7 +4272,7 @@ async function doRegister() {
     // Conferma email nativa attiva (caso non standard nella configurazione
     // attuale, gestito comunque per robustezza): nessuna sessione ancora
     // disponibile, non possiamo chiamare la Edge Function autenticata.
-    await sb.functions.invoke('send-confirmation-email', { body: { email } }).catch(() => {});
+    await sb.functions.invoke('send-confirmation-email', { body: { email, newSignup: true } }).catch(() => {});
     err.style.color = 'var(--fisar)';
     err.textContent = '✓ Account creato! Controlla la tua email per confermare, poi accedi.';
     err.style.display = 'block';
@@ -4284,7 +4284,9 @@ async function doRegister() {
   if (regType === 'winery' && wineryName) await submitRegistrationWineryClaim(wineryName);
   // Login immediato per scelta (nessuna conferma email bloccante): inviamo
   // comunque una email di verifica tramite Resend, puramente informativa.
-  sb.functions.invoke('send-confirmation-email', { body: {} }).catch(() => {});
+  // newSignup:true fa inviare alla stessa Edge Function anche una notifica
+  // di nuova iscrizione all'indirizzo admin.
+  sb.functions.invoke('send-confirmation-email', { body: { newSignup: true } }).catch(() => {});
   const doneMsg = regType === 'winery'
     ? 'Account creato! Ti abbiamo inviato una email di conferma e inoltrato la richiesta di collegamento per la tua cantina 🍷'
     : 'Account creato! Ti abbiamo inviato una email di conferma — la trovi anche nel tuo profilo 📧';
