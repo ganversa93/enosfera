@@ -48,9 +48,6 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css">
-  <script src="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js"></script>
   <script>
     // Applica subito il tema scelto manualmente (se presente) per evitare
     // un flash del tema di sistema prima che carichi lo script del modulo.
@@ -3656,6 +3653,7 @@
         <button class="btn sm primary" onclick="saveScanLimits()"><i class="ti ti-device-floppy"></i>Salva limiti</button>
         <button class="btn sm" style="margin-left:8px" onclick="resetScanUsage('global')"><i class="ti ti-refresh"></i>Azzera contatore globale</button>
         <div class="subhead" style="margin-top:1rem">Utilizzo di questo mese per utente</div>
+        <input type="text" id="admin-scan-search" placeholder="Cerca un utente per nome…" autocomplete="off" oninput="searchScanUsersAdmin()" style="margin-top:8px">
         <div id="admin-scan-usage-list" style="margin-top:8px"></div>
       </div>
     </div>
@@ -4026,6 +4024,11 @@
    Settings → API → Project URL / anon public key
    ══════════════════════════════════════════════ */
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+import {
+  GEO_REGIONS, GEO_PROVINCES_ITALIA, ITALY_DOCG, FRANCE_AOC, GERMANY_DESIGNATIONS,
+  USA_AVA, CHILE_DO, ARGENTINA_IG, NZ_GI, SOUTHAFRICA_WO, AUSTRALIA_GI,
+  SPAIN_DO, GRAPE_VARIETIES, DELEGAZIONI
+} from './data-geo.js';
 
 const SUPABASE_URL      = 'https://xvtbsanxvkshqyeqordp.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh2dGJzYW54dmtzaHF5ZXFvcmRwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxMjY0MjIsImV4cCI6MjEwMDcwMjQyMn0._4YKqsrpBPeCKhFxmCJcIWvep0780H985hCPpWJw-Lg';
@@ -4080,6 +4083,43 @@ let activeDeg = 'ais';
 // lasciarlo fermo sul default 88 — altrimenti chi guarda anche solo per
 // sbaglio quel tab rischia di salvare 88 senza accorgersene.
 let fScoreManuallySet = false;
+
+/* ── CARICAMENTO PIGRO LIBRERIE PESANTI ──
+   Quill (editor blog) e Chart.js (grafici Evidenze) servono solo su due
+   schermate specifiche, non a ogni avvio dell'app: invece di caricarle
+   sempre da <head> (erano lì come <script> bloccanti), si caricano al
+   volo la prima volta che servono davvero e poi restano in cache per le
+   volte successive nella stessa sessione — stessa libreria, stesso CDN,
+   solo caricata quando serve invece che sempre. */
+const _loadedScripts = {};
+function loadScriptOnce(url) {
+  if (_loadedScripts[url]) return _loadedScripts[url];
+  _loadedScripts[url] = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = url;
+    s.onload = resolve;
+    // Se il CDN non risponde (rete assente/instabile), non teniamo in
+    // cache il fallimento: un tentativo successivo (es. riaprendo la
+    // schermata) riprova da capo invece di restare bloccato per sempre
+    // sullo stesso errore nella stessa sessione.
+    s.onerror = () => { delete _loadedScripts[url]; reject(new Error(`Impossibile caricare ${url}`)); };
+    document.head.appendChild(s);
+  });
+  return _loadedScripts[url];
+}
+function loadStylesheetOnce(url) {
+  if (document.querySelector(`link[href="${url}"]`)) return;
+  const l = document.createElement('link');
+  l.rel = 'stylesheet'; l.href = url;
+  document.head.appendChild(l);
+}
+async function ensureQuillLoaded() {
+  loadStylesheetOnce('https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css');
+  await loadScriptOnce('https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js');
+}
+async function ensureChartLoaded() {
+  await loadScriptOnce('https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js');
+}
 
 /* ── TOAST ── */
 function toast(msg) {
@@ -5851,17 +5891,38 @@ async function saveScanLimits() {
   loadAdminStats();
 }
 
-async function loadScanUsageList() {
-  const list = document.getElementById('admin-scan-usage-list');
-  const { data, error } = await sb.rpc('get_scan_usage_this_month');
-  if (error) { list.innerHTML = '<div style="font-size:12px;color:var(--muted)">Errore caricamento.</div>'; return; }
-  list.innerHTML = (data && data.length)
+function scanUsageRowsHtml(data, emptyMsg) {
+  return (data && data.length)
     ? data.map(u => `
       <div class="winery-row">
         <div class="winery-row-name">${escapeAttr(u.full_name || 'Utente')} <span style="font-size:11px;color:var(--muted);font-weight:400">(${u.count} scansioni)</span></div>
         <button class="btn sm" data-uid="${u.user_id}" onclick="resetScanUsage(this.dataset.uid)"><i class="ti ti-refresh"></i>Azzera</button>
       </div>`).join('')
-    : '<div style="text-align:center;padding:1.5rem;color:var(--muted)">Nessuna scansione questo mese</div>';
+    : `<div style="text-align:center;padding:1.5rem;color:var(--muted)">${emptyMsg}</div>`;
+}
+
+async function loadScanUsageList() {
+  const list = document.getElementById('admin-scan-usage-list');
+  const { data, error } = await sb.rpc('get_scan_usage_this_month');
+  if (error) { list.innerHTML = '<div style="font-size:12px;color:var(--muted)">Errore caricamento.</div>'; return; }
+  list.innerHTML = scanUsageRowsHtml(data, 'Nessuna scansione questo mese');
+}
+
+// Cerca un utente per nome, per trovarne/azzerarne il contatore anche se
+// questo mese non ha ancora fatto nessuna scansione (e quindi non compare
+// nell'elenco sopra) — cosa diversa dal "ritenta non riuscito" di una
+// scansione singola, qui è l'admin che cerca una persona per nome.
+let adminScanSearchTimer = null;
+function searchScanUsersAdmin() {
+  clearTimeout(adminScanSearchTimer);
+  const q = document.getElementById('admin-scan-search').value.trim();
+  if (!q) { loadScanUsageList(); return; }
+  adminScanSearchTimer = setTimeout(async () => {
+    const list = document.getElementById('admin-scan-usage-list');
+    const { data, error } = await sb.rpc('search_users_for_scan_admin', { q });
+    if (error) { list.innerHTML = '<div style="font-size:12px;color:var(--muted)">Errore ricerca.</div>'; return; }
+    list.innerHTML = scanUsageRowsHtml(data, 'Nessun utente trovato');
+  }, 300);
 }
 
 async function resetScanUsage(scope) {
@@ -5870,7 +5931,8 @@ async function resetScanUsage(scope) {
   if (error) { toastErr('Errore: ' + error.message); return; }
   toast('✓ Contatore azzerato');
   loadAdminStats();
-  loadScanUsageList();
+  const query = document.getElementById('admin-scan-search')?.value.trim();
+  if (query) searchScanUsersAdmin(); else loadScanUsageList();
 }
 
 async function loadWineryClaims() {
@@ -8295,188 +8357,11 @@ async function wizardNext() {
    con le suddivisioni amministrative ufficiali (più utili per un archivio
    vini). La provincia è gestita solo per l'Italia, dove è terminologia
    comune nelle denominazioni (es. "Provincia di Cuneo" per il Barolo). */
-const GEO_REGIONS = {
-  Italia: ['Piemonte','Valle d\'Aosta','Lombardia','Trentino-Alto Adige','Veneto','Friuli-Venezia Giulia','Liguria','Emilia-Romagna','Toscana','Umbria','Marche','Lazio','Abruzzo','Molise','Campania','Puglia','Basilicata','Calabria','Sicilia','Sardegna'],
-  Francia: ['Alsazia','Beaujolais','Bordeaux','Borgogna','Champagne','Corsica','Jura','Languedoc-Roussillon','Valle della Loira','Provenza','Valle del Rodano','Savoia','Sud-Ovest'],
-  Germania: ['Ahr','Baden','Franconia','Hessische Bergstraße','Mittelrhein','Mosella','Nahe','Palatinato','Rheingau','Rheinhessen','Saale-Unstrut','Sassonia','Württemberg'],
-  Spagna: ['Rioja','Ribera del Duero','Priorat','Penedès','Rías Baixas','Jerez','Navarra','Rueda','Toro','Bierzo','La Mancha','Jumilla','Somontano','Catalogna','Galizia','Andalusia','Castiglia e León','Aragona','Paesi Baschi','Canarie'],
-  'Stati Uniti': ['Napa Valley','Sonoma County','Central Coast','Paso Robles','Santa Barbara County','Willamette Valley (Oregon)','Columbia Valley (Washington)','Finger Lakes (New York)'],
-  Cile: ['Valle de Elqui','Valle de Limarí','Valle de Aconcagua','Valle de Casablanca','Valle de San Antonio','Valle del Maipo','Valle de Cachapoal','Valle de Colchagua','Valle de Curicó','Valle del Maule','Valle del Itata','Valle del Bío Bío'],
-  Argentina: ['Mendoza','Salta','San Juan','La Rioja','Catamarca','Río Negro','Neuquén'],
-  'Nuova Zelanda': ['Marlborough','Hawke\'s Bay','Central Otago','Wairarapa (Martinborough)','Nelson','Canterbury (Waipara)','Gisborne','Auckland (Waiheke Island)'],
-  'Sud Africa': ['Stellenbosch','Paarl','Franschhoek','Constantia','Swartland','Walker Bay','Robertson','Elgin'],
-  Australia: ['Barossa Valley','McLaren Vale','Hunter Valley','Margaret River','Yarra Valley','Coonawarra','Clare Valley','Adelaide Hills','Eden Valley','Mornington Peninsula']
-};
-
-const GEO_PROVINCES_ITALIA = {
-  'Piemonte': ['Alessandria','Asti','Biella','Cuneo','Novara','Torino','Verbano-Cusio-Ossola','Vercelli'],
-  'Valle d\'Aosta': ['Aosta'],
-  'Lombardia': ['Bergamo','Brescia','Como','Cremona','Lecco','Lodi','Mantova','Milano','Monza e Brianza','Pavia','Sondrio','Varese'],
-  'Trentino-Alto Adige': ['Trento','Bolzano'],
-  'Veneto': ['Belluno','Padova','Rovigo','Treviso','Venezia','Verona','Vicenza'],
-  'Friuli-Venezia Giulia': ['Gorizia','Pordenone','Trieste','Udine'],
-  'Liguria': ['Genova','Imperia','La Spezia','Savona'],
-  'Emilia-Romagna': ['Bologna','Ferrara','Forlì-Cesena','Modena','Parma','Piacenza','Ravenna','Reggio Emilia','Rimini'],
-  'Toscana': ['Arezzo','Firenze','Grosseto','Livorno','Lucca','Massa-Carrara','Pisa','Pistoia','Prato','Siena'],
-  'Umbria': ['Perugia','Terni'],
-  'Marche': ['Ancona','Ascoli Piceno','Fermo','Macerata','Pesaro e Urbino'],
-  'Lazio': ['Frosinone','Latina','Rieti','Roma','Viterbo'],
-  'Abruzzo': ['Chieti','L\'Aquila','Pescara','Teramo'],
-  'Molise': ['Campobasso','Isernia'],
-  'Campania': ['Avellino','Benevento','Caserta','Napoli','Salerno'],
-  'Puglia': ['Bari','Barletta-Andria-Trani','Brindisi','Foggia','Lecce','Taranto'],
-  'Basilicata': ['Matera','Potenza'],
-  'Calabria': ['Catanzaro','Cosenza','Crotone','Reggio Calabria','Vibo Valentia'],
-  'Sicilia': ['Agrigento','Caltanissetta','Catania','Enna','Messina','Palermo','Ragusa','Siracusa','Trapani'],
-  'Sardegna': ['Cagliari','Nuoro','Oristano','Sassari','Sud Sardegna']
-};
-
-/* ══ DOC / DOCG / AOC / AVA / GI / WO — suggerimenti per uniformare il campo
-   denominazione ══
-   Non è un elenco esaustivo (l'Italia da sola ha oltre 400 DOC/DOCG):
-   copre le DOCG italiane (elenco chiuso, ~78) organizzate per regione, più
-   le denominazioni principali per Francia, Germania, Spagna e per i
-   produttori extraeuropei più diffusi in cantina (Stati Uniti, Cile,
-   Argentina, Nuova Zelanda, Sud Africa).
-   Il campo resta di testo libero — questi sono solo suggerimenti. */
-const ITALY_DOCG = {
-  'Piemonte': ['Alta Langa','Asti / Moscato d\'Asti','Barbaresco','Barbera d\'Asti','Barbera del Monferrato Superiore','Barolo','Brachetto d\'Acqui','Canelli / Moscato di Canelli','Gavi (Cortese di Gavi)','Diano d\'Alba (Dolcetto di Diano d\'Alba)','Dogliani (Dolcetto di Dogliani Superiore)','Ovada (Dolcetto di Ovada Superiore)','Erbaluce di Caluso (Caluso)','Gattinara','Ghemme','Nizza','Ruché di Castagnole Monferrato','Roero','Terre Alfieri'],
-  'Valle d\'Aosta': [],
-  'Lombardia': ['Franciacorta','Moscato di Scanzo','Oltrepò Pavese Metodo Classico','Sforzato di Valtellina','Valtellina Superiore'],
-  'Trentino-Alto Adige': [],
-  'Veneto': ['Amarone della Valpolicella','Recioto della Valpolicella','Bardolino Superiore','Soave Superiore','Recioto di Soave','Conegliano Valdobbiadene Prosecco Superiore','Colli Asolani Prosecco Superiore (Asolo Prosecco)','Colli di Conegliano','Piave Malanotte (Malanotte del Piave)','Lison','Montello Rosso','Recioto di Gambellara'],
-  'Friuli-Venezia Giulia': ['Ramandolo','Colli Orientali del Friuli Picolit','Rosazzo'],
-  'Liguria': [],
-  'Emilia-Romagna': ['Albana di Romagna','Colli Bolognesi Pignoletto'],
-  'Toscana': ['Brunello di Montalcino','Carmignano','Chianti Classico','Chianti','Elba Aleatico Passito','Montecucco Sangiovese','Morellino di Scansano','Suvereto','Val di Cornia Rosso','Vernaccia di San Gimignano','Vino Nobile di Montepulciano'],
-  'Umbria': ['Montefalco Sagrantino','Torgiano Rosso Riserva'],
-  'Marche': ['Conero (Conero Riserva)','Offida','Verdicchio dei Castelli di Jesi Riserva','Vernaccia di Serrapetrona'],
-  'Lazio': ['Cesanese del Piglio (Piglio)','Cannellino di Frascati','Frascati Superiore'],
-  'Abruzzo': ['Colline Teramane Montepulciano d\'Abruzzo','Tullum'],
-  'Molise': [],
-  'Campania': ['Taurasi','Fiano di Avellino','Greco di Tufo'],
-  'Puglia': ['Castel del Monte Bombino Nero','Castel del Monte Nero di Troia Riserva','Castel del Monte Rosso Riserva','Primitivo di Manduria Dolce Naturale'],
-  'Basilicata': ['Aglianico del Vulture Superiore'],
-  'Calabria': [],
-  'Sicilia': ['Cerasuolo di Vittoria'],
-  'Sardegna': ['Vermentino di Gallura Superiore']
-};
-
-const FRANCE_AOC = {
-  'Alsazia': ['Alsace','Alsace Grand Cru','Crémant d\'Alsace'],
-  'Beaujolais': ['Beaujolais','Beaujolais-Villages','Morgon','Fleurie','Moulin-à-Vent','Chiroubles','Brouilly','Saint-Amour'],
-  'Bordeaux': ['Bordeaux','Bordeaux Supérieur','Médoc','Haut-Médoc','Margaux','Pauillac','Saint-Émilion','Pomerol','Graves','Sauternes','Pessac-Léognan'],
-  'Borgogna': ['Bourgogne','Chablis','Gevrey-Chambertin','Vosne-Romanée','Meursault','Puligny-Montrachet','Pommard','Mâcon'],
-  'Champagne': ['Champagne'],
-  'Corsica': ['Ajaccio','Patrimonio','Vin de Corse'],
-  'Jura': ['Côtes du Jura','Château-Chalon','Arbois'],
-  'Languedoc-Roussillon': ['Languedoc','Corbières','Minervois','Faugères','Fitou','Collioure'],
-  'Valle della Loira': ['Sancerre','Pouilly-Fumé','Vouvray','Chinon','Muscadet','Saumur-Champigny'],
-  'Provenza': ['Côtes de Provence','Bandol','Cassis'],
-  'Valle del Rodano': ['Côtes du Rhône','Châteauneuf-du-Pape','Hermitage','Côte-Rôtie','Gigondas','Vacqueyras'],
-  'Savoia': ['Vin de Savoie','Roussette de Savoie'],
-  'Sud-Ovest': ['Cahors','Madiran','Jurançon','Bergerac']
-};
-
-const GERMANY_DESIGNATIONS = ['Qualitätswein','Kabinett','Spätlese','Auslese','Beerenauslese (BA)','Trockenbeerenauslese (TBA)','Eiswein','Prädikatswein','Erste Lage','Grosses Gewächs (GG)','Classic','Selection'];
-
-const USA_AVA = {
-  'Napa Valley': ['Napa Valley AVA','Stags Leap District AVA','Oakville AVA','Rutherford AVA','Howell Mountain AVA'],
-  'Sonoma County': ['Sonoma Valley AVA','Russian River Valley AVA','Alexander Valley AVA','Dry Creek Valley AVA'],
-  'Central Coast': ['Central Coast AVA','Edna Valley AVA','Santa Maria Valley AVA'],
-  'Paso Robles': ['Paso Robles AVA'],
-  'Santa Barbara County': ['Santa Ynez Valley AVA','Sta. Rita Hills AVA'],
-  'Willamette Valley (Oregon)': ['Willamette Valley AVA','Dundee Hills AVA','Eola-Amity Hills AVA'],
-  'Columbia Valley (Washington)': ['Columbia Valley AVA','Walla Walla Valley AVA','Yakima Valley AVA'],
-  'Finger Lakes (New York)': ['Finger Lakes AVA','Seneca Lake AVA']
-};
-
-const CHILE_DO = {
-  'Valle de Elqui': ['Elqui DO'],
-  'Valle de Limarí': ['Limarí DO'],
-  'Valle de Aconcagua': ['Aconcagua DO'],
-  'Valle de Casablanca': ['Casablanca DO'],
-  'Valle de San Antonio': ['San Antonio DO','Leyda DO'],
-  'Valle del Maipo': ['Maipo Valley DO'],
-  'Valle de Cachapoal': ['Cachapoal Valley DO','Rapel Valley DO'],
-  'Valle de Colchagua': ['Colchagua Valley DO','Rapel Valley DO'],
-  'Valle de Curicó': ['Curicó Valley DO'],
-  'Valle del Maule': ['Maule Valley DO'],
-  'Valle del Itata': ['Itata Valley DO'],
-  'Valle del Bío Bío': ['Bío Bío Valley DO']
-};
-
-const ARGENTINA_IG = {
-  Mendoza: ['Luján de Cuyo IG','Valle de Uco IG','Maipú IG','San Rafael IG','Mendoza IG'],
-  Salta: ['Valles Calchaquíes IG','Cafayate IG'],
-  'San Juan': ['Pedernal Valley IG','Tulum Valley IG'],
-  'La Rioja': ['Famatina Valley IG'],
-  Catamarca: ['Fiambalá IG'],
-  'Río Negro': ['Río Negro IG'],
-  Neuquén: ['Neuquén IG']
-};
-
-const NZ_GI = {
-  Marlborough: ['Marlborough GI'],
-  'Hawke\'s Bay': ['Hawke\'s Bay GI','Gimblett Gravels GI'],
-  'Central Otago': ['Central Otago GI'],
-  'Wairarapa (Martinborough)': ['Martinborough GI'],
-  Nelson: ['Nelson GI'],
-  'Canterbury (Waipara)': ['Waipara Valley GI'],
-  Gisborne: ['Gisborne GI'],
-  'Auckland (Waiheke Island)': ['Waiheke Island GI']
-};
-
-const SOUTHAFRICA_WO = {
-  Stellenbosch: ['Stellenbosch WO'],
-  Paarl: ['Paarl WO'],
-  Franschhoek: ['Franschhoek Valley WO'],
-  Constantia: ['Constantia WO'],
-  Swartland: ['Swartland WO'],
-  'Walker Bay': ['Walker Bay WO','Hemel-en-Aarde Valley WO'],
-  Robertson: ['Robertson WO'],
-  Elgin: ['Elgin WO']
-};
-
-const AUSTRALIA_GI = {
-  'Barossa Valley': ['Barossa Valley GI'],
-  'McLaren Vale': ['McLaren Vale GI'],
-  'Hunter Valley': ['Hunter Valley GI'],
-  'Margaret River': ['Margaret River GI'],
-  'Yarra Valley': ['Yarra Valley GI'],
-  Coonawarra: ['Coonawarra GI'],
-  'Clare Valley': ['Clare Valley GI'],
-  'Adelaide Hills': ['Adelaide Hills GI'],
-  'Eden Valley': ['Eden Valley GI'],
-  'Mornington Peninsula': ['Mornington Peninsula GI']
-};
-
-/* ══ VITIGNI — elenco curato (non esaustivo) per uniformare il campo ══
-   Internazionali + principali autoctoni italiani, francesi, tedeschi,
-   spagnoli. Il campo resta comunque libero per varietà non elencate. */
-const GRAPE_VARIETIES = [
-  // Internazionali
-  'Cabernet Sauvignon','Cabernet Franc','Merlot','Pinot Nero','Pinot Grigio','Pinot Bianco',
-  'Syrah','Chardonnay','Sauvignon Blanc','Riesling','Gewürztraminer','Viognier',
-  'Grenache (Garnacha)','Tempranillo','Malbec','Petit Verdot','Sémillon','Moscato',
-  'Zinfandel (Primitivo)','Gamay','Mourvèdre','Carignan','Cinsault','Chenin Blanc',
-  // Autoctoni italiani
-  'Sangiovese','Nebbiolo','Barbera','Dolcetto','Corvina','Rondinella','Molinara',
-  'Garganega','Trebbiano','Vermentino','Glera','Nero d\'Avola','Nerello Mascalese',
-  'Nerello Cappuccio','Aglianico','Fiano','Greco','Falanghina','Verdicchio','Vernaccia',
-  'Montepulciano','Lambrusco','Croatina','Freisa','Grignolino','Cortese','Arneis',
-  'Ribolla Gialla','Friulano','Pignolo','Schiava','Lagrein','Teroldego','Negroamaro',
-  'Bombino Bianco','Bombino Nero','Grillo','Catarratto','Malvasia','Ansonica (Inzolia)',
-  'Pecorino','Passerina','Sagrantino','Ciliegiolo','Canaiolo','Colorino','Vespolina',
-  'Bonarda','Timorasso','Moscato Giallo','Traminer Aromatico','Kerner','Marzemino',
-  // Francia (oltre agli internazionali già elencati)
-  'Melon de Bourgogne','Ugni Blanc','Colombard','Roussanne','Marsanne','Petit Manseng',
-  // Germania (oltre a Riesling già elencato)
-  'Müller-Thurgau','Silvaner','Dornfelder','Portugieser','Scheurebe',
-  // Spagna (oltre a Tempranillo/Grenache già elencati)
-  'Albariño','Verdejo','Bobal','Godello','Mencía','Palomino','Xarel-lo','Macabeo',
-  'Monastrell','Graciano','Cariñena (Mazuelo)'
-];
+// GEO_REGIONS, GEO_PROVINCES_ITALIA, ITALY_DOCG, FRANCE_AOC,
+// GERMANY_DESIGNATIONS, USA_AVA, CHILE_DO, ARGENTINA_IG, NZ_GI,
+// SOUTHAFRICA_WO, AUSTRALIA_GI, GRAPE_VARIETIES: vedi data-geo.js
+// (import in testa al modulo) — puro dato statico, spostato lì per
+// alleggerire questo file.
 
 let selectedGrapes = []; // [{name, pct}]
 
@@ -8779,28 +8664,7 @@ function removeWinePosition(index) {
   renderWinePositionChips();
 }
 
-const SPAIN_DO = {
-  'Rioja': ['Rioja DOCa'],
-  'Ribera del Duero': ['Ribera del Duero DO'],
-  'Priorat': ['Priorat DOQ'],
-  'Penedès': ['Penedès DO'],
-  'Rías Baixas': ['Rías Baixas DO'],
-  'Jerez': ['Jerez-Xérès-Sherry DO'],
-  'Navarra': ['Navarra DO'],
-  'Rueda': ['Rueda DO'],
-  'Toro': ['Toro DO'],
-  'Bierzo': ['Bierzo DO'],
-  'La Mancha': ['La Mancha DO'],
-  'Jumilla': ['Jumilla DO'],
-  'Somontano': ['Somontano DO'],
-  'Catalogna': ['DO Catalunya','Montsant DO','Empordà DO'],
-  'Galizia': ['Valdeorras DO','Ribeiro DO','Monterrei DO'],
-  'Andalusia': ['Montilla-Moriles DO','Málaga DO'],
-  'Castiglia e León': ['Cigales DO','Arribes DO'],
-  'Aragona': ['Cariñena DO','Campo de Borja DO'],
-  'Paesi Baschi': ['Getariako Txakolina DO'],
-  'Canarie': ['Ycoden-Daute-Isora DO','Abona DO']
-};
+// SPAIN_DO: vedi data-geo.js (import in testa al modulo)
 
 let regionSuggestions   = [];
 let provinceSuggestions = [];
@@ -8843,12 +8707,7 @@ function updateProvinceOptions() {
 // vedi attachAutocomplete('p-delegazione', ...) più sotto). Non è l'elenco
 // ufficiale completo di ciascuna associazione (FISAR ne ha decine, organizzate
 // per provincia): è un punto di partenza, il campo accetta comunque testo libero.
-const DELEGAZIONI = {
-  AIS: ['Abruzzo','Basilicata','Calabria','Campania','Emilia Romagna','Friuli Venezia Giulia','Lazio','Liguria','Lombardia','Marche','Molise','Piemonte','Puglia','Sardegna','Sicilia','Toscana','Trentino Alto Adige','Umbria','Valle d\'Aosta','Veneto'],
-  FISAR: ['Delegazione di Alessandria','Delegazione di Bari','Delegazione di Bologna','Delegazione di Caserta','Delegazione di Civitavecchia e Costa Etrusco-Romana','Delegazione di Empoli','Delegazione di Firenze','Delegazione di Genova','Delegazione di Livorno','Delegazione di Lucca','Delegazione di Milano','Delegazione di Napoli','Delegazione di Palermo','Delegazione di Pavia','Delegazione di Pesaro-Urbino-Fano','Delegazione di Pisa','Delegazione di Portogruaro','Delegazione di Prato','Delegazione di Roma','Delegazione di Torino','Delegazione di Venezia','Delegazione di Verona'],
-  ONAV: ['Sezione di Bologna','Sezione di Firenze','Sezione di Milano','Sezione di Napoli','Sezione di Padova','Sezione di Roma','Sezione di Torino','Sezione di Venezia'],
-  FIS: ['Fondazione Ancona','Fondazione Andria','Fondazione Bergamo','Fondazione Bologna','Fondazione Cagliari','Fondazione Catania','Fondazione Fondi','Fondazione Franciacorta','Fondazione Frosinone','Fondazione Genova','Fondazione Grosseto','Fondazione Grottaferrata','Fondazione Lecce','Fondazione Mantova','Fondazione Milano','Fondazione Napoli','Fondazione Padova','Fondazione Pescara','Fondazione Pisa','Fondazione Roma','Fondazione Siena','Fondazione Torino','Fondazione Treviso','Fondazione Val d\'Orcia','Fondazione Verona','Fondazione Vicenza']
-};
+// DELEGAZIONI: vedi data-geo.js (import in testa al modulo)
 
 // Prefisso testuale che ciascuna associazione usa per tutte le sue delegazioni
 // (AIS non ne ha uno: la lista è di soli nomi di regione). Se l'utente scrive
@@ -9468,7 +9327,7 @@ async function showBlogPostDetail(id) {
     document.getElementById('bp-title').value = post?.title || '';
     await loadBlogAuthorOptions(post?.author_id || (post ? '' : currentUser.id));
     document.getElementById('bp-excerpt').value = post?.excerpt || '';
-    getBpEditor().root.innerHTML = bpBodyToHtml(post?.body);
+    (await getBpEditor()).root.innerHTML = bpBodyToHtml(post?.body);
     document.getElementById('bp-status').value = post?.status || 'draft';
     document.getElementById('bp-cover-preview').innerHTML = post?.cover_image_url ? `<img src="${post.cover_image_url}" style="max-width:100%;border-radius:8px;display:block" alt="">` : '';
     await renderBpTagChips(post?.tags || []);
@@ -9547,8 +9406,14 @@ function bpBodyToHtml(body) {
 // form invece di ricrearla, dato che il contenitore #bp-body-editor
 // resta sempre nel DOM (la "schermata" è solo nascosta, non rimossa).
 let bpEditor = null;
-function getBpEditor() {
+async function getBpEditor() {
   if (bpEditor) return bpEditor;
+  try {
+    await ensureQuillLoaded();
+  } catch (e) {
+    toastErr('Impossibile caricare l\'editor (connessione assente?). Riprova.');
+    throw e;
+  }
   bpEditor = new Quill('#bp-body-editor', {
     theme: 'snow',
     placeholder: 'Testo dell\'articolo…',
@@ -9581,7 +9446,7 @@ async function insertBpEditorImage() {
   input.onchange = async () => {
     const file = input.files[0];
     if (!file) return;
-    const editor = getBpEditor();
+    const editor = await getBpEditor();
     const range = editor.getSelection(true);
     let toUpload = file;
     try { toUpload = await compressImage(file, 1000, 0.85); } catch (e) { console.warn('compressImage immagine corpo fallita', e); }
@@ -9603,7 +9468,7 @@ async function saveBlogPost() {
   const status = document.getElementById('bp-status').value;
   const authorSel = document.getElementById('bp-author-id');
   const authorOpt = authorSel?.options[authorSel.selectedIndex];
-  const bodyHtml = getBpEditor().root.innerHTML;
+  const bodyHtml = (await getBpEditor()).root.innerHTML;
   const row = {
     title, body: bodyHtml === '<p><br></p>' ? null : bodyHtml, status,
     author_id: authorSel?.value || null,
@@ -10222,7 +10087,12 @@ function hlWineInPeriod(w, range) {
   return inRange(w.tastingDate) || inRange(w.date);
 }
 
-function renderHighlights() {
+async function renderHighlights() {
+  // Se il CDN di Chart.js non risponde (rete assente/instabile), le
+  // statistiche numeriche restano comunque visibili: solo i grafici
+  // vengono saltati, invece di lasciare l'intera schermata vuota.
+  let chartLib = true;
+  try { await ensureChartLoaded(); } catch (e) { console.warn('Chart.js non disponibile', e); chartLib = false; }
   document.getElementById('hl-chip-tasted')?.classList.toggle('active', highlightsView === 'tasted');
   document.getElementById('hl-chip-owned')?.classList.toggle('active', highlightsView === 'owned');
   document.getElementById('hl-chip-all')?.classList.toggle('active', highlightsView === 'all');
@@ -10255,6 +10125,7 @@ function renderHighlights() {
   const vMax = vintages.length ? Math.max(...vintages) : null;
   document.getElementById('hl-stat-vintage').textContent = vintages.length ? (vMin === vMax ? String(vMin) : `${vMin}–${vMax}`) : '—';
 
+  if (!chartLib) return;
   hlDrawDonut('hl-chart-type', tallyTopN(hlCurrentWines.map(w => w.type), 7), null, label => HL_TYPE_COLORS[label] || HL_TYPE_COLORS.Altro);
   hlGrapeState = { mode: 'top' }; renderGrapeChart();
   hlRegionState = { mode: 'top' }; renderRegionChart();
@@ -10766,7 +10637,7 @@ Object.assign(window, {
   addPosNode, removePosNode, addWinePosition, removeWinePosition, onPosL1Change, onPosL2Change, onPosL3Change,
   addDetailPosition, removeDetailPosition, onDetailPosL1Change, onDetailPosL2Change, onDetailPosL3Change,
   showWineryDetail, toggleWineryPreview, saveWineryDetails, uploadWineryLogo, goBackFromWinery, showAdminWineriesScreen, deleteWinery, searchAllWineries,
-  saveScanLimits, resetScanUsage,
+  saveScanLimits, resetScanUsage, searchScanUsersAdmin,
   addWineryCatalogWine, removeWineryCatalogWine, useFaviconAsLogo,
   editWineryCatalogWine, cancelEditWineryCatalogWine, addWineryManually, importWineryCatalogFromShop, enrichWineryFromWebsite, enrichWineryCatalogGrapes,
   linkProducerToWinery, approveWineryClaim, rejectWineryClaim, submitWineryClaim, cancelWineryClaim, myWineryIds,

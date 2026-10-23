@@ -3034,3 +3034,35 @@ end;
 $$;
 revoke all on function public.reset_scan_usage(text) from public, anon;
 grant execute on function public.reset_scan_usage(text) to authenticated;
+
+-- ════════════════════════════════════════════════════════════════
+-- Ricerca utente per nome nella sezione "Monitoraggio Scan AI": l'elenco
+-- di get_scan_usage_this_month() mostra solo chi ha già fatto almeno una
+-- scansione questo mese, quindi non basta per trovare un utente
+-- specifico che non vi compare ancora — stessa logica SECURITY DEFINER
+-- delle altre funzioni di questa schermata, conta zero se l'utente non
+-- ha ancora una riga in scan_usage per il periodo corrente.
+-- ════════════════════════════════════════════════════════════════
+create or replace function public.search_users_for_scan_admin(q text)
+returns table (user_id uuid, full_name text, count integer)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_admin() then
+    raise exception 'not authorized';
+  end if;
+  return query
+    select p.id, p.full_name,
+      coalesce((select su.count from public.scan_usage su
+        where su.scope = p.id::text and su.period = to_char(now(), 'YYYY-MM')), 0)
+    from public.profiles p
+    where p.full_name ilike '%' || q || '%'
+    order by p.full_name
+    limit 20;
+end;
+$$;
+revoke all on function public.search_users_for_scan_admin(text) from public, anon;
+grant execute on function public.search_users_for_scan_admin(text) to authenticated;
