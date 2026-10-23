@@ -21,6 +21,30 @@ const SERVICE_ROLE_KEY   = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
+// Notifica l'admin via email (stesso indirizzo già usato per le nuove
+// registrazioni) quando l'aggiornamento di un abbonamento fallisce in
+// modo imprevisto — qui più che altrove conviene saperlo subito, perché
+// significa che qualcuno ha pagato ma non ha ricevuto il Premium (o
+// viceversa per una disdetta). Prima si vedeva solo aprendo a mano i log
+// di Supabase. Nessun limite di frequenza: se diventa rumoroso per un
+// problema ricorrente, è già di per sé un segnale che va sistemato. Non
+// usata per una firma webhook non valida (sotto): quello è traffico di
+// probing atteso, non un errore da segnalare.
+async function notifyAdminError(fn: string, err: unknown) {
+  try {
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${Deno.env.get('RESEND_API_KEY')}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: 'Enoscrigno <noreply@enoscrigno.it>',
+        to: ['enoscrigno@gmail.com'],
+        subject: `Errore in ${fn} — Enoscrigno`,
+        html: `<p style="font-family:Arial,sans-serif">Errore imprevisto nella Edge Function <b>${fn}</b>:</p><pre style="white-space:pre-wrap;font-size:12px;background:#f5f5f5;padding:12px;border-radius:8px">${String(err instanceof Error ? err.stack || err.message : err).slice(0, 2000)}</pre>`,
+      }),
+    });
+  } catch {}
+}
+
 Deno.serve(async (req) => {
   const signature = req.headers.get('stripe-signature');
   const body = await req.text();
@@ -61,6 +85,7 @@ Deno.serve(async (req) => {
     return new Response('ok', { status: 200 });
   } catch (err) {
     console.error('stripe-webhook error:', err);
+    await notifyAdminError('stripe-webhook', err);
     return new Response('Errore interno', { status: 500 });
   }
 });

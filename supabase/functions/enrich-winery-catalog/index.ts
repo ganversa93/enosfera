@@ -28,6 +28,27 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Notifica l'admin via email (stesso indirizzo già usato per le nuove
+// registrazioni) quando questa funzione va in errore in modo imprevisto —
+// prima si vedeva solo aprendo a mano i log di Supabase. Nessun limite di
+// frequenza: se diventa rumoroso per un problema ricorrente, è già di per
+// sé un segnale che va sistemato. Un fallimento qui non deve mai impedire
+// la risposta di errore originale al client.
+async function notifyAdminError(fn: string, err: unknown) {
+  try {
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${Deno.env.get('RESEND_API_KEY')}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: 'Enoscrigno <noreply@enoscrigno.it>',
+        to: ['enoscrigno@gmail.com'],
+        subject: `Errore in ${fn} — Enoscrigno`,
+        html: `<p style="font-family:Arial,sans-serif">Errore imprevisto nella Edge Function <b>${fn}</b>:</p><pre style="white-space:pre-wrap;font-size:12px;background:#f5f5f5;padding:12px;border-radius:8px">${String(err instanceof Error ? err.stack || err.message : err).slice(0, 2000)}</pre>`,
+      }),
+    });
+  } catch {}
+}
+
 const FETCH_TIMEOUT_MS = 15000;
 const MAX_HTML_BYTES = 800_000;
 // Per vino, molto più corto che in enrich-winery-profile: qui se ne
@@ -162,6 +183,7 @@ Deno.serve(async (req) => {
     return json({ ok: true, checked: wines.length, updated, failed: failedCount });
   } catch (err) {
     console.error('enrich-winery-catalog error:', err);
+    await notifyAdminError('enrich-winery-catalog', err);
     return json({ error: 'server_error', message: `Errore imprevisto: ${err instanceof Error ? err.message : String(err)}` }, 200);
   }
 });

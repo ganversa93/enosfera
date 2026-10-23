@@ -31,6 +31,27 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Notifica l'admin via email quando questa funzione va in errore in modo
+// imprevisto — prima si vedeva solo aprendo a mano i log di Supabase.
+// Nessun limite di frequenza: se diventa rumoroso per un problema
+// ricorrente, è già di per sé un segnale che va sistemato. Un
+// fallimento qui non deve mai impedire la risposta di errore originale
+// al client.
+async function notifyAdminError(fn: string, err: unknown) {
+  try {
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: FROM_ADDRESS,
+        to: [TO_ADDRESS],
+        subject: `Errore in ${fn} — Enoscrigno`,
+        html: `<p style="font-family:Arial,sans-serif">Errore imprevisto nella Edge Function <b>${fn}</b>:</p><pre style="white-space:pre-wrap;font-size:12px;background:#f5f5f5;padding:12px;border-radius:8px">${String(err instanceof Error ? err.stack || err.message : err).slice(0, 2000)}</pre>`,
+      }),
+    });
+  } catch {}
+}
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -107,6 +128,7 @@ Deno.serve(async (req) => {
     return json({ ok: true });
   } catch (err) {
     console.error(err);
+    await notifyAdminError('send-feedback-email', err);
     return json({ error: 'Errore interno' }, 500);
   }
 });
