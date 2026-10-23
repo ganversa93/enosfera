@@ -2855,3 +2855,55 @@ create policy "winery_contacts: solo il proprietario"
 -- ════════════════════════════════════════════════════════════════
 alter table public.winery_contacts add column if not exists telefono text;
 alter table public.winery_contacts add column if not exists email text;
+
+-- ════════════════════════════════════════════════════════════════
+-- FIX SICUREZZA: le due policy "profiles: visibili a chi ha una
+-- richiesta di follow/condivisione cantina con me" rendevano leggibile
+-- l'INTERA riga di profiles (RLS filtra per riga, non per colonna) a
+-- chiunque avesse anche solo una richiesta "pending" in corso — bastava
+-- mandare una richiesta di follow a qualcuno per poter leggere, con una
+-- chiamata diretta alle API (la chiave anon è pubblica by design),
+-- colonne mai mostrate dal frontend come stripe_customer_id,
+-- subscription_status, card (tessera), cellar_positions_tree.
+--
+-- Il frontend, in ogni punto in cui legge il profilo di un altro utente
+-- tramite questa relazione, seleziona sempre e solo id/full_name/
+-- avatar_base64/assoc (mai altro) — vedi index.html, loadFollowRequests,
+-- loadSharedCellars, loadCellarShareMembers, loadCellarInvitesReceived,
+-- loadNetworkFeed. Questa funzione restituisce solo quelle 4 colonne,
+-- con la stessa identica logica di autorizzazione delle due policy che
+-- sostituisce (più "o profilo pubblico", già coperta da un'altra policy
+-- esistente ma inclusa qui per avere un solo punto di lettura ovunque
+-- nel frontend serva il profilo "breve" di un altro utente) — stesso
+-- principio già usato per get_user_id_by_email/get_cellar_position_tree.
+-- ════════════════════════════════════════════════════════════════
+create or replace function public.get_relationship_profile_brief(p_ids uuid[])
+returns table (id uuid, full_name text, avatar_base64 text, assoc text)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select p.id, p.full_name, p.avatar_base64, p.assoc
+  from public.profiles p
+  where p.id = any(p_ids)
+    and (
+      p.id = auth.uid()
+      or p.is_public = true
+      or exists (
+        select 1 from public.follows f
+        where (f.follower_id = auth.uid() and f.followee_id = p.id)
+           or (f.followee_id = auth.uid() and f.follower_id = p.id)
+      )
+      or exists (
+        select 1 from public.cellar_shares cs
+        where (cs.owner_id = auth.uid() and cs.member_id = p.id)
+           or (cs.member_id = auth.uid() and cs.owner_id = p.id)
+      )
+    );
+$$;
+revoke all on function public.get_relationship_profile_brief(uuid[]) from public, anon;
+grant execute on function public.get_relationship_profile_brief(uuid[]) to authenticated;
+
+drop policy if exists "profiles: visibili a chi ha una richiesta di follow con me" on public.profiles;
+drop policy if exists "profiles: visibili a chi condivide una cantina con me" on public.profiles;

@@ -8954,7 +8954,7 @@ async function loadFollowRequests() {
   if (error || !requests?.length) { section.style.display = 'none'; return; }
 
   const ids = requests.map(r => r.follower_id);
-  const { data: profilesData } = await sb.from('profiles').select('id, full_name, avatar_base64').in('id', ids);
+  const { data: profilesData } = await sb.rpc('get_relationship_profile_brief', { p_ids: ids });
   const profMap = Object.fromEntries((profilesData || []).map(p => [p.id, p]));
 
   section.style.display = '';
@@ -8992,7 +8992,7 @@ async function loadSharedCellars() {
     .eq('member_id', currentUser.id).eq('status', 'accepted');
   if (!shares?.length) { mySharedCellars = []; renderCellarSelector(); return; }
   const ownerIds = shares.map(s => s.owner_id);
-  const { data: profiles } = await sb.from('profiles').select('id, full_name').in('id', ownerIds);
+  const { data: profiles } = await sb.rpc('get_relationship_profile_brief', { p_ids: ownerIds });
   const profMap = Object.fromEntries((profiles || []).map(p => [p.id, p.full_name]));
   mySharedCellars = ownerIds.map(id => ({ ownerId: id, name: profMap[id] || 'Cantina condivisa' }));
   renderCellarSelector();
@@ -9051,7 +9051,7 @@ async function loadCellarShareMembers() {
   const { data: shares } = await sb.from('cellar_shares').select('member_id, status').eq('owner_id', currentUser.id);
   if (!shares?.length) { box.style.display = 'none'; return; }
   const ids = shares.map(s => s.member_id);
-  const { data: profiles } = await sb.from('profiles').select('id, full_name, avatar_base64').in('id', ids);
+  const { data: profiles } = await sb.rpc('get_relationship_profile_brief', { p_ids: ids });
   const profMap = Object.fromEntries((profiles || []).map(p => [p.id, p]));
   box.style.display = '';
   document.getElementById('fsec-cellar-mgmt')?.classList.remove('collapsed');
@@ -9079,7 +9079,7 @@ async function loadCellarInvitesReceived() {
     .eq('member_id', currentUser.id).eq('status', 'pending');
   if (!invites?.length) { section.style.display = 'none'; return; }
   const ownerIds = invites.map(i => i.owner_id);
-  const { data: profiles } = await sb.from('profiles').select('id, full_name').in('id', ownerIds);
+  const { data: profiles } = await sb.rpc('get_relationship_profile_brief', { p_ids: ownerIds });
   const profMap = Object.fromEntries((profiles || []).map(p => [p.id, p.full_name]));
   section.style.display = '';
   document.getElementById('fsec-cellar-mgmt')?.classList.remove('collapsed');
@@ -10251,7 +10251,7 @@ async function loadNetworkFeed() {
   if (error) { feedBox.innerHTML = `<div class="empty"><p>Errore caricamento feed.</p></div>`; return; }
   if (!wines?.length) { networkWinesCache = []; feedBox.innerHTML = `<div class="empty"><i class="ti ti-bottle"></i><p>Le persone che segui non hanno ancora vini visibili.</p></div>`; return; }
 
-  const { data: profilesData } = await sb.from('profiles').select('id, full_name, avatar_base64, assoc').in('id', followeeIds);
+  const { data: profilesData } = await sb.rpc('get_relationship_profile_brief', { p_ids: followeeIds });
   const profMap = Object.fromEntries((profilesData || []).map(p => [p.id, p]));
 
   networkWinesCache = wines.map(row => ({
