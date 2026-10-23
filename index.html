@@ -4068,6 +4068,8 @@ let eventProvinceSuggestions = [];  // autocomplete provincia nella scheda event
 let eventsCache = [];       // tutti gli eventi caricati una volta, filtrati/ordinati lato client
 let showPastEvents = false; // false = in programma (default), true = passati
 let favoriteEventIds = new Set(); // id degli eventi messi tra i preferiti dall'utente corrente
+let attendingEventIds = new Set();  // id degli eventi a cui l'utente corrente ha segnato "Parteciperò"
+let eventAttendeeCounts = new Map(); // event_id -> numero di partecipanti totali (tutti gli utenti)
 let currentFilter    = 'all';
 let currentQtyFilter = 'all';
 let sortField = 'created'; // 'created' | 'vintage' | 'price' | 'type' — cantina
@@ -6143,6 +6145,24 @@ async function loadFavoriteEventIds() {
   return new Set((data || []).map(r => r.event_id));
 }
 
+// "Parteciperò": a differenza dei preferiti (privati, solo le proprie
+// righe), event_attendees è leggibile da chiunque autenticato — serve a
+// calcolare il numero di partecipanti per OGNI evento, non solo i propri.
+// Una sola query per tutta l'app invece di una per evento, poi si
+// raggruppa lato client: stesso principio di eventsCache/myWines(), le
+// righe non sono mai così tante da giustificare query per-evento.
+async function loadEventAttendance() {
+  const { data, error } = await sb.from('event_attendees').select('event_id, user_id');
+  if (error) { console.warn('loadEventAttendance', error); return { mine: new Set(), counts: new Map() }; }
+  const counts = new Map();
+  const mine = new Set();
+  for (const r of (data || [])) {
+    counts.set(r.event_id, (counts.get(r.event_id) || 0) + 1);
+    if (currentUser && r.user_id === currentUser.id) mine.add(r.event_id);
+  }
+  return { mine, counts };
+}
+
 // Aggiunge/rimuove un evento dai preferiti dell'utente corrente e aggiorna
 // subito sia la stellina cliccata sia — se aperta — la sezione "prossimi
 // eventi" in cima alla lista, senza dover ricaricare tutto da capo.
@@ -6164,6 +6184,63 @@ async function toggleEventFavorite(id, domEvent) {
     btn.innerHTML = `<i class="ti ${!wasFav ? 'ti-star-filled' : 'ti-star'}"></i>`;
   });
   if (document.getElementById('events-list')) { renderEventsFavSection(); renderEventsList(); }
+}
+
+// "Parteciperò": a differenza del preferito è un segnale pubblico (lo
+// vedono tutti, non solo chi l'ha messo) — da qui il bottone con testo
+// invece della sola stellina, e l'aggiornamento sia del contatore nella
+// card sia, se aperta, della lista "Chi partecipa" nel dettaglio.
+async function toggleEventAttending(id, domEvent) {
+  domEvent?.stopPropagation();
+  if (!currentUser) return;
+  const wasAttending = attendingEventIds.has(id);
+  if (wasAttending) {
+    attendingEventIds.delete(id);
+    eventAttendeeCounts.set(id, Math.max(0, (eventAttendeeCounts.get(id) || 1) - 1));
+    const { error } = await sb.from('event_attendees').delete().eq('user_id', currentUser.id).eq('event_id', id);
+    if (error) { attendingEventIds.add(id); eventAttendeeCounts.set(id, (eventAttendeeCounts.get(id) || 0) + 1); toastErr('Errore: ' + error.message); return; }
+  } else {
+    attendingEventIds.add(id);
+    eventAttendeeCounts.set(id, (eventAttendeeCounts.get(id) || 0) + 1);
+    const { error } = await sb.from('event_attendees').insert({ user_id: currentUser.id, event_id: id });
+    if (error) { attendingEventIds.delete(id); eventAttendeeCounts.set(id, Math.max(0, (eventAttendeeCounts.get(id) || 1) - 1)); toastErr('Errore: ' + error.message); return; }
+  }
+  document.querySelectorAll(`.event-attend-btn[data-id="${id}"]`).forEach(btn => {
+    btn.classList.toggle('primary', !wasAttending);
+    btn.innerHTML = `<i class="ti ${!wasAttending ? 'ti-circle-check-filled' : 'ti-circle-plus'}"></i>${!wasAttending ? 'Parteciperò ✓' : 'Parteciperò'}`;
+  });
+  if (document.getElementById('events-list')) renderEventsList();
+  if (currentEventId === id) loadEventAttendeesSection(id);
+}
+
+// Nomi/avatar di chi partecipa, mostrati nel dettaglio evento — a
+// differenza del conteggio (derivato da eventAttendeeCounts, già in
+// memoria), i nomi vanno risolti con una RPC perché event_attendees non
+// porta altro che l'id: profiles ha RLS per-relazione (vedi
+// get_relationship_profile_brief) che qui non si applica, dato che
+// partecipare a un evento è un segnale pubblico scelto apposta, non
+// legato al proprio profilo pubblico/privato.
+async function loadEventAttendeesSection(id) {
+  const section = document.getElementById('event-attendees-section');
+  if (!section) return;
+  const countEl = document.getElementById('event-attendees-count');
+  const listEl = document.getElementById('event-attendees-list');
+  const { data, error } = await sb.rpc('get_event_attendees', { p_event_id: id });
+  if (error) { console.warn('loadEventAttendeesSection', error); section.style.display = 'none'; return; }
+  const attendees = data || [];
+  if (!attendees.length) { section.style.display = 'none'; return; }
+  section.style.display = '';
+  countEl.textContent = ` (${attendees.length})`;
+  listEl.innerHTML = attendees.map(a => {
+    const initials = (a.full_name || '?').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+    return `
+      <div style="display:flex;align-items:center;gap:8px;padding:5px 0">
+        ${a.avatar_base64
+          ? `<img src="${a.avatar_base64}" style="width:26px;height:26px;border-radius:50%;object-fit:cover;flex-shrink:0">`
+          : `<div style="width:26px;height:26px;border-radius:50%;background:var(--wine-pale);color:var(--wine);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;flex-shrink:0">${initials}</div>`}
+        <div style="font-size:13px;color:var(--ink)">${a.full_name || 'Utente'}</div>
+      </div>`;
+  }).join('');
 }
 
 // Sezione fissa in cima alla schermata Eventi: i preferiti dell'utente
@@ -6196,6 +6273,7 @@ function eventCardHtml(e) {
       </div>
       ${formatEventDateRange(e.date_from, e.date_to) ? `<div class="event-card-loc"><i class="ti ti-calendar-event"></i>${formatEventDateRange(e.date_from, e.date_to)}</div>` : ''}
       ${(e.region || e.province) ? `<div class="event-card-loc"><i class="ti ti-map-pin"></i>${[e.region, e.province].filter(Boolean).join(', ')}</div>` : ''}
+      ${eventAttendeeCounts.get(e.id) ? `<div class="event-card-loc"><i class="ti ti-users"></i>${eventAttendeeCounts.get(e.id)} partecipant${eventAttendeeCounts.get(e.id) === 1 ? 'e' : 'i'}</div>` : ''}
       ${e.description ? `<div class="event-card-desc">${e.description}</div>` : ''}
     </div>`;
 }
@@ -6217,7 +6295,10 @@ async function showEventsScreen() {
   if (addBtn) addBtn.style.display = (currentUser?.isAdmin || myWineryIds().length) ? '' : 'none';
   const list = document.getElementById('events-list');
   list.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted)">Caricamento…</div>';
-  [eventsCache, favoriteEventIds] = await Promise.all([loadEvents(), loadFavoriteEventIds()]);
+  let attendance;
+  [eventsCache, favoriteEventIds, attendance] = await Promise.all([loadEvents(), loadFavoriteEventIds(), loadEventAttendance()]);
+  attendingEventIds = attendance.mine;
+  eventAttendeeCounts = attendance.counts;
   populateEventsFilterOptions();
   renderEventsFavSection();
   renderEventsList();
@@ -6336,9 +6417,14 @@ async function showEventDetail(id, prefill) {
         ${ev.website ? `<a href="${ev.website}" target="_blank" rel="noopener" class="winery-link" style="text-decoration:none"><i class="ti ti-world" style="font-size:12px"></i> ${ev.website.replace(/^https?:\/\//,'')}</a>` : ''}
         ${ev.phone ? `<div style="font-size:12.5px;color:var(--muted)"><i class="ti ti-phone" style="font-size:12px"></i> <a href="tel:${ev.phone}" style="color:inherit;text-decoration:none">${ev.phone}</a></div>` : ''}
         ${ev.email ? `<div style="font-size:12.5px;color:var(--muted)"><i class="ti ti-mail" style="font-size:12px"></i> <a href="mailto:${ev.email}" style="color:inherit;text-decoration:none">${ev.email}</a></div>` : ''}
+        ${currentUser ? `<button class="btn sm event-attend-btn${attendingEventIds.has(ev.id) ? ' primary' : ''}" data-id="${ev.id}" style="margin-top:8px" onclick="toggleEventAttending('${ev.id}', event)"><i class="ti ${attendingEventIds.has(ev.id) ? 'ti-circle-check-filled' : 'ti-circle-plus'}"></i>${attendingEventIds.has(ev.id) ? 'Parteciperò ✓' : 'Parteciperò'}</button>` : ''}
       </div>
     </div>
     ${(ev.associations && ev.associations.length) ? `<div class="dchips" style="margin-top:.75rem">${ev.associations.map(a => `<span class="dchip">${a}</span>`).join('')}</div>` : ''}
+    <div class="fsec" style="margin-top:1.25rem;display:none" id="event-attendees-section">
+      <div class="stitle"><i class="ti ti-users"></i>Chi partecipa<span id="event-attendees-count"></span></div>
+      <div id="event-attendees-list"></div>
+    </div>
     ${mapQuery ? `
       <div class="fsec" style="margin-top:1.25rem">
         <div class="stitle"><i class="ti ti-map-2"></i>Dove</div>
@@ -6407,6 +6493,7 @@ Area food">${ev?.main_features || ''}</textarea></div>
     </div>` : '';
 
   body.innerHTML = readView + adminForm;
+  if (ev && id) loadEventAttendeesSection(id);
 
   if (manageEv) {
     eventProvinceSuggestions = GEO_PROVINCES_ITALIA[ev?.region || ''] || [];
@@ -10644,7 +10731,7 @@ Object.assign(window, {
   showWineryContactsScreen, renderWineryContactsList, saveWineryContactQuick, cancelEditWineryContactQuick, editWineryContactQuick, deleteWineryContactQuick,
   renderWineryContactsSection, saveWineryContactInline, deleteWineryContactInline, scanBusinessCard,
   showEventsScreen, showAddEventForm, showEventDetail, saveEvent, deleteEvent, duplicateEvent, setEventStatus,
-  renderEventsList, updateEventsProvinceFilterOptions, toggleShowPastEvents, toggleEventFavorite,
+  renderEventsList, updateEventsProvinceFilterOptions, toggleShowPastEvents, toggleEventFavorite, toggleEventAttending,
   showConfigListsScreen, selectConfigList, addConfigListValue, removeConfigListValue,
   showApprofondisciScreen, showApBlogScreen, showApEnologiaScreen, setApEnologiaView,
   showBlogPostDetail, saveBlogPost, deleteBlogPost, uploadBlogCover, toggleBpTagChip,

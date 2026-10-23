@@ -3066,3 +3066,56 @@ end;
 $$;
 revoke all on function public.search_users_for_scan_admin(text) from public, anon;
 grant execute on function public.search_users_for_scan_admin(text) to authenticated;
+
+-- ════════════════════════════════════════════════════════════════
+-- "Parteciperò": a differenza di event_favorites (preferito privato,
+-- solo le proprie righe — vedi sopra), questo è un segnale pubblico
+-- pensato per rafforzare il senso di community, quindi la lettura è
+-- aperta a chiunque autenticato (serve per contare i partecipanti di
+-- OGNI evento, non solo i propri), mentre scrittura/cancellazione
+-- restano riservate alla propria riga, come per i preferiti.
+-- ════════════════════════════════════════════════════════════════
+create table if not exists public.event_attendees (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  event_id uuid not null references public.events(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (user_id, event_id)
+);
+
+alter table public.event_attendees enable row level security;
+
+drop policy if exists "event_attendees: lettura per chiunque autenticato" on public.event_attendees;
+create policy "event_attendees: lettura per chiunque autenticato"
+  on public.event_attendees for select to authenticated using (true);
+
+drop policy if exists "event_attendees: scrivo/cancello solo la mia riga" on public.event_attendees;
+create policy "event_attendees: scrivo/cancello solo la mia riga"
+  on public.event_attendees for insert to authenticated with check (auth.uid() = user_id);
+
+drop policy if exists "event_attendees: cancello solo la mia riga" on public.event_attendees;
+create policy "event_attendees: cancello solo la mia riga"
+  on public.event_attendees for delete to authenticated using (auth.uid() = user_id);
+
+-- Per mostrare i NOMI di chi partecipa (non solo il conteggio, già
+-- ottenibile da un select diretto su event_attendees) serve una
+-- funzione SECURITY DEFINER: profiles ha RLS per-relazione (own/
+-- pubblico/follow/cellar_shares — vedi get_relationship_profile_brief),
+-- che qui non si applica apposta. Partecipare a un evento è un segnale
+-- pubblico scelto dall'utente stesso cliccando "Parteciperò", del tutto
+-- indipendente dal fatto che il suo profilo sia impostato come pubblico
+-- o privato nel Network.
+create or replace function public.get_event_attendees(p_event_id uuid)
+returns table (user_id uuid, full_name text, avatar_base64 text)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select p.id, p.full_name, p.avatar_base64
+  from public.event_attendees ea
+  join public.profiles p on p.id = ea.user_id
+  where ea.event_id = p_event_id
+  order by ea.created_at;
+$$;
+revoke all on function public.get_event_attendees(uuid) from public, anon;
+grant execute on function public.get_event_attendees(uuid) to authenticated;
