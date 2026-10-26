@@ -675,8 +675,12 @@
        tutti sempre cliccabili (nessuno "occupied" bloccato come nel
        picker — qui occupato è una destinazione valida, per lo scambio). */
     .cellar-map-section { margin-bottom: 24px; }
+    .cellar-map-section-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
     .cellar-map-section-title { font-size: 13px; font-weight: 600; color: var(--ink); margin-bottom: 2px; }
     .cellar-map-section-count { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
+    .cellar-map-section-header .cellar-map-section-count { margin-bottom: 0; }
+    .cellar-map-section-header[onclick] { cursor: pointer; padding: 2px 0; }
+    .cellar-map-row-label { display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: var(--muted); }
     .cellar-map-slot {
       width: 58px; height: 58px; font-size: 9.5px; line-height: 1.15; padding: 3px;
       overflow: hidden; word-break: break-word; cursor: pointer; border-style: solid;
@@ -9260,10 +9264,12 @@ function closeCellarSlotPicker() {
    di più — vedi la scelta fatta insieme). ── */
 let cellarMapSource = null; // { l1, l2, l3, slot, wineId } oppure null
 let cellarMapL1 = null; // quale posizione principale (L1) è mostrata ora — null = non ancora scelta
+let cellarMapExpandedSections = new Set(); // chiavi "l1\u0001l2\u0001l3" delle zone aperte "a tendina"
 
 function showCellarMapScreen() {
   cellarMapSource = null;
   cellarMapL1 = null;
+  cellarMapExpandedSections = new Set();
   showScreen('screen-cellar-map');
   renderCellarMap();
 }
@@ -9274,6 +9280,20 @@ function showCellarMapScreen() {
 // in un'altra (es. da "Garage" a "Armadio climatizzato").
 function setCellarMapL1(l1) {
   cellarMapL1 = l1;
+  renderCellarMap();
+}
+
+function cellarMapSectionKey(l1, l2, l3) { return [l1, l2, l3].join('\u0001'); }
+
+// Apre/chiude "a tendina" la griglia di una singola zona — con più zone
+// nella stessa posizione principale partono tutte chiuse, così si vede
+// meno roba e si apre solo quella che serve (vedi la richiesta fatta
+// insieme). Se la L1 selezionata ha solo una zona non c'è nulla da
+// nascondere: in quel caso resta sempre aperta (vedi renderCellarMap).
+function toggleCellarMapSection(l1, l2, l3) {
+  const key = cellarMapSectionKey(l1, l2, l3);
+  if (cellarMapExpandedSections.has(key)) cellarMapExpandedSections.delete(key);
+  else cellarMapExpandedSections.add(key);
   renderCellarMap();
 }
 
@@ -9334,22 +9354,41 @@ function renderCellarMap() {
     const occ = getSlotOccupancy(node.l1, node.l2, node.l3);
     const pathLabel = [node.l1, node.l2, node.l3].filter(Boolean).join(' · ');
     const gridCols = node.cols || Math.min(node.capacity, 4);
-    const slotsHtml = Array.from({ length: node.capacity }, (_, i) => i + 1).map(n => {
+    // Con più zone nella stessa L1 partono tutte chiuse "a tendina" — si
+    // apre solo quella che serve. Con una sola zona non c'è nulla da
+    // nascondere: resta sempre aperta, nessun'intestazione cliccabile.
+    const sectionKey = cellarMapSectionKey(node.l1, node.l2, node.l3);
+    const isExpanded = nodes.length === 1 || cellarMapExpandedSections.has(sectionKey);
+    let slotsHtml = '';
+    for (let n = 1; n <= node.capacity; n++) {
+      const col = (n - 1) % gridCols;
+      // Numero di riga mostrato solo a scopo informativo (per orientarsi
+      // in griglie grandi, es. 120 slot su 6 colonne = 20 righe) —
+      // un'etichetta a inizio riga, non uno slot cliccabile.
+      if (col === 0) {
+        const rowNum = Math.floor((n - 1) / gridCols) + 1;
+        slotsHtml += `<div class="cellar-map-row-label">${rowNum}</div>`;
+      }
       const wine = occ.get(n);
       const isSource = cellarMapSource && cellarMapSource.l1 === node.l1 && cellarMapSource.l2 === node.l2 && cellarMapSource.l3 === node.l3 && cellarMapSource.slot === n;
       const cls = isSource ? 'source-selected' : wine ? 'filled-slot' : 'empty-slot';
       const label = isSource ? '<i class="ti ti-check"></i>' : wine ? escapeAttr(wine.name) : n;
       const title = wine ? escapeAttr([wine.name, wine.producer].filter(Boolean).join(' — ')) : 'Libero';
-      return `<div class="slot-circle cellar-map-slot ${cls}" onclick="onCellarMapSlotClick('${escapeAttr(node.l1)}','${escapeAttr(node.l2)}','${escapeAttr(node.l3)}',${n})" title="${title}">${label}</div>`;
-    }).join('');
+      slotsHtml += `<div class="slot-circle cellar-map-slot ${cls}" onclick="onCellarMapSlotClick('${escapeAttr(node.l1)}','${escapeAttr(node.l2)}','${escapeAttr(node.l3)}',${n})" title="${title}">${label}</div>`;
+    }
     // niente scroll interno: con il selettore a mostrare una sola L1 per
-    // volta, tutti gli slot di ogni zona devono restare visibili tutti
-    // insieme (scorre la pagina, non la singola griglia).
+    // volta e le zone a tendina, ogni griglia aperta deve restare
+    // visibile per intero (scorre la pagina, non la singola griglia).
     return `
       <div class="cellar-map-section">
-        <div class="cellar-map-section-title">${pathLabel}</div>
-        <div class="cellar-map-section-count">${occ.size}/${node.capacity} occupati</div>
-        <div class="slot-grid" style="grid-template-columns:repeat(${gridCols},1fr);max-height:none;overflow:visible">${slotsHtml}</div>
+        <div class="cellar-map-section-header" ${nodes.length > 1 ? `onclick="toggleCellarMapSection('${escapeAttr(node.l1)}','${escapeAttr(node.l2)}','${escapeAttr(node.l3)}')"` : ''}>
+          <div>
+            <div class="cellar-map-section-title">${pathLabel}</div>
+            <div class="cellar-map-section-count">${occ.size}/${node.capacity} occupati</div>
+          </div>
+          ${nodes.length > 1 ? `<i class="ti ti-chevron-down" style="font-size:14px;color:var(--muted);transition:transform .2s;transform:rotate(${isExpanded ? '0' : '-90'}deg)"></i>` : ''}
+        </div>
+        ${isExpanded ? `<div class="slot-grid" style="grid-template-columns:auto repeat(${gridCols},1fr);max-height:none;overflow:visible">${slotsHtml}</div>` : ''}
       </div>`;
   }).join('');
   body.innerHTML = l1SelectorHtml + sectionsHtml;
@@ -11875,7 +11914,7 @@ Object.assign(window, {
   openCellarSlotPicker, toggleSlotPick, confirmSlotPick, closeCellarSlotPicker,
   startStructureWizard, wizSubmitName, wizAnswerHasChildren, wizSubmitLayout, wizAnswerMoreSiblings, finishStructureWizard, closeStructureWizard,
   wizGoBack, wizConfirmClose,
-  showCellarMapScreen, setCellarMapL1, onCellarMapSlotClick, confirmFreeSlot, closeFreeSlotPicker,
+  showCellarMapScreen, setCellarMapL1, toggleCellarMapSection, onCellarMapSlotClick, confirmFreeSlot, closeFreeSlotPicker,
   downloadImportTemplate, handleImportFile,
   addDetailPosition, removeDetailPosition, onDetailPosL1Change, onDetailPosL2Change, onDetailPosL3Change,
   showWineryDetail, toggleWineryPreview, saveWineryDetails, uploadWineryLogo, goBackFromWinery, showAdminWineriesScreen, deleteWinery, searchAllWineries,
