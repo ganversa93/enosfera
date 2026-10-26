@@ -9500,6 +9500,19 @@ function posParentArrayFor(path) {
   return arr;
 }
 
+// Nomi dei nodi L1 (livello 0) attualmente espansi — tutti chiusi di
+// default: con una struttura a più posizioni/zone la vista libera
+// diventava subito molto affollata (tutto sempre visibile). Solo L1 è
+// collassabile per ora: L2/L3 restano sempre visibili una volta aperto
+// il genitore, la profondità massima è comunque solo 3 livelli.
+let posTreeExpandedL1 = new Set();
+
+function togglePosL1Expanded(name) {
+  if (posTreeExpandedL1.has(name)) posTreeExpandedL1.delete(name);
+  else posTreeExpandedL1.add(name);
+  renderPosTree();
+}
+
 function renderPosNode(node, path, level) {
   const pathStr = path.join(',');
   const canHaveChildren = level < 2; // livello 3 è foglia, non ha ulteriori figli
@@ -9512,9 +9525,11 @@ function renderPosNode(node, path, level) {
   // valore già impostato non si perde se poi si aggiungono figli: resta
   // nel dato, semplicemente non si mostra finché il nodo non torna foglia.
   const isLeafNow = !node.children || node.children.length === 0;
+  const isL1 = level === 0;
+  const isExpanded = !isL1 || posTreeExpandedL1.has(node.name);
   return `
     <div class="pos-node" style="margin-left:${level * 14}px">
-      <div class="pos-node-row">
+      <div class="pos-node-row" ${isL1 ? `onclick="togglePosL1Expanded('${escapeAttr(node.name)}')" style="cursor:pointer"` : ''}>
         <span>${node.name}</span>
         ${isLeafNow ? `
           <input type="number" class="pos-capacity-input" style="width:48px" min="1" max="99" step="1" placeholder="R" title="Righe (facoltativo)" value="${node.rows || ''}" onclick="event.stopPropagation()" oninput="updatePosNodeLayout('${pathStr}','rows',this.value)">
@@ -9522,9 +9537,10 @@ function renderPosNode(node, path, level) {
           <input type="number" class="pos-capacity-input" style="width:48px" min="1" max="99" step="1" placeholder="C" title="Colonne (facoltativo — se non ti interessano le righe, metti qui direttamente il totale bottiglie)" value="${node.cols || ''}" onclick="event.stopPropagation()" oninput="updatePosNodeLayout('${pathStr}','cols',this.value)">
           <span id="pos-cap-label-${pathStr.replace(/,/g, '-')}" style="font-size:11px;font-weight:600;color:var(--gold-l)">${node.capacity ? `=${node.capacity}` : ''}</span>
         ` : ''}
-        <span class="rm-btn" onclick="removePosNode('${pathStr}')">×</span>
+        ${isL1 ? `<i class="ti ti-chevron-down" style="font-size:14px;color:rgba(255,255,255,.75);transition:transform .2s;transform:rotate(${isExpanded ? '0' : '-90'}deg)"></i>` : ''}
+        <span class="rm-btn" onclick="event.stopPropagation();removePosNode('${pathStr}')">×</span>
       </div>
-      ${canHaveChildren ? `
+      ${canHaveChildren && isExpanded ? `
         <div class="pos-node-children">
           ${node.children.map((c, i) => renderPosNode(c, [...path, i], level + 1)).join('')}
           <div class="pos-add-row">
@@ -9557,6 +9573,7 @@ function addPosNode(parentPathStr, inputId) {
   const siblings = posChildrenArrayFor(parentPathStr);
   if (siblings.some(n => n.name.toLowerCase() === trimmed.toLowerCase())) { if (input) input.value = ''; return; }
   siblings.push({ name: trimmed, children: [] });
+  if (parentPathStr === '') posTreeExpandedL1.add(trimmed); // nuova posizione principale: resta aperta per continuare subito ad aggiungere sotto
   renderPosTree();
   // Dopo il re-render l'input si azzera insieme al resto: rimettiamo il focus sul nuovo campo omologo
   document.getElementById(inputId)?.focus();
@@ -9797,6 +9814,7 @@ function wizReviewNodeHtml(node, level) {
 }
 
 function finishStructureWizard() {
+  wizPosTree.forEach(n => posTreeExpandedL1.add(n.name)); // appena creata dal wizard: resta aperta, l'utente la vuole vedere subito
   posTree.push(...wizPosTree);
   renderPosTree();
   closeStructureWizard();
@@ -11801,7 +11819,7 @@ Object.assign(window, {
   dismissPublicPrompt, acceptPublicPrompt, markFScoreManual, dismissAssocPrompt, saveAssocPrompt, acceptPrivacyPrompt, openImageLightbox, closeImageLightbox,
   openTutorial, tutorialStep, skipTutorial,
   confirmSumDuplicateQty, confirmSaveDuplicateAsNew, closeDuplicateWinePrompt,
-  addPosNode, removePosNode, updatePosNodeLayout, addWinePosition, removeWinePosition, onPosL1Change, onPosL2Change, onPosL3Change,
+  addPosNode, removePosNode, updatePosNodeLayout, togglePosL1Expanded, addWinePosition, removeWinePosition, onPosL1Change, onPosL2Change, onPosL3Change,
   openCellarSlotPicker, toggleSlotPick, confirmSlotPick, closeCellarSlotPicker,
   startStructureWizard, wizSubmitName, wizAnswerHasChildren, wizSubmitLayout, wizAnswerMoreSiblings, finishStructureWizard, closeStructureWizard,
   wizGoBack, wizConfirmClose,
