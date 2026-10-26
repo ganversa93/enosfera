@@ -648,10 +648,10 @@
       background: var(--wine); border: 0.5px solid rgba(107,24,57,.2);
       border-radius: 8px; padding: 6px 8px 6px 12px; font-size: 12.5px; color: #fff; font-weight: 500;
     }
-    .pos-node-row .rm-btn { margin-left: 4px; cursor: pointer; opacity: .6; font-size: 15px; line-height: 1; padding: 0 2px; }
+    .pos-node-row .rm-btn { margin-left: auto; cursor: pointer; opacity: .6; font-size: 15px; line-height: 1; padding: 0 2px; }
     .pos-node-row .rm-btn:hover { opacity: 1; }
     .pos-node-row .pos-capacity-input {
-      margin-left: auto; width: 60px; flex-shrink: 0; font-family: 'Inter', sans-serif;
+      width: 60px; flex-shrink: 0; font-family: 'Inter', sans-serif;
       font-size: 11.5px; padding: 4px 6px; border-radius: 6px; text-align: center;
       border: 0.5px solid rgba(255,255,255,.35); background: rgba(255,255,255,.12); color: #fff;
     }
@@ -9185,11 +9185,18 @@ function renderPosNode(node, path, level) {
   const canHaveChildren = level < 2; // livello 3 è foglia, non ha ulteriori figli
   const childLabel = level === 0 ? 'zona' : 'piano';
   const inputId = 'pos-add-' + pathStr.replace(/,/g, '-');
+  // La capienza ha senso solo su un nodo che ORA è una foglia (nessun
+  // figlio): solo quelli possono diventare la posizione finale a cui si
+  // aggancia un vino (vedi addWinePosition/maybeOfferSlotPicker, che
+  // scattano solo quando il livello raggiunto non ha ulteriori figli). Un
+  // valore già impostato non si perde se poi si aggiungono figli: resta
+  // nel dato, semplicemente non si mostra finché il nodo non torna foglia.
+  const isLeafNow = !node.children || node.children.length === 0;
   return `
     <div class="pos-node" style="margin-left:${level * 14}px">
       <div class="pos-node-row">
         <span>${node.name}</span>
-        <input type="number" class="pos-capacity-input" min="1" max="999" step="1" placeholder="n° bott." title="Quante bottiglie entrano in questa posizione (facoltativo)" value="${node.capacity || ''}" onclick="event.stopPropagation()" oninput="updatePosNodeCapacity('${pathStr}', this.value)">
+        ${isLeafNow ? `<input type="number" class="pos-capacity-input" min="1" max="999" step="1" placeholder="n° bott." title="Quante bottiglie entrano in questa posizione (facoltativo)" value="${node.capacity || ''}" onclick="event.stopPropagation()" oninput="updatePosNodeCapacity('${pathStr}', this.value)">` : ''}
         <span class="rm-btn" onclick="removePosNode('${pathStr}')">×</span>
       </div>
       ${canHaveChildren ? `
