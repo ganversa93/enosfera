@@ -684,7 +684,7 @@
     .cellar-map-section-count { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
     .cellar-map-section-header .cellar-map-section-count { margin-bottom: 0; }
     .cellar-map-section-header[onclick] { cursor: pointer; padding: 2px 0; }
-    .cellar-map-row-label { display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: var(--muted); }
+    .slot-row-label { display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: var(--muted); }
     .cellar-map-slot {
       width: 58px; height: 58px; font-size: 9.5px; line-height: 1.15; padding: 3px;
       overflow: hidden; word-break: break-word; cursor: pointer; border-style: solid;
@@ -9150,16 +9150,24 @@ function renderSlotPicker() {
   // disposizione fisica reale invece delle 4 colonne fisse di default.
   // minmax(0,1fr) invece di 1fr: con molte colonne i cerchi si
   // restringono (vedi .slot-circle) invece di far scorrere la card anche
-  // in orizzontale.
-  grid.style.gridTemplateColumns = `repeat(${s.cols || Math.min(s.capacity, 4)}, minmax(0,1fr))`;
-  grid.innerHTML = Array.from({ length: s.capacity }, (_, i) => i + 1).map(n => {
+  // in orizzontale. La prima colonna "auto" ospita il numero di riga
+  // (solo informativo, vedi sotto), per orientarsi nelle griglie grandi.
+  const gridCols = s.cols || Math.min(s.capacity, 4);
+  grid.style.gridTemplateColumns = `auto repeat(${gridCols}, minmax(0,1fr))`;
+  let slotsHtml = '';
+  for (let n = 1; n <= s.capacity; n++) {
+    if ((n - 1) % gridCols === 0) {
+      const rowNum = Math.floor((n - 1) / gridCols) + 1;
+      slotsHtml += `<div class="slot-row-label">${rowNum}</div>`;
+    }
     const isOther = s.occupiedByOthers.has(n);
     const isMine = s.mineSlots.has(n);
     const isPending = s.pendingSelected.has(n);
     const cls = isOther ? 'occupied' : isMine ? 'mine' : isPending ? 'selected' : '';
     const title = isOther ? 'Occupato da un altro vino' : isMine ? 'Già assegnato a questo vino' : 'Libero';
-    return `<div class="slot-circle ${cls}" ${(isOther || isMine) ? '' : `onclick="toggleSlotPick(${n})"`} title="${title}">${n}</div>`;
-  }).join('');
+    slotsHtml += `<div class="slot-circle ${cls}" ${(isOther || isMine) ? '' : `onclick="toggleSlotPick(${n})"`} title="${title}">${n}</div>`;
+  }
+  grid.innerHTML = slotsHtml;
   const count = s.pendingSelected.size;
   document.getElementById('slot-picker-count').textContent = `${count} selezionat${count === 1 ? 'o' : 'i'}`;
 }
@@ -9303,7 +9311,7 @@ function renderCellarMap() {
       // un'etichetta a inizio riga, non uno slot cliccabile.
       if (col === 0) {
         const rowNum = Math.floor((n - 1) / gridCols) + 1;
-        slotsHtml += `<div class="cellar-map-row-label">${rowNum}</div>`;
+        slotsHtml += `<div class="slot-row-label">${rowNum}</div>`;
       }
       const wine = occ.get(n);
       const isSource = cellarMapSource && cellarMapSource.l1 === node.l1 && cellarMapSource.l2 === node.l2 && cellarMapSource.l3 === node.l3 && cellarMapSource.slot === n;
