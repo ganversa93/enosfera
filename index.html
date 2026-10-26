@@ -648,8 +648,16 @@
       background: var(--wine); border: 0.5px solid rgba(107,24,57,.2);
       border-radius: 8px; padding: 6px 8px 6px 12px; font-size: 12.5px; color: #fff; font-weight: 500;
     }
-    .pos-node-row .rm-btn { margin-left: auto; cursor: pointer; opacity: .6; font-size: 15px; line-height: 1; padding: 0 2px; }
+    .pos-node-row .rm-btn { margin-left: 4px; cursor: pointer; opacity: .6; font-size: 15px; line-height: 1; padding: 0 2px; }
     .pos-node-row .rm-btn:hover { opacity: 1; }
+    .pos-node-row .pos-capacity-input {
+      margin-left: auto; width: 60px; flex-shrink: 0; font-family: 'Inter', sans-serif;
+      font-size: 11.5px; padding: 4px 6px; border-radius: 6px; text-align: center;
+      border: 0.5px solid rgba(255,255,255,.35); background: rgba(255,255,255,.12); color: #fff;
+    }
+    .pos-node-row .pos-capacity-input::placeholder { color: rgba(255,255,255,.6); }
+    .pos-node-row .pos-capacity-input:focus { outline: none; border-color: #fff; }
+    .pos-node-row .pos-capacity-input:focus-visible { outline: 2px solid var(--gold-l); outline-offset: 1px; }
     .pos-node-children { margin-left: 16px; padding-left: 10px; border-left: 1px dashed var(--border); margin-top: 6px; }
     .pos-add-row { display: flex; gap: 6px; margin: 4px 0 10px; }
     .pos-add-row input {
@@ -9039,6 +9047,7 @@ function renderPosNode(node, path, level) {
     <div class="pos-node" style="margin-left:${level * 14}px">
       <div class="pos-node-row">
         <span>${node.name}</span>
+        <input type="number" class="pos-capacity-input" min="1" max="999" step="1" placeholder="n° bott." title="Quante bottiglie entrano in questa posizione (facoltativo)" value="${node.capacity || ''}" onclick="event.stopPropagation()" oninput="updatePosNodeCapacity('${pathStr}', this.value)">
         <span class="rm-btn" onclick="removePosNode('${pathStr}')">×</span>
       </div>
       ${canHaveChildren ? `
@@ -9084,6 +9093,22 @@ function removePosNode(pathStr) {
   const arr = posParentArrayFor(path);
   arr.splice(path[path.length - 1], 1);
   renderPosTree();
+}
+
+// Capienza (n° bottiglie) di una posizione — facoltativa, serve da base per
+// la futura gestione grafica degli slot in cantina. Può stare su qualunque
+// nodo dell'albero, non solo sulle foglie: un vino si può agganciare a
+// qualunque livello (vedi addWinePosition), quindi qualunque nodo può
+// essere la posizione "finale" usata davvero. Non ri-renderizza l'albero
+// (perderebbe il focus sull'input mentre si digita): muta solo il dato in
+// memoria, salvato poi con il resto del profilo.
+function updatePosNodeCapacity(pathStr, value) {
+  const path = posPathArr(pathStr);
+  const arr = posParentArrayFor(path);
+  const node = arr[path[path.length - 1]];
+  if (!node) return;
+  const n = parseInt(value, 10);
+  node.capacity = (value && n > 0) ? n : null;
 }
 
 function goBackFromProfile() { showScreen(profileReturnScreen); }
@@ -10915,7 +10940,7 @@ Object.assign(window, {
   dismissPublicPrompt, acceptPublicPrompt, markFScoreManual, dismissAssocPrompt, saveAssocPrompt, acceptPrivacyPrompt, openImageLightbox, closeImageLightbox,
   openTutorial, tutorialStep, skipTutorial,
   confirmSumDuplicateQty, confirmSaveDuplicateAsNew, closeDuplicateWinePrompt,
-  addPosNode, removePosNode, addWinePosition, removeWinePosition, onPosL1Change, onPosL2Change, onPosL3Change,
+  addPosNode, removePosNode, updatePosNodeCapacity, addWinePosition, removeWinePosition, onPosL1Change, onPosL2Change, onPosL3Change,
   addDetailPosition, removeDetailPosition, onDetailPosL1Change, onDetailPosL2Change, onDetailPosL3Change,
   showWineryDetail, toggleWineryPreview, saveWineryDetails, uploadWineryLogo, goBackFromWinery, showAdminWineriesScreen, deleteWinery, searchAllWineries,
   saveScanLimits, resetScanUsage, searchScanUsersAdmin,
