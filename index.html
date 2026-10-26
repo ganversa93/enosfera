@@ -9605,10 +9605,18 @@ function updatePosNodeLayout(pathStr, field, value) {
    altrimenti i children del nodo padre) più il suo level (0/1/2). Finito
    un frame (nessun altro fratello), si risale al frame genitore e si
    richiede lì "un altro fratello?" — è il padre che aveva già risposto
-   "sì" ad avere sotto-livelli, non va richiesto di nuovo. */
+   "sì" ad avere sotto-livelli, non va richiesto di nuovo.
+
+   wizHistory: pila di "azioni di annullamento" — un passo avanti non è
+   mai lineare (la stessa domanda "un altro fratello?" si raggiunge sia
+   dopo aver compilato una foglia sia risalendo da un ramo finito, con
+   target "indietro" diversi), quindi invece di dedurre "da dove torno"
+   da un indice, ogni transizione in avanti registra qui esattamente come
+   disfare se stessa e ri-mostrare il passo precedente. */
 let wizPosTree = [];
 let wizStack = [];
 let wizCurrentNode = null;
+let wizHistory = [];
 
 const WIZ_LEVEL_LABEL = ['posizione principale', 'zona', 'piano'];
 
@@ -9616,11 +9624,23 @@ function startStructureWizard() {
   wizPosTree = [];
   wizStack = [{ arr: wizPosTree, level: 0 }];
   wizCurrentNode = null;
+  wizHistory = [];
   document.getElementById('cellar-wizard-overlay').classList.add('open');
   wizRenderAskName();
 }
 
 function wizCurrentFrame() { return wizStack[wizStack.length - 1]; }
+
+function wizGoBack() {
+  const undo = wizHistory.pop();
+  if (undo) undo(); else wizConfirmClose();
+}
+
+// Pulsante "Indietro": nascosto solo sul primissimo passo (nulla da
+// disfare), altrimenti sempre presente accanto ad Avanti/Annulla.
+function wizBackButtonHtml() {
+  return wizHistory.length ? `<button class="btn sm" onclick="wizGoBack()"><i class="ti ti-arrow-left"></i>Indietro</button>` : '';
+}
 
 function wizRenderAskName() {
   const frame = wizCurrentFrame();
@@ -9630,7 +9650,8 @@ function wizRenderAskName() {
     <div class="fg"><input type="text" id="wiz-name-input" placeholder="es. ${frame.level === 0 ? 'Cantina, Garage…' : frame.level === 1 ? 'Rossi, Legno…' : 'Piano 1, Basso…'}" autocomplete="off"></div>
     <div class="public-prompt-actions" style="margin-top:4px">
       <button class="btn primary" onclick="wizSubmitName()"><i class="ti ti-check"></i>Avanti</button>
-      <button class="btn sm" onclick="closeStructureWizard()">Annulla</button>
+      ${wizBackButtonHtml()}
+      <button class="btn sm" onclick="wizConfirmClose()">Annulla</button>
     </div>
   `;
   setTimeout(() => document.getElementById('wiz-name-input')?.focus(), 50);
@@ -9641,6 +9662,12 @@ function wizSubmitName() {
   const name = (input?.value || '').trim();
   if (!name) { input?.focus(); return; }
   const frame = wizCurrentFrame();
+  const prevCurrentNode = wizCurrentNode;
+  wizHistory.push(() => {
+    frame.arr.pop();
+    wizCurrentNode = prevCurrentNode;
+    wizRenderAskName();
+  });
   const node = { name, children: [], capacity: null };
   frame.arr.push(node);
   wizCurrentNode = node;
@@ -9656,15 +9683,22 @@ function wizRenderAskHasChildren() {
     <div class="public-prompt-actions">
       <button class="btn primary" onclick="wizAnswerHasChildren(true)"><i class="ti ti-sitemap"></i>È divisa in ${childLabel}</button>
       <button class="btn sm" onclick="wizAnswerHasChildren(false)">Le bottiglie stanno qui</button>
+      ${wizBackButtonHtml()}
     </div>
   `;
 }
 
 function wizAnswerHasChildren(yes) {
+  const frame = wizCurrentFrame();
   if (yes) {
-    wizStack.push({ arr: wizCurrentNode.children, level: wizCurrentFrame().level + 1 });
+    wizHistory.push(() => {
+      wizStack.pop();
+      wizRenderAskHasChildren();
+    });
+    wizStack.push({ arr: wizCurrentNode.children, level: frame.level + 1 });
     wizRenderAskName();
   } else {
+    wizHistory.push(() => wizRenderAskHasChildren());
     wizRenderAskLayout();
   }
 }
@@ -9672,22 +9706,30 @@ function wizAnswerHasChildren(yes) {
 // Righe × colonne invece di un numero unico: oltre al totale (capacity,
 // usato per il conteggio occupati/liberi della griglia slot), righe e
 // colonne restano salvate sul nodo per disegnare la griglia nella stessa
-// disposizione fisica reale, non solo come lista piatta.
+// disposizione fisica reale, non solo come lista piatta. Pre-compilati
+// con quanto già impostato, così tornando "Indietro" dopo aver risposto
+// non si perde ciò che si era scritto.
 function wizRenderAskLayout() {
   document.getElementById('cellar-wizard-body').innerHTML = `
     <p style="font-size:13px;color:var(--ink);margin-bottom:10px">Quante bottiglie entrano in "${wizCurrentNode.name}"? Facoltativo: dividi in righe e colonne se vuoi rispecchiare la disposizione reale.</p>
     <div class="frow">
-      <div class="fg"><label>Righe</label><input type="number" id="wiz-rows-input" min="1" max="99" step="1" placeholder="es. 3"></div>
-      <div class="fg"><label>Colonne</label><input type="number" id="wiz-cols-input" min="1" max="99" step="1" placeholder="es. 4"></div>
+      <div class="fg"><label>Righe</label><input type="number" id="wiz-rows-input" min="1" max="99" step="1" placeholder="es. 3" value="${wizCurrentNode.rows || ''}"></div>
+      <div class="fg"><label>Colonne</label><input type="number" id="wiz-cols-input" min="1" max="99" step="1" placeholder="es. 4" value="${wizCurrentNode.cols || ''}"></div>
     </div>
     <div class="public-prompt-actions" style="margin-top:4px">
       <button class="btn primary" onclick="wizSubmitLayout()"><i class="ti ti-check"></i>Avanti</button>
+      ${wizBackButtonHtml()}
       <a href="#" onclick="wizSubmitLayout(true);return false;" style="font-size:11px;color:var(--muted);text-decoration:underline;text-align:center;margin-top:4px">Salta, non lo so ancora</a>
     </div>
   `;
 }
 
 function wizSubmitLayout(skip) {
+  // Nessun valore da ripristinare qui: tornare "Indietro" deve solo
+  // ri-mostrare il passo con quanto già scritto (il form si pre-compila
+  // da wizCurrentNode.rows/cols) — non serve disfare la scelta come per
+  // gli altri passi, perché qui non c'è una diramazione da annullare.
+  wizHistory.push(() => wizRenderAskLayout());
   if (!skip) {
     const rows = parseInt(document.getElementById('wiz-rows-input')?.value, 10);
     const cols = parseInt(document.getElementById('wiz-cols-input')?.value, 10);
@@ -9712,12 +9754,22 @@ function wizRenderAskMoreSiblings() {
     <div class="public-prompt-actions">
       <button class="btn primary" onclick="wizAnswerMoreSiblings(true)"><i class="ti ti-plus"></i>Sì, aggiungine un'altra</button>
       <button class="btn sm" onclick="wizAnswerMoreSiblings(false)">No, ho finito qui</button>
+      ${wizBackButtonHtml()}
     </div>
   `;
 }
 
 function wizAnswerMoreSiblings(yes) {
-  if (yes) { wizRenderAskName(); return; }
+  const frame = wizCurrentFrame();
+  if (yes) {
+    wizHistory.push(() => wizRenderAskMoreSiblings());
+    wizRenderAskName();
+    return;
+  }
+  wizHistory.push(() => {
+    wizStack.push(frame);
+    wizRenderAskMoreSiblings();
+  });
   wizStack.pop();
   if (wizStack.length === 0) wizRenderReview();
   else wizRenderAskMoreSiblings();
@@ -9729,8 +9781,9 @@ function wizRenderReview() {
     <div style="margin-bottom:14px">${wizPosTree.map(n => wizReviewNodeHtml(n, 0)).join('')}</div>
     <div class="public-prompt-actions">
       <button class="btn primary" onclick="finishStructureWizard()"><i class="ti ti-check"></i>Aggiungi questa struttura</button>
+      ${wizBackButtonHtml()}
       <button class="btn sm" onclick="startStructureWizard()">Ricomincia da capo</button>
-      <a href="#" onclick="closeStructureWizard();return false;" style="font-size:11px;color:var(--muted);text-decoration:underline;text-align:center;margin-top:2px">Annulla</a>
+      <a href="#" onclick="wizConfirmClose();return false;" style="font-size:11px;color:var(--muted);text-decoration:underline;text-align:center;margin-top:2px">Annulla</a>
     </div>
   `;
 }
@@ -9750,9 +9803,19 @@ function finishStructureWizard() {
   toast('✓ Struttura aggiunta — premi Salva per renderla definitiva');
 }
 
+// Punto d'uscita per Annulla/× — a differenza di finishStructureWizard
+// (percorso di successo, niente da perdere) qui si rischia di buttare
+// via progressi reali: si avvisa solo se è già stato fatto almeno un
+// passo avanti (wizHistory non vuoto), altrimenti si esce senza chiedere
+// — non c'è nulla da perdere sul primissimo schermo.
+function wizConfirmClose() {
+  if (wizHistory.length && !confirm('Hai dati non salvati in questo wizard — uscire comunque? Il progresso andrà perso.')) return;
+  closeStructureWizard();
+}
+
 function closeStructureWizard() {
   document.getElementById('cellar-wizard-overlay').classList.remove('open');
-  wizPosTree = []; wizStack = []; wizCurrentNode = null;
+  wizPosTree = []; wizStack = []; wizCurrentNode = null; wizHistory = [];
 }
 
 function goBackFromProfile() { showScreen(profileReturnScreen); }
@@ -11741,6 +11804,7 @@ Object.assign(window, {
   addPosNode, removePosNode, updatePosNodeLayout, addWinePosition, removeWinePosition, onPosL1Change, onPosL2Change, onPosL3Change,
   openCellarSlotPicker, toggleSlotPick, confirmSlotPick, closeCellarSlotPicker,
   startStructureWizard, wizSubmitName, wizAnswerHasChildren, wizSubmitLayout, wizAnswerMoreSiblings, finishStructureWizard, closeStructureWizard,
+  wizGoBack, wizConfirmClose,
   showCellarMapScreen, onCellarMapSlotClick, confirmFreeSlot, closeFreeSlotPicker,
   downloadImportTemplate, handleImportFile,
   addDetailPosition, removeDetailPosition, onDetailPosL1Change, onDetailPosL2Change, onDetailPosL3Change,
