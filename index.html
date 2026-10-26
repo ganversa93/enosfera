@@ -2137,7 +2137,16 @@
             <input type="number" id="af-price-max" placeholder="Max" min="0" step="1" oninput="renderGrid()" style="width:70px">
           </div>
         </div>
+        <div class="adv-filter-field" style="flex:0 0 auto;min-width:170px">
+          <label>Finestra di consumo (anno)</label>
+          <div style="display:flex;gap:6px;align-items:center">
+            <input type="number" id="af-drink-min" placeholder="Da" min="1900" max="2100" step="1" oninput="renderGrid()" style="width:70px">
+            <span style="color:var(--muted);font-size:12px">–</span>
+            <input type="number" id="af-drink-max" placeholder="A" min="1900" max="2100" step="1" oninput="renderGrid()" style="width:70px">
+          </div>
+        </div>
       </div>
+      <button class="btn sm" style="margin-top:4px" onclick="quickFilterReadyToDrink()"><i class="ti ti-glass"></i>Pronti da bere ora</button>
       <div class="adv-filter-divider"></div>
       <div class="adv-filter-group">
         <label class="adv-filter-group-label">Ordina per</label>
@@ -6922,12 +6931,35 @@ function resetAdvFilters() {
   document.getElementById('af-shopcat').value = '';
   document.getElementById('af-price-min').value = '';
   document.getElementById('af-price-max').value = '';
+  document.getElementById('af-drink-min').value = '';
+  document.getElementById('af-drink-max').value = '';
   populateAdvRegionOptions();
   renderGrid();
 }
 
+// Scorciatoia per non perdersi vini in cantina che andrebbero bevuti:
+// imposta solo il massimo a quest'anno, lasciando il minimo vuoto — mostra
+// quindi sia i vini nella finestra ottimale ora sia quelli già oltre
+// (finestra iniziata e già conclusa), non solo l'anno esatto.
+function quickFilterReadyToDrink() {
+  document.getElementById('af-drink-min').value = '';
+  document.getElementById('af-drink-max').value = new Date().getFullYear();
+  renderGrid();
+}
+
+// Estrae {start, end} dalla finestra di consumo (campo libero, es.
+// "2025–2038", eventualmente con un solo anno) prendendo i primi due
+// numeri a 4 cifre trovati nel testo — tollerante al formato perché il
+// campo resta editabile a mano.
+function parseDrinkWindow(drink) {
+  if (!drink) return null;
+  const nums = (String(drink).match(/\d{4}/g) || []).map(Number);
+  if (!nums.length) return null;
+  return { start: nums[0], end: nums[1] ?? nums[0] };
+}
+
 function updateAdvFilterBadge() {
-  let n = ['af-country','af-region','af-pairing','af-grape','af-shopcat','af-price-min','af-price-max'].filter(id => document.getElementById(id)?.value).length;
+  let n = ['af-country','af-region','af-pairing','af-grape','af-shopcat','af-price-min','af-price-max','af-drink-min','af-drink-max'].filter(id => document.getElementById(id)?.value).length;
   if (currentFilter !== 'all') n++;
   if (currentQtyFilter !== 'all') n++;
   const badge = document.getElementById('adv-filter-badge');
@@ -7034,6 +7066,8 @@ function renderGrid() {
   const afShopCat = document.getElementById('af-shopcat')?.value || '';
   const afPriceMin = parseFloat(document.getElementById('af-price-min')?.value);
   const afPriceMax = parseFloat(document.getElementById('af-price-max')?.value);
+  const afDrinkMin = parseInt(document.getElementById('af-drink-min')?.value, 10);
+  const afDrinkMax = parseInt(document.getElementById('af-drink-max')?.value, 10);
   updateAdvFilterBadge();
   const list = myWines().filter(w => {
     if (currentFilter !== 'all' && w.type !== currentFilter) return false;
@@ -7057,6 +7091,12 @@ function renderGrid() {
     if (afShopCat && w.shopCategory !== afShopCat) return false;
     if (!isNaN(afPriceMin) && !(w.price >= afPriceMin)) return false;
     if (!isNaN(afPriceMax) && !(w.price <= afPriceMax)) return false;
+    if (!isNaN(afDrinkMin) || !isNaN(afDrinkMax)) {
+      const win = parseDrinkWindow(w.drink);
+      if (!win) return false; // nessuna finestra compilata: escluso quando si filtra su questo campo
+      if (!isNaN(afDrinkMin) && win.end   < afDrinkMin) return false;
+      if (!isNaN(afDrinkMax) && win.start > afDrinkMax) return false;
+    }
     if (!matchesSearch(q, [w.name, w.producer, w.region, w.pairing])) return false;
     return true;
   });
@@ -8231,7 +8271,10 @@ function editWine() {
   document.getElementById('f-country').value = '';
   document.getElementById('f-region').value = '';
   document.getElementById('f-province').value = '';
-  const set = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
+  // v ?? '' (non "if v != null") perché altrimenti un campo vuoto sul
+  // vino aperto ora (es. nessuna finestra di consumo) lascia nell'input
+  // il valore del vino modificato precedentemente invece di svuotarsi.
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v ?? ''; };
   set('f-name', w.name); set('f-producer', w.producer); set('f-vintage', w.vintage);
   selectedWineryId = w.wineryId || null;
   updateWineryLinkVisibility();
@@ -10855,7 +10898,7 @@ Object.assign(window, {
   showDenominationDetail, saveDenomination, deleteDenomination, searchDenominations, toggleApTypeFilter, toggleDenomRegionMenu, toggleDnVersionChip, toggleDenomSortMenu, toggleDenomPreview, changeDenomPage,
   cycleDnGrapeBound, updateDnGrapePct, removeDnGrapeTag,
   addDnAgingRow, updateDnAgingRow, removeDnAgingRow, updateDnParam,
-  applySuggestedDrinkWindow
+  applySuggestedDrinkWindow, quickFilterReadyToDrink
 });
 </script>
 </body>
