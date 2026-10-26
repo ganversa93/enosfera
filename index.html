@@ -648,8 +648,11 @@
       background: var(--wine); border: 0.5px solid rgba(107,24,57,.2);
       border-radius: 8px; padding: 6px 8px 6px 12px; font-size: 12.5px; color: #fff; font-weight: 500;
     }
-    .pos-node-row .rm-btn { margin-left: auto; cursor: pointer; opacity: .6; font-size: 15px; line-height: 1; padding: 0 2px; }
+    .pos-node-row .rm-btn { cursor: pointer; opacity: .6; font-size: 15px; line-height: 1; padding: 0 2px; }
     .pos-node-row .rm-btn:hover { opacity: 1; }
+    .pos-node-row .move-btn { cursor: pointer; opacity: .6; font-size: 15px; line-height: 1; padding: 0 1px; display: flex; }
+    .pos-node-row .move-btn:hover { opacity: 1; }
+    .pos-node-row .move-btn.disabled { opacity: .2; cursor: default; pointer-events: none; }
     .pos-node-row .pos-capacity-input {
       width: 60px; flex-shrink: 0; font-family: 'Inter', sans-serif;
       font-size: 13px; font-weight: 600; padding: 6px 4px; border-radius: 7px; text-align: center;
@@ -9527,6 +9530,10 @@ function renderPosNode(node, path, level) {
   const isLeafNow = !node.children || node.children.length === 0;
   const isL1 = level === 0;
   const isExpanded = !isL1 || posTreeExpandedL1.has(node.name);
+  const idx = path[path.length - 1];
+  const siblingsArr = posParentArrayFor(path);
+  const isFirst = idx === 0;
+  const isLast = idx === siblingsArr.length - 1;
   return `
     <div class="pos-node" style="margin-left:${level * 14}px">
       <div class="pos-node-row" ${isL1 ? `onclick="togglePosL1Expanded('${escapeAttr(node.name)}')" style="cursor:pointer"` : ''}>
@@ -9537,8 +9544,12 @@ function renderPosNode(node, path, level) {
           <input type="number" class="pos-capacity-input" style="width:48px" min="1" max="99" step="1" placeholder="C" title="Colonne (facoltativo — se non ti interessano le righe, metti qui direttamente il totale bottiglie)" value="${node.cols || ''}" onclick="event.stopPropagation()" oninput="updatePosNodeLayout('${pathStr}','cols',this.value)">
           <span id="pos-cap-label-${pathStr.replace(/,/g, '-')}" style="font-size:11px;font-weight:600;color:var(--gold-l)">${node.capacity ? `=${node.capacity}` : ''}</span>
         ` : ''}
-        ${isL1 ? `<i class="ti ti-chevron-down" style="font-size:14px;color:rgba(255,255,255,.75);transition:transform .2s;transform:rotate(${isExpanded ? '0' : '-90'}deg)"></i>` : ''}
-        <span class="rm-btn" onclick="event.stopPropagation();removePosNode('${pathStr}')">×</span>
+        <span style="margin-left:auto;display:flex;align-items:center;gap:6px">
+          <span class="move-btn${isFirst ? ' disabled' : ''}" title="Sposta su" onclick="event.stopPropagation();movePosNode('${pathStr}',-1)"><i class="ti ti-caret-up-filled"></i></span>
+          <span class="move-btn${isLast ? ' disabled' : ''}" title="Sposta giù" onclick="event.stopPropagation();movePosNode('${pathStr}',1)"><i class="ti ti-caret-down-filled"></i></span>
+          ${isL1 ? `<i class="ti ti-chevron-down" style="font-size:14px;color:rgba(255,255,255,.75);transition:transform .2s;transform:rotate(${isExpanded ? '0' : '-90'}deg)"></i>` : ''}
+          <span class="rm-btn" onclick="event.stopPropagation();removePosNode('${pathStr}')">×</span>
+        </span>
       </div>
       ${canHaveChildren && isExpanded ? `
         <div class="pos-node-children">
@@ -9583,6 +9594,20 @@ function removePosNode(pathStr) {
   const path = posPathArr(pathStr);
   const arr = posParentArrayFor(path);
   arr.splice(path[path.length - 1], 1);
+  renderPosTree();
+}
+
+// Scambia un nodo con il fratello immediatamente sopra (dir=-1) o sotto
+// (dir=1) — le freccette ↑/↓ di ogni riga. Nessun effetto se è già
+// primo/ultimo (le freccette sono disabilitate in quel caso, ma lo
+// controlliamo comunque qui).
+function movePosNode(pathStr, dir) {
+  const path = posPathArr(pathStr);
+  const arr = posParentArrayFor(path);
+  const idx = path[path.length - 1];
+  const newIdx = idx + dir;
+  if (newIdx < 0 || newIdx >= arr.length) return;
+  [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
   renderPosTree();
 }
 
@@ -11819,7 +11844,7 @@ Object.assign(window, {
   dismissPublicPrompt, acceptPublicPrompt, markFScoreManual, dismissAssocPrompt, saveAssocPrompt, acceptPrivacyPrompt, openImageLightbox, closeImageLightbox,
   openTutorial, tutorialStep, skipTutorial,
   confirmSumDuplicateQty, confirmSaveDuplicateAsNew, closeDuplicateWinePrompt,
-  addPosNode, removePosNode, updatePosNodeLayout, togglePosL1Expanded, addWinePosition, removeWinePosition, onPosL1Change, onPosL2Change, onPosL3Change,
+  addPosNode, removePosNode, movePosNode, updatePosNodeLayout, togglePosL1Expanded, addWinePosition, removeWinePosition, onPosL1Change, onPosL2Change, onPosL3Change,
   openCellarSlotPicker, toggleSlotPick, confirmSlotPick, closeCellarSlotPicker,
   startStructureWizard, wizSubmitName, wizAnswerHasChildren, wizSubmitLayout, wizAnswerMoreSiblings, finishStructureWizard, closeStructureWizard,
   wizGoBack, wizConfirmClose,
