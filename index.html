@@ -698,22 +698,6 @@
     }
     .pos-add-row input:focus { outline: none; border-color: var(--wine); }
     .pos-add-row input:focus-visible { outline: 2px solid var(--wine); outline-offset: 2px; }
-    /* Grid invece di flex: le <select> hanno una loro sizing "intrinseca"
-       che con flex-grow spesso non si distribuisce sull'intera riga —
-       con grid-template-columns le tre select occupano sempre spazio
-       uguale, riempiendo tutta la card. Nessun pulsante "Aggiungi": la
-       posizione si imposta e salva scegliendo le select, come lo
-       stepper della quantità. */
-    .pos-select-row {
-      display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; width: 100%;
-    }
-    .pos-select-row select {
-      width: 100%; font-family: 'Inter', sans-serif; font-size: 13px;
-      padding: 8px 10px; border-radius: 8px;
-      border: 0.5px solid var(--border); background: var(--bg); color: var(--ink);
-    }
-    .pos-select-row select:focus { outline: none; border-color: var(--wine); }
-    .pos-select-row select:focus-visible { outline: 2px solid var(--wine); outline-offset: 2px; }
     .pos-chip-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 
     .subhead { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; margin: 18px 0 8px; }
@@ -1797,8 +1781,8 @@
         </div>
         <div class="guide-flag">
           <div class="guide-flag-title"><i class="ti ti-map-pin"></i> Posizionare un vino <span class="guide-flag-where">form vino e scheda dettaglio</span></div>
-          <p>Scegliendo posizione/zona/piano, se quel punto ha una capienza impostata compare <b>"Posiziona in cantina"</b>: apre una griglia di slot, uno per bottiglia — tocchi quelli liberi per assegnarli (più di uno se il vino ha più bottiglie nello stesso punto). Chi è occupato da un altro vino è segnato e non selezionabile da qui.</p>
-          <p>Se il punto scelto non ha una capienza impostata, si comporta come prima: una tag generica senza slot preciso.</p>
+          <p>Il pulsante <b>"Scegli posizione in cantina"</b> apre un popup grafico: tocchi posizione → zona → piano scendendo nella struttura, senza tendine da scorrere. Se il punto a cui arrivi ha una capienza impostata, il popup passa alla griglia di slot — tocchi quelli liberi per assegnarli (più di uno se il vino ha più bottiglie nello stesso punto); chi è occupato da un altro vino è segnato e non selezionabile da qui.</p>
+          <p>Se il punto scelto non ha una capienza impostata, si comporta come prima: una tag generica senza slot preciso, aggiunta subito.</p>
         </div>
         <div class="guide-flag">
           <div class="guide-flag-title"><i class="ti ti-grid-dots"></i> Mappa cantina <span class="guide-flag-where">icona accanto a Export, o dal menu</span></div>
@@ -3645,14 +3629,9 @@
       </div>
       <div class="fg">
         <label>Posizione in cantina <span style="font-weight:400;color:var(--muted)">(facoltativo, puoi aggiungerne più di una)</span></label>
-        <div class="pos-select-row" id="f-pos-selects-row">
-          <select id="f-pos-l1" onchange="onPosL1Change()"><option value="">Posizione…</option></select>
-          <select id="f-pos-l2" onchange="onPosL2Change()"><option value="">Zona…</option></select>
-          <select id="f-pos-l3" onchange="onPosL3Change()"><option value="">Piano…</option></select>
-        </div>
-        <button type="button" class="btn sm" id="f-pos-slot-btn" style="display:none;margin-top:6px" onclick="openCellarSlotPicker('f-pos-slot-btn')"><i class="ti ti-grid-dots"></i>Posiziona in cantina</button>
+        <button type="button" class="btn sm" id="f-pos-pick-btn" style="display:none" onclick="openPosTreePicker('form')"><i class="ti ti-map-pin"></i>Scegli posizione in cantina</button>
         <div class="pos-chip-row" id="wine-pos-tags"></div>
-        <div id="f-pos-empty-hint" style="display:none;font-size:11px;color:var(--muted);margin-top:6px">Non hai ancora configurato posizioni per la cantina. Vai al <a href="#" onclick="showProfileScreen();return false;">tuo profilo</a> per aggiungerle.</div>
+        <div id="f-pos-empty-hint" style="display:none;font-size:11px;color:var(--muted);margin-top:6px"></div>
       </div>
       <div class="frow">
         <div class="fg"><label>Data acquisto</label><input type="date" id="f-date"></div>
@@ -4142,6 +4121,21 @@
       <button class="btn primary" onclick="confirmSumDuplicateQty()"><i class="ti ti-plus"></i>Somma la quantità</button>
       <button class="btn sm" onclick="confirmSaveDuplicateAsNew()">Salva come vino separato</button>
       <a href="#" onclick="closeDuplicateWinePrompt();return false;" style="font-size:11px;color:var(--muted);text-decoration:underline;margin-top:2px">Annulla, torna al modulo</a>
+    </div>
+  </div>
+</div>
+
+<!-- SCEGLI POSIZIONE IN CANTINA — popup grafico che sostituisce le 3
+     tendine Posizione/Zona/Piano: un tocco per livello, scendendo
+     nell'albero configurato nel profilo, fino a una foglia (che apre la
+     griglia a slot qui sotto se ha una capienza, o si aggiunge subito). -->
+<div class="public-prompt-overlay" id="pos-tree-picker-overlay">
+  <div class="public-prompt-card" style="max-width:420px;text-align:left">
+    <div class="stitle" style="font-size:13px;margin-bottom:2px"><i class="ti ti-map-pin"></i>Posiziona in cantina</div>
+    <div id="pos-tree-picker-breadcrumb" style="font-size:12px;color:var(--muted);margin-bottom:10px"></div>
+    <div id="pos-tree-picker-list" style="display:flex;flex-direction:column;gap:6px;max-height:340px;overflow-y:auto"></div>
+    <div class="public-prompt-actions" style="margin-top:14px">
+      <button class="btn sm" onclick="closePosTreePicker()">Annulla</button>
     </div>
   </div>
 </div>
@@ -7325,7 +7319,7 @@ function showAdd() {
   const visToggle = document.getElementById('f-visibility'); if (visToggle) visToggle.checked = true;
   selectedGrapes = []; renderGrapeTags();
   const grapesInput = document.getElementById('f-grapes-input'); if (grapesInput) grapesInput.value = '';
-  selectedWinePositions = []; renderWinePositionSelects(); renderWinePositionChips();
+  selectedWinePositions = []; renderWinePositionPickerUI(); renderWinePositionChips();
   clear(['f-vintage','f-abv','f-price']);
   updateRegionOptions(); // resetta datalist regione/provincia e stato campo
   document.querySelectorAll('.p-chip').forEach(chip => chip.classList.remove('active'));
@@ -8294,13 +8288,8 @@ function showDetail(id) {
       ${w.tastingPlace ? `<div class="d-row"><div class="fl">Luogo degustazione</div><div class="fv">${w.tastingPlace}</div></div>` : ''}
       <div class="d-row wide">
         <div class="fl"><i class="ti ti-map-pin" style="font-size:11px;vertical-align:-1px;margin-right:3px"></i>Posizione in cantina</div>
-        <div class="pos-select-row" id="detail-pos-selects-row">
-          <select id="dp-pos-l1" onchange="onDetailPosL1Change()"><option value="">Posizione…</option></select>
-          <select id="dp-pos-l2" onchange="onDetailPosL2Change()"><option value="">Zona…</option></select>
-          <select id="dp-pos-l3" onchange="onDetailPosL3Change()"><option value="">Piano…</option></select>
-        </div>
-        <button type="button" class="btn sm" id="dp-pos-slot-btn" style="display:none;margin-top:6px" onclick="openCellarSlotPicker('dp-pos-slot-btn')"><i class="ti ti-grid-dots"></i>Posiziona in cantina</button>
-        <div id="detail-pos-empty-hint" style="display:none;font-size:11px;color:var(--muted)">Non hai ancora configurato posizioni per la cantina. Vai al <a href="#" onclick="showProfileScreen();return false;">tuo profilo</a> per aggiungerle.</div>
+        <button type="button" class="btn sm" id="dp-pos-pick-btn" style="display:none" onclick="openPosTreePicker('detail')"><i class="ti ti-map-pin"></i>Scegli posizione in cantina</button>
+        <div id="detail-pos-empty-hint" style="display:none;font-size:11px;color:var(--muted)"></div>
         <div class="pos-chip-row" id="detail-pos-tags"></div>
       </div>
     </div>
@@ -8310,16 +8299,15 @@ function showDetail(id) {
     ${w.notes ? `<div class="dsec-title"><i class="ti ti-feather"></i>Note di degustazione</div><div class="dtable" style="padding:1rem 1.1rem;font-style:italic;line-height:1.7;font-size:13px;color:var(--muted)">${w.notes}</div>` : ''}
     ${w.tags ? `<div class="tag-list">${w.tags.split(',').map(t => `<span class="tag">#${t.trim()}</span>`).join('')}</div>` : ''}
   `;
-  renderDetailPosSelects();
+  renderDetailPosPickerUI();
   renderDetailPosChips(w);
   showScreen('screen-detail');
 }
 
 // Posizione in cantina sulla scheda di dettaglio — modificabile sul posto
 // (aggiunta/rimozione salvate subito, come lo stepper delle bottiglie),
-// senza dover entrare in "Modifica". Nessun pulsante "Aggiungi": appena la
-// selezione raggiunge una foglia dell'albero (non ci sono più livelli
-// sotto, o si è scelto il livello 3) si salva da sola su DB.
+// senza dover entrare in "Modifica". Il pulsante apre il popup grafico
+// condiviso (vedi openPosTreePicker più sotto) invece delle 3 tendine.
 // Messaggio quando il proprietario della cantina in visualizzazione non ha
 // ancora configurato posizioni: a chi guarda la propria cantina indichiamo
 // dove andare a configurarle; a un membro di cantina condivisa (per cui
@@ -8331,48 +8319,12 @@ function posEmptyHintHtml() {
     : 'Il proprietario di questa cantina non ha ancora configurato posizioni.';
 }
 
-function renderDetailPosSelects() {
-  fillPosSelect('dp-pos-l1', ownerCellarPosTree.map(n => n.name), 'Posizione…');
-  fillPosSelect('dp-pos-l2', [], 'Zona…');
-  fillPosSelect('dp-pos-l3', [], 'Piano…');
-  hideSlotPickerButton('dp-pos-slot-btn');
+function renderDetailPosPickerUI() {
   const hasAny = ownerCellarPosTree.length > 0;
-  document.getElementById('detail-pos-selects-row').style.display = hasAny ? '' : 'none';
+  const btn = document.getElementById('dp-pos-pick-btn');
+  if (btn) btn.style.display = hasAny ? '' : 'none';
   const hint = document.getElementById('detail-pos-empty-hint');
-  hint.style.display = hasAny ? 'none' : '';
-  if (!hasAny) hint.innerHTML = posEmptyHintHtml();
-}
-
-function onDetailPosL1Change() {
-  const l1name = document.getElementById('dp-pos-l1')?.value || '';
-  const node = ownerCellarPosTree.find(n => n.name === l1name);
-  const l2opts = (node?.children || []).map(c => c.name);
-  fillPosSelect('dp-pos-l2', l2opts, 'Zona…');
-  fillPosSelect('dp-pos-l3', [], 'Piano…');
-  if (l1name && l2opts.length === 0) maybeOfferSlotPicker(l1name, '', '', node, 'dp-pos-slot-btn', addDetailPosition);
-  else hideSlotPickerButton('dp-pos-slot-btn');
-}
-
-function onDetailPosL2Change() {
-  const l1name = document.getElementById('dp-pos-l1')?.value || '';
-  const l2name = document.getElementById('dp-pos-l2')?.value || '';
-  const l1node = ownerCellarPosTree.find(n => n.name === l1name);
-  const l2node = l1node?.children.find(c => c.name === l2name);
-  const l3opts = (l2node?.children || []).map(c => c.name);
-  fillPosSelect('dp-pos-l3', l3opts, 'Piano…');
-  if (l2name && l3opts.length === 0) maybeOfferSlotPicker(l1name, l2name, '', l2node, 'dp-pos-slot-btn', addDetailPosition);
-  else hideSlotPickerButton('dp-pos-slot-btn');
-}
-
-function onDetailPosL3Change() {
-  const l1name = document.getElementById('dp-pos-l1')?.value || '';
-  const l2name = document.getElementById('dp-pos-l2')?.value || '';
-  const l3name = document.getElementById('dp-pos-l3')?.value || '';
-  if (!l3name) { hideSlotPickerButton('dp-pos-slot-btn'); return; }
-  const l1node = ownerCellarPosTree.find(n => n.name === l1name);
-  const l2node = l1node?.children.find(c => c.name === l2name);
-  const l3node = l2node?.children.find(c => c.name === l3name);
-  maybeOfferSlotPicker(l1name, l2name, l3name, l3node, 'dp-pos-slot-btn', addDetailPosition);
+  if (hint) { hint.style.display = hasAny ? 'none' : ''; if (!hasAny) hint.innerHTML = posEmptyHintHtml(); }
 }
 
 function renderDetailPosChips(w) {
@@ -8384,25 +8336,6 @@ function renderDetailPosChips(w) {
       <span class="rm-btn" onclick="removeDetailPosition(${i})">×</span>
     </span>
   `).join('');
-}
-
-async function addDetailPosition() {
-  const w = winesCache.find(x => x.id === currentDetailId); if (!w) return;
-  const l1 = document.getElementById('dp-pos-l1')?.value || '';
-  const l2 = document.getElementById('dp-pos-l2')?.value || '';
-  const l3 = document.getElementById('dp-pos-l3')?.value || '';
-  if (!l1 && !l2 && !l3) return;
-  const positions = w.cellarPositions || [];
-  if (positions.some(p => p.l1 === l1 && p.l2 === l2 && p.l3 === l3)) {
-    toast('Posizione già aggiunta');
-  } else {
-    const updated = [...positions, { l1, l2, l3 }];
-    const ok = await dbUpdatePositions(w.id, updated);
-    if (ok) { w.cellarPositions = updated; renderDetailPosChips(w); }
-  }
-  fillPosSelect('dp-pos-l1', ownerCellarPosTree.map(n => n.name), 'Posizione…');
-  fillPosSelect('dp-pos-l2', [], 'Zona…');
-  fillPosSelect('dp-pos-l3', [], 'Piano…');
 }
 
 async function removeDetailPosition(index) {
@@ -8528,7 +8461,7 @@ function editWine() {
   set('f-province', w.province);
   set('f-abv', w.abv);
   set('f-format', w.format); set('f-price', w.price); set('f-qty', w.qty ?? 1);
-  renderWinePositionSelects();
+  renderWinePositionPickerUI();
   selectedWinePositions = (w.cellarPositions || []).map(p => ({ l1: p.l1 || '', l2: p.l2 || '', l3: p.l3 || '', slot: p.slot || null }));
   renderWinePositionChips();
   set('f-date', w.date); set('f-shop', w.shop); set('f-shop-category', w.shopCategory); set('f-drink', w.drink);
@@ -9067,87 +9000,29 @@ function dnParamDots(value) {
 /* ── Posizione in cantina sul form vino — un vino può avere più posizioni ── */
 let selectedWinePositions = []; // [{l1,l2,l3}]
 
-function fillPosSelect(id, opts, placeholder) {
-  const sel = document.getElementById(id);
-  if (!sel) return;
-  sel.innerHTML = `<option value="">${placeholder}</option>` + opts.map(o => `<option value="${o}">${o}</option>`).join('');
-}
-
-// Popola il primo <select> (livello 1) con l'albero configurato dal
-// proprietario della cantina in visualizzazione (ownerCellarPosTree,
-// caricato da initApp / switchCellarOwner) e mostra un avviso se non ne ha
-// ancora configurato nessuno. Livello 2 e 3 si popolano a cascata, vedi
-// onPosL1Change/onPosL2Change/onPosL3Change. Nessun pulsante "Aggiungi":
-// appena la selezione raggiunge una foglia dell'albero (non ci sono più
-// livelli sotto, o si è scelto il livello 3) la posizione si aggiunge da
-// sola, come lo stepper della quantità.
-function renderWinePositionSelects() {
-  fillPosSelect('f-pos-l1', ownerCellarPosTree.map(n => n.name), 'Posizione…');
-  fillPosSelect('f-pos-l2', [], 'Zona…');
-  fillPosSelect('f-pos-l3', [], 'Piano…');
-  hideSlotPickerButton('f-pos-slot-btn');
+function renderWinePositionPickerUI() {
   const hasAny = ownerCellarPosTree.length > 0;
-  document.getElementById('f-pos-selects-row').style.display = hasAny ? '' : 'none';
+  const btn = document.getElementById('f-pos-pick-btn');
+  if (btn) btn.style.display = hasAny ? '' : 'none';
   const hint = document.getElementById('f-pos-empty-hint');
-  hint.style.display = hasAny ? 'none' : '';
-  if (!hasAny) hint.innerHTML = posEmptyHintHtml();
+  if (hint) { hint.style.display = hasAny ? 'none' : ''; if (!hasAny) hint.innerHTML = posEmptyHintHtml(); }
 }
 
-function onPosL1Change() {
-  const l1name = document.getElementById('f-pos-l1')?.value || '';
-  const node = ownerCellarPosTree.find(n => n.name === l1name);
-  const l2opts = (node?.children || []).map(c => c.name);
-  fillPosSelect('f-pos-l2', l2opts, 'Zona…');
-  fillPosSelect('f-pos-l3', [], 'Piano…');
-  if (l1name && l2opts.length === 0) maybeOfferSlotPicker(l1name, '', '', node, 'f-pos-slot-btn', addWinePosition);
-  else hideSlotPickerButton('f-pos-slot-btn');
-}
+// Popup grafico "Scegli posizione in cantina" — un tocco per livello,
+// scendendo nell'albero configurato dal proprietario della cantina in
+// visualizzazione (ownerCellarPosTree) fino a una foglia: se ha una
+// capienza si passa alla griglia a slot (più sotto), altrimenti la
+// posizione generica si aggiunge subito. Sostituisce le 3 tendine
+// Posizione/Zona/Piano usate in precedenza. Condiviso tra form
+// (Aggiungi/Modifica vino) e scheda di dettaglio: mode distingue dove
+// salvare (selectedWinePositions in sessione, o subito su DB).
+let posTreePickerState = null; // { mode:'form'|'detail', path:[nomi] }
 
-function onPosL2Change() {
-  const l1name = document.getElementById('f-pos-l1')?.value || '';
-  const l2name = document.getElementById('f-pos-l2')?.value || '';
-  const l1node = ownerCellarPosTree.find(n => n.name === l1name);
-  const l2node = l1node?.children.find(c => c.name === l2name);
-  const l3opts = (l2node?.children || []).map(c => c.name);
-  fillPosSelect('f-pos-l3', l3opts, 'Piano…');
-  if (l2name && l3opts.length === 0) maybeOfferSlotPicker(l1name, l2name, '', l2node, 'f-pos-slot-btn', addWinePosition);
-  else hideSlotPickerButton('f-pos-slot-btn');
-}
-
-function onPosL3Change() {
-  const l1name = document.getElementById('f-pos-l1')?.value || '';
-  const l2name = document.getElementById('f-pos-l2')?.value || '';
-  const l3name = document.getElementById('f-pos-l3')?.value || '';
-  if (!l3name) { hideSlotPickerButton('f-pos-slot-btn'); return; }
-  const l1node = ownerCellarPosTree.find(n => n.name === l1name);
-  const l2node = l1node?.children.find(c => c.name === l2name);
-  const l3node = l2node?.children.find(c => c.name === l3name);
-  maybeOfferSlotPicker(l1name, l2name, l3name, l3node, 'f-pos-slot-btn', addWinePosition);
-}
-
-// Se la posizione raggiunta ha una capienza (impostata nel profilo), si
-// propone il pulsante "Posiziona in cantina" (slot specifico, una
-// bottiglia = uno slot) invece di aggiungere subito una tag generica
-// l1/l2/l3 come prima: altrimenti si rischierebbe di "consumare" la
-// selezione senza mai passare dalla griglia. Le posizioni senza capienza
-// restano invece col comportamento di sempre (tag aggiunta subito tramite
-// fallbackAddFn, lo stesso usato da sempre in quel contesto). Condivisa
-// tra form (Aggiungi/Modifica vino) e scheda di dettaglio: btnId distingue
-// quale pulsante/contesto attivare.
-function maybeOfferSlotPicker(l1, l2, l3, node, btnId, fallbackAddFn) {
-  const btn = document.getElementById(btnId);
-  if (node?.capacity) {
-    btn.dataset.l1 = l1; btn.dataset.l2 = l2; btn.dataset.l3 = l3;
-    btn.style.display = '';
-  } else {
-    hideSlotPickerButton(btnId);
-    fallbackAddFn();
-  }
-}
-
-function hideSlotPickerButton(btnId) {
-  const btn = document.getElementById(btnId);
-  if (btn) btn.style.display = 'none';
+function openPosTreePicker(mode) {
+  if (!ownerCellarPosTree.length) return;
+  posTreePickerState = { mode, path: [] };
+  renderPosTreePicker();
+  document.getElementById('pos-tree-picker-overlay').classList.add('open');
 }
 
 function findPosTreeNode(l1, l2, l3) {
@@ -9160,7 +9035,71 @@ function findPosTreeNode(l1, l2, l3) {
   return n2.children?.find(n => n.name === l3) || null;
 }
 
-let slotPickerState = null; // { l1, l2, l3, capacity, occupiedByOthers:Set, mineSlots:Set, pendingSelected:Set, mode:'form'|'detail', btnId }
+function renderPosTreePicker() {
+  const s = posTreePickerState;
+  if (!s) return;
+  const crumbs = ['<a href="#" onclick="posTreePickerGoTo(0);return false;">Cantina</a>']
+    .concat(s.path.map((name, i) => `<a href="#" onclick="posTreePickerGoTo(${i + 1});return false;">${escapeAttr(name)}</a>`));
+  document.getElementById('pos-tree-picker-breadcrumb').innerHTML = crumbs.join(' <i class="ti ti-chevron-right" style="font-size:10px;vertical-align:-1px"></i> ');
+  const children = s.path.length === 0 ? ownerCellarPosTree : (findPosTreeNode(s.path[0], s.path[1] || '', s.path[2] || '')?.children || []);
+  // Icona a destra di ogni riga: freccia se si scende ancora, griglia se
+  // è una foglia con capienza (apre la griglia slot), spunta se è una
+  // foglia senza capienza (si aggiunge subito toccandola).
+  document.getElementById('pos-tree-picker-list').innerHTML = children.map(n => {
+    const hasChildren = n.children && n.children.length > 0;
+    const icon = hasChildren ? 'ti-chevron-right' : n.capacity ? 'ti-grid-dots' : 'ti-check';
+    return `<div class="pos-node-row" style="cursor:pointer" onclick="posTreePickerSelect('${escapeAttr(n.name)}')"><span>${escapeAttr(n.name)}</span><i class="ti ${icon}" style="margin-left:auto"></i></div>`;
+  }).join('');
+}
+
+function posTreePickerGoTo(depth) {
+  if (!posTreePickerState) return;
+  posTreePickerState.path = posTreePickerState.path.slice(0, depth);
+  renderPosTreePicker();
+}
+
+async function posTreePickerSelect(name) {
+  const s = posTreePickerState;
+  if (!s) return;
+  const newPath = [...s.path, name];
+  const node = findPosTreeNode(newPath[0], newPath[1] || '', newPath[2] || '');
+  if (!node) return;
+  if (node.children && node.children.length > 0) {
+    s.path = newPath;
+    renderPosTreePicker();
+    return;
+  }
+  const [l1, l2, l3] = [newPath[0] || '', newPath[1] || '', newPath[2] || ''];
+  closePosTreePicker();
+  if (node.capacity) openSlotGrid(l1, l2, l3, node, s.mode);
+  else await commitPlainPosition(l1, l2, l3, s.mode);
+}
+
+function closePosTreePicker() {
+  document.getElementById('pos-tree-picker-overlay').classList.remove('open');
+  posTreePickerState = null;
+}
+
+// Aggiunge una posizione "generica" l1/l2/l3 (senza slot specifico — il
+// punto scelto non ha una capienza impostata). mode='detail' salva
+// subito su DB (come lo stepper delle bottiglie); altrimenti accumula in
+// selectedWinePositions fino al salvataggio dell'intero vino.
+async function commitPlainPosition(l1, l2, l3, mode) {
+  if (mode === 'detail') {
+    const w = winesCache.find(x => x.id === currentDetailId); if (!w) return;
+    const positions = w.cellarPositions || [];
+    if (positions.some(p => p.l1 === l1 && p.l2 === l2 && p.l3 === l3)) { toast('Posizione già aggiunta'); return; }
+    const updated = [...positions, { l1, l2, l3 }];
+    const ok = await dbUpdatePositions(w.id, updated);
+    if (ok) { w.cellarPositions = updated; renderDetailPosChips(w); }
+  } else {
+    if (selectedWinePositions.some(p => p.l1 === l1 && p.l2 === l2 && p.l3 === l3)) { toast('Posizione già aggiunta'); return; }
+    selectedWinePositions.push({ l1, l2, l3 });
+    renderWinePositionChips();
+  }
+}
+
+let slotPickerState = null; // { l1, l2, l3, capacity, occupiedByOthers:Set, mineSlots:Set, pendingSelected:Set, mode:'form'|'detail' }
 
 // occupiedByOthers: slot già presi da ALTRI vini in questa stessa
 // posizione (letti da myWines(), escluso il vino che si sta modificando/
@@ -9168,16 +9107,11 @@ let slotPickerState = null; // { l1, l2, l3, capacity, occupiedByOthers:Set, min
 // da selectedWinePositions (sessione di editing, non ancora salvata se si
 // sta aggiungendo un vino nuovo), in dettaglio dal vino già salvato su DB
 // — mostrati ma non riselezionabili qui: si rimuovono dalla chip, non
-// dalla griglia. btnId distingue il contesto chiamante (form o scheda di
-// dettaglio): 'dp-pos-slot-btn' è la scheda di dettaglio, salva subito su
-// DB; qualunque altro id (oggi solo 'f-pos-slot-btn') è il form, accumula
-// in selectedWinePositions fino al salvataggio dell'intero vino.
-function openCellarSlotPicker(btnId) {
-  const btn = document.getElementById(btnId);
-  const l1 = btn?.dataset.l1 || '', l2 = btn?.dataset.l2 || '', l3 = btn?.dataset.l3 || '';
-  const node = findPosTreeNode(l1, l2, l3);
-  if (!node?.capacity) return;
-  const mode = btnId === 'dp-pos-slot-btn' ? 'detail' : 'form';
+// dalla griglia. mode distingue il contesto chiamante: 'detail' salva
+// subito su DB, 'form' accumula in selectedWinePositions fino al
+// salvataggio dell'intero vino. Chiamata da posTreePickerSelect una volta
+// raggiunta una foglia con capienza.
+function openSlotGrid(l1, l2, l3, node, mode) {
   const excludeId = mode === 'detail' ? currentDetailId : (document.getElementById('f-edit-id')?.value || null);
   const occupiedByOthers = new Set();
   myWines().forEach(w => {
@@ -9193,7 +9127,7 @@ function openCellarSlotPicker(btnId) {
   } else {
     mineSlots = new Set(selectedWinePositions.filter(p => p.l1 === l1 && p.l2 === l2 && p.l3 === l3 && p.slot).map(p => p.slot));
   }
-  slotPickerState = { l1, l2, l3, capacity: node.capacity, cols: node.cols || null, occupiedByOthers, mineSlots, pendingSelected: new Set(), mode, btnId };
+  slotPickerState = { l1, l2, l3, capacity: node.capacity, cols: node.cols || null, occupiedByOthers, mineSlots, pendingSelected: new Set(), mode };
   renderSlotPicker();
   document.getElementById('cellar-slot-picker-overlay').classList.add('open');
 }
@@ -9241,16 +9175,6 @@ async function confirmSlotPick() {
     renderWinePositionChips();
   }
   closeCellarSlotPicker();
-  hideSlotPickerButton(s.btnId);
-  if (s.mode === 'detail') {
-    fillPosSelect('dp-pos-l1', ownerCellarPosTree.map(n => n.name), 'Posizione…');
-    fillPosSelect('dp-pos-l2', [], 'Zona…');
-    fillPosSelect('dp-pos-l3', [], 'Piano…');
-  } else {
-    fillPosSelect('f-pos-l1', ownerCellarPosTree.map(n => n.name), 'Posizione…');
-    fillPosSelect('f-pos-l2', [], 'Zona…');
-    fillPosSelect('f-pos-l3', [], 'Piano…');
-  }
 }
 
 function closeCellarSlotPicker() {
@@ -9300,7 +9224,7 @@ function toggleCellarMapSection(l1, l2, l3) {
 // Tutti i nodi con una capienza impostata, raccolti ricorsivamente
 // dall'intero albero (ownerCellarPosTree) — solo quelli hanno davvero
 // una griglia di slot da mostrare. Stesso criterio "solo nodi che sono
-// ORA foglie" usato in renderPosNode/maybeOfferSlotPicker: un nodo con
+// ORA foglie" usato in renderPosNode/posTreePickerSelect: un nodo con
 // figli e una vecchia capienza rimasta (valore nascosto ma non perso)
 // non genera una griglia qui — si scende nei figli invece.
 function getAllCapacityNodes() {
@@ -9457,22 +9381,6 @@ function renderWinePositionChips() {
   `).join('');
 }
 
-function addWinePosition() {
-  const l1 = document.getElementById('f-pos-l1')?.value || '';
-  const l2 = document.getElementById('f-pos-l2')?.value || '';
-  const l3 = document.getElementById('f-pos-l3')?.value || '';
-  if (!l1 && !l2 && !l3) return;
-  if (selectedWinePositions.some(p => p.l1 === l1 && p.l2 === l2 && p.l3 === l3)) {
-    toast('Posizione già aggiunta');
-  } else {
-    selectedWinePositions.push({ l1, l2, l3 });
-    renderWinePositionChips();
-  }
-  fillPosSelect('f-pos-l1', ownerCellarPosTree.map(n => n.name), 'Posizione…');
-  fillPosSelect('f-pos-l2', [], 'Zona…');
-  fillPosSelect('f-pos-l3', [], 'Piano…');
-}
-
 function removeWinePosition(index) {
   selectedWinePositions.splice(index, 1);
   renderWinePositionChips();
@@ -9589,8 +9497,8 @@ function renderPosNode(node, path, level) {
   const inputId = 'pos-add-' + pathStr.replace(/,/g, '-');
   // La capienza ha senso solo su un nodo che ORA è una foglia (nessun
   // figlio): solo quelli possono diventare la posizione finale a cui si
-  // aggancia un vino (vedi addWinePosition/maybeOfferSlotPicker, che
-  // scattano solo quando il livello raggiunto non ha ulteriori figli). Un
+  // aggancia un vino (vedi posTreePickerSelect, che scatta solo quando il
+  // livello raggiunto non ha ulteriori figli). Un
   // valore già impostato non si perde se poi si aggiungono figli: resta
   // nel dato, semplicemente non si mostra finché il nodo non torna foglia.
   const isLeafNow = !node.children || node.children.length === 0;
@@ -11910,13 +11818,14 @@ Object.assign(window, {
   dismissPublicPrompt, acceptPublicPrompt, markFScoreManual, dismissAssocPrompt, saveAssocPrompt, acceptPrivacyPrompt, openImageLightbox, closeImageLightbox,
   openTutorial, tutorialStep, skipTutorial,
   confirmSumDuplicateQty, confirmSaveDuplicateAsNew, closeDuplicateWinePrompt,
-  addPosNode, removePosNode, movePosNode, updatePosNodeLayout, togglePosL1Expanded, addWinePosition, removeWinePosition, onPosL1Change, onPosL2Change, onPosL3Change,
-  openCellarSlotPicker, toggleSlotPick, confirmSlotPick, closeCellarSlotPicker,
+  addPosNode, removePosNode, movePosNode, updatePosNodeLayout, togglePosL1Expanded, removeWinePosition,
+  openPosTreePicker, posTreePickerSelect, posTreePickerGoTo, closePosTreePicker,
+  toggleSlotPick, confirmSlotPick, closeCellarSlotPicker,
   startStructureWizard, wizSubmitName, wizAnswerHasChildren, wizSubmitLayout, wizAnswerMoreSiblings, finishStructureWizard, closeStructureWizard,
   wizGoBack, wizConfirmClose,
   showCellarMapScreen, setCellarMapL1, toggleCellarMapSection, onCellarMapSlotClick, confirmFreeSlot, closeFreeSlotPicker,
   downloadImportTemplate, handleImportFile,
-  addDetailPosition, removeDetailPosition, onDetailPosL1Change, onDetailPosL2Change, onDetailPosL3Change,
+  removeDetailPosition,
   showWineryDetail, toggleWineryPreview, saveWineryDetails, uploadWineryLogo, goBackFromWinery, showAdminWineriesScreen, deleteWinery, searchAllWineries,
   saveScanLimits, resetScanUsage, searchScanUsersAdmin,
   addWineryCatalogWine, removeWineryCatalogWine, useFaviconAsLogo,
