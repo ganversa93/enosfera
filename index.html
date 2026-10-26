@@ -222,6 +222,7 @@
       transition: border-color .15s ease;
     }
     .hl-period-bar select:focus, .hl-period-bar input[type="date"]:focus { outline: none; border-color: var(--gold-l); }
+    .hl-period-bar select:focus-visible, .hl-period-bar input[type="date"]:focus-visible { outline: 2px solid var(--gold-l); outline-offset: 2px; }
     .hl-back-link { font-size: 11px; color: var(--wine); text-decoration: underline; display: inline-block; margin-bottom: 6px; }
 
     /* ── FILTERS ── */
@@ -233,6 +234,7 @@
       transition: border-color .15s ease;
     }
     .filter-bar input:focus { outline: none; border-color: var(--gold-l); }
+    .filter-bar input:focus-visible { outline: 2px solid var(--gold-l); outline-offset: 2px; }
     .sort-bar { display: flex; gap: 8px; align-items: center; margin: -0.25rem 0 1.25rem; }
     .sort-bar select {
       flex: 1; font-family: 'Inter', sans-serif; font-size: 13px;
@@ -241,6 +243,7 @@
       transition: border-color .15s ease;
     }
     .sort-bar select:focus { outline: none; border-color: var(--gold-l); }
+    .sort-bar select:focus-visible { outline: 2px solid var(--gold-l); outline-offset: 2px; }
     .sort-bar .btn.sm { flex-shrink: 0; padding: 7px 11px; }
     .chip {
       font-size: 12px; padding: 5px 12px; border-radius: 20px;
@@ -361,6 +364,7 @@
       transition: border-color .15s ease;
     }
     .lfield input:focus, .lfield select:focus, .lfield textarea:focus { outline: none; border-color: var(--gold-l); }
+    .lfield input:focus-visible, .lfield select:focus-visible, .lfield textarea:focus-visible { outline: 2px solid var(--gold-l); outline-offset: 2px; }
     .lfield textarea { resize: vertical; }
     .lbtn {
       width: 100%; padding: 10px; font-size: 14px; font-weight: 500;
@@ -409,6 +413,7 @@
       transition: border-color .15s ease;
     }
     .fg input:focus, .fg select:focus, .fg textarea:focus { outline: none; border-color: var(--gold-l); }
+    .fg input:focus-visible, .fg select:focus-visible, .fg textarea:focus-visible { outline: 2px solid var(--gold-l); outline-offset: 2px; }
     .fg textarea { resize: vertical; min-height: 75px; }
 
     .qty-stepper { display: flex; align-items: center; gap: 10px; }
@@ -503,6 +508,7 @@
       border: 0.5px solid var(--border); background: var(--surf); color: var(--ink);
     }
     .network-search:focus { outline: none; border-color: var(--wine); }
+    .network-search:focus-visible { outline: 2px solid var(--wine); outline-offset: 2px; }
 
     .email-reminder {
       display: flex; align-items: center; gap: 10px;
@@ -652,6 +658,7 @@
       border: 0.5px solid var(--border); background: var(--bg); color: var(--ink);
     }
     .pos-add-row input:focus { outline: none; border-color: var(--wine); }
+    .pos-add-row input:focus-visible { outline: 2px solid var(--wine); outline-offset: 2px; }
     /* Grid invece di flex: le <select> hanno una loro sizing "intrinseca"
        che con flex-grow spesso non si distribuisce sull'intera riga —
        con grid-template-columns le tre select occupano sempre spazio
@@ -667,6 +674,7 @@
       border: 0.5px solid var(--border); background: var(--bg); color: var(--ink);
     }
     .pos-select-row select:focus { outline: none; border-color: var(--wine); }
+    .pos-select-row select:focus-visible { outline: 2px solid var(--wine); outline-offset: 2px; }
     .pos-chip-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 
     .subhead { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; margin: 18px 0 8px; }
@@ -702,6 +710,7 @@
       transition: border-color .15s ease;
     }
     .adv-filter-field select:focus, .adv-filter-field input:focus { outline: none; border-color: var(--gold-l); }
+    .adv-filter-field select:focus-visible, .adv-filter-field input:focus-visible { outline: 2px solid var(--gold-l); outline-offset: 2px; }
 
     /* ── AUTOCOMPLETE personalizzato (sostituisce datalist, poco affidabile su iOS) ── */
     .ac-box {
@@ -844,7 +853,7 @@
     .img-lightbox-overlay {
       display: none; position: fixed; inset: 0; z-index: 310;
       background: rgba(0,0,0,.85); align-items: center; justify-content: center; padding: 1.5rem;
-      cursor: zoom-out;
+      cursor: zoom-out; overscroll-behavior: contain;
     }
     .img-lightbox-overlay.open { display: flex; }
     .img-lightbox-overlay img { max-width: 100%; max-height: 100%; border-radius: 10px; box-shadow: 0 12px 40px rgba(0,0,0,.45); cursor: default; }
@@ -1100,6 +1109,7 @@
       cursor: pointer;
     }
     .fisar-sel:focus { outline: none; border-color: var(--fisar); }
+    .fisar-sel:focus-visible { outline: 2px solid var(--fisar); outline-offset: 2px; }
     .fisar-sel.filled { border-color: var(--fisar); background: var(--fisar-pale); color: var(--fisar); font-weight: 500; }
     /* ── ONAV qualitative selects — stesse .fisar-row/.fisar-field/.fisar-label
        generiche, solo select e badge hanno una variante colore propria. ── */
@@ -1115,6 +1125,7 @@
       cursor: pointer;
     }
     .onav-sel:focus { outline: none; border-color: var(--onav); }
+    .onav-sel:focus-visible { outline: 2px solid var(--onav); outline-offset: 2px; }
     .onav-sel.filled { border-color: var(--onav); background: var(--onav-pale); color: var(--onav); font-weight: 500; }
     @media (max-width: 520px) { .fisar-row { grid-template-columns: 1fr; } }
     /* Selects della scheda analitico-descrittiva AIS: stesso layout, colore brand AIS */
@@ -1170,6 +1181,7 @@
     .public-prompt-overlay {
       display: none; position: fixed; inset: 0; z-index: 300;
       background: rgba(0,0,0,.55); align-items: center; justify-content: center; padding: 1rem;
+      overscroll-behavior: contain;
     }
     .public-prompt-overlay.open { display: flex; }
     .public-prompt-card {
@@ -6196,7 +6208,9 @@ async function toggleEventFavorite(id, domEvent) {
   }
   document.querySelectorAll(`.event-fav-btn[data-id="${id}"]`).forEach(btn => {
     btn.classList.toggle('active', !wasFav);
-    btn.innerHTML = `<i class="ti ${!wasFav ? 'ti-star-filled' : 'ti-star'}"></i>`;
+    btn.setAttribute('aria-label', !wasFav ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti');
+    btn.setAttribute('aria-pressed', String(!wasFav));
+    btn.innerHTML = `<i class="ti ${!wasFav ? 'ti-star-filled' : 'ti-star'}" aria-hidden="true"></i>`;
   });
   if (document.getElementById('events-list')) { renderEventsFavSection(); renderEventsList(); }
 }
@@ -6283,7 +6297,7 @@ function eventCardHtml(e) {
           ${eventStatusBadgeHtml(e.status)}
           ${e.category ? `<span class="dchip">${e.category}</span>` : ''}
           ${(e.associations || []).map(a => `<span class="dchip">${a}</span>`).join('')}
-          ${currentUser ? `<button class="event-fav-btn${isFav ? ' active' : ''}" data-id="${e.id}" style="position:static" onclick="toggleEventFavorite('${e.id}', event)"><i class="ti ${isFav ? 'ti-star-filled' : 'ti-star'}"></i></button>` : ''}
+          ${currentUser ? `<button class="event-fav-btn${isFav ? ' active' : ''}" data-id="${e.id}" style="position:static" aria-label="${isFav ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti'}" aria-pressed="${isFav}" onclick="toggleEventFavorite('${e.id}', event)"><i class="ti ${isFav ? 'ti-star-filled' : 'ti-star'}" aria-hidden="true"></i></button>` : ''}
         </div>
       </div>
       ${formatEventDateRange(e.date_from, e.date_to) ? `<div class="event-card-loc"><i class="ti ti-calendar-event"></i>${formatEventDateRange(e.date_from, e.date_to)}</div>` : ''}
@@ -6429,7 +6443,7 @@ async function showEventDetail(id, prefill) {
   // salva.
   const readView = (ev && id) ? `
     <div class="winery-hero" style="position:relative">
-      ${currentUser ? `<button class="event-fav-btn${favoriteEventIds.has(ev.id) ? ' active' : ''}" data-id="${ev.id}" onclick="toggleEventFavorite('${ev.id}', event)"><i class="ti ${favoriteEventIds.has(ev.id) ? 'ti-star-filled' : 'ti-star'}"></i></button>` : ''}
+      ${currentUser ? `<button class="event-fav-btn${favoriteEventIds.has(ev.id) ? ' active' : ''}" data-id="${ev.id}" aria-label="${favoriteEventIds.has(ev.id) ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti'}" aria-pressed="${favoriteEventIds.has(ev.id)}" onclick="toggleEventFavorite('${ev.id}', event)"><i class="ti ${favoriteEventIds.has(ev.id) ? 'ti-star-filled' : 'ti-star'}" aria-hidden="true"></i></button>` : ''}
       <div>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:2px">
           <div class="winery-name">${ev.name}</div>
