@@ -652,11 +652,11 @@
     .pos-node-row .rm-btn:hover { opacity: 1; }
     .pos-node-row .pos-capacity-input {
       width: 60px; flex-shrink: 0; font-family: 'Inter', sans-serif;
-      font-size: 11.5px; padding: 4px 6px; border-radius: 6px; text-align: center;
-      border: 0.5px solid rgba(255,255,255,.35); background: rgba(255,255,255,.12); color: #fff;
+      font-size: 13px; font-weight: 600; padding: 6px 4px; border-radius: 7px; text-align: center;
+      border: 1.5px solid rgba(255,255,255,.55); background: #fff; color: var(--wine);
     }
-    .pos-node-row .pos-capacity-input::placeholder { color: rgba(255,255,255,.6); }
-    .pos-node-row .pos-capacity-input:focus { outline: none; border-color: #fff; }
+    .pos-node-row .pos-capacity-input::placeholder { color: var(--muted); font-weight: 400; }
+    .pos-node-row .pos-capacity-input:focus { outline: none; border-color: var(--gold-l); }
     .pos-node-row .pos-capacity-input:focus-visible { outline: 2px solid var(--gold-l); outline-offset: 1px; }
     .slot-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 4px 0 6px; max-height: 260px; overflow-y: auto; }
     .slot-circle {
@@ -9470,10 +9470,10 @@ function renderPosNode(node, path, level) {
       <div class="pos-node-row">
         <span>${node.name}</span>
         ${isLeafNow ? `
-          <input type="number" class="pos-capacity-input" style="width:34px" min="1" max="99" step="1" placeholder="R" title="Righe (facoltativo)" value="${node.rows || ''}" onclick="event.stopPropagation()" oninput="updatePosNodeLayout('${pathStr}','rows',this.value)">
-          <span style="color:rgba(255,255,255,.45);font-size:11px">×</span>
-          <input type="number" class="pos-capacity-input" style="width:34px" min="1" max="99" step="1" placeholder="C" title="Colonne (facoltativo — se non ti interessano le righe, metti qui direttamente il totale bottiglie)" value="${node.cols || ''}" onclick="event.stopPropagation()" oninput="updatePosNodeLayout('${pathStr}','cols',this.value)">
-          <span id="pos-cap-label-${pathStr.replace(/,/g, '-')}" style="font-size:10px;color:rgba(255,255,255,.65)">${node.capacity ? `=${node.capacity}` : ''}</span>
+          <input type="number" class="pos-capacity-input" style="width:38px" min="1" max="99" step="1" placeholder="R" title="Righe (facoltativo)" value="${node.rows || ''}" onclick="event.stopPropagation()" oninput="updatePosNodeLayout('${pathStr}','rows',this.value)">
+          <span style="color:rgba(255,255,255,.75);font-size:12px">×</span>
+          <input type="number" class="pos-capacity-input" style="width:38px" min="1" max="99" step="1" placeholder="C" title="Colonne (facoltativo — se non ti interessano le righe, metti qui direttamente il totale bottiglie)" value="${node.cols || ''}" onclick="event.stopPropagation()" oninput="updatePosNodeLayout('${pathStr}','cols',this.value)">
+          <span id="pos-cap-label-${pathStr.replace(/,/g, '-')}" style="font-size:11px;font-weight:600;color:var(--gold-l)">${node.capacity ? `=${node.capacity}` : ''}</span>
         ` : ''}
         <span class="rm-btn" onclick="removePosNode('${pathStr}')">×</span>
       </div>
