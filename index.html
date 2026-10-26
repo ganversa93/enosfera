@@ -4023,6 +4023,21 @@
       </div>
     </div>
     <div class="export-msg ok" id="export-msg"></div>
+
+    <div class="subhead" style="margin-top:1.4rem">Importa in cantina</div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:12px">Arrivi da un'altra app o hai un foglio con i tuoi vini? Scarica il modello, compilalo (solo il <b>Nome</b> è obbligatorio) e ricaricalo qui.</p>
+    <div class="export-card">
+      <div class="export-row">
+        <div class="export-info"><i class="ti ti-file-download" aria-hidden="true"></i><div class="export-info-text"><span>Scarica il modello</span><small>File Excel (.xlsx) con le colonne giuste già pronte</small></div></div>
+        <button class="btn sm" onclick="downloadImportTemplate()">Scarica modello</button>
+      </div>
+      <div class="export-row">
+        <div class="export-info"><i class="ti ti-file-upload" aria-hidden="true"></i><div class="export-info-text"><span>Carica il file compilato</span><small>.xlsx o .csv — anche un export CSV di Enoscrigno va bene</small></div></div>
+        <input type="file" id="import-file-input" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleImportFile(this)">
+        <button class="btn primary sm" onclick="document.getElementById('import-file-input').click()">Scegli file</button>
+      </div>
+    </div>
+    <div class="spin-wrap" id="import-spin" style="display:none;margin-top:10px"><div class="spin"></div><span style="font-size:12px;color:var(--muted)" id="import-spin-label">Importazione in corso…</span></div>
   </div>
 
 </div>
@@ -4286,6 +4301,9 @@ async function ensureQuillLoaded() {
 }
 async function ensureChartLoaded() {
   await loadScriptOnce('https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js');
+}
+async function ensureXlsxLoaded() {
+  await loadScriptOnce('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js');
 }
 
 /* ── TOAST ── */
@@ -11390,6 +11408,160 @@ function exportCSV() {
   dl('cantina_' + currentUser.name.replace(/\s/g,'_') + '.csv', [hdr, ...rows].join('\n'), 'text/csv');
   showExportMsg('✓ CSV esportato con successo');
 }
+
+// Stesse etichette dell'header di exportCSV sopra, tolte le due colonne
+// che non ha senso compilare a mano (Schema degustazione e Punteggio:
+// derivano dalla scheda di degustazione in app, non da un dato grezzo
+// da foglio) — così un export fatto da Enoscrigno è già di per sé un
+// file d'importazione valido, oltre al modello scaricabile apposta.
+const IMPORT_COLUMNS = ['Nome','Produttore','Annata','Tipo','DOC','Vitigni','Regione','Provincia','Paese','Gradazione','Formato','Prezzo','Bottiglie','Data acquisto','Categoria acquisto','Luogo','Da bere','Abbinamento','Note'];
+
+async function downloadImportTemplate() {
+  await ensureXlsxLoaded();
+  const example = ['Barolo','Cantina Esempio',2019,'Rosso','Barolo','Nebbiolo 100%','Piemonte','Cuneo','Italia',14.5,'750 ml',35,2,'2024-03-10','Enoteca','Enoteca Rossi, Torino','2027–2040','Brasati e carni rosse','Vino di esempio: cancella questa riga prima di caricare il file'];
+  const ws = XLSX.utils.aoa_to_sheet([IMPORT_COLUMNS, example]);
+  ws['!cols'] = IMPORT_COLUMNS.map(() => ({ wch: 16 }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Cantina');
+  XLSX.writeFile(wb, 'modello_importazione_enoscrigno.xlsx');
+}
+
+// Legge Nome/Produttore/… dall'intestazione per nome, non per posizione
+// di colonna: tollerante a colonne riordinate, mancanti o extra (es. uno
+// dei due export-only "Schema degustazione"/"Punteggio" rimasti nel
+// file). Solo il Nome è obbligatorio — una riga senza va saltata, non
+// bloccare l'intera importazione per una riga incompleta.
+// Colonne che devono contenere un numero: se la cella non è vuota ma non
+// si riesce a leggerla come numero (es. testo nella colonna Bottiglie),
+// il campo viene lasciato vuoto/di default invece di far fallire la riga
+// — ma va segnalato all'utente, non scartato in silenzio (vedi warnings
+// raccolti in handleImportFile). Tollerante a simboli comuni (€, $,
+// virgola decimale) prima di arrendersi.
+const IMPORT_NUMERIC_FIELDS = [
+  { label: 'Annata',     key: 'vintage', kind: 'int', min: 1800, max: 2100, fallback: null },
+  { label: 'Gradazione', key: 'abv',     kind: 'num', min: 0,    max: 30,   fallback: null },
+  { label: 'Prezzo',     key: 'price',   kind: 'num', min: 0,    max: 999999, fallback: null },
+  { label: 'Bottiglie',  key: 'qty',     kind: 'int', min: 0,    max: 9999, fallback: 1 },
+];
+
+function parseImportRow(row, rowNum) {
+  const get = (label) => {
+    const key = Object.keys(row).find(k => k.trim().toLowerCase() === label.toLowerCase());
+    if (key === undefined) return '';
+    const v = row[key];
+    return v == null ? '' : String(v).trim();
+  };
+  const name = get('Nome');
+  if (!name) return { wine: null, warnings: [] };
+
+  const warnings = [];
+  const wine = {
+    name,
+    producer: get('Produttore') || null,
+    type: get('Tipo') || null,
+    doc: get('DOC') || null,
+    grapes: get('Vitigni') || null,
+    region: get('Regione') || null,
+    province: get('Provincia') || null,
+    country: get('Paese') || 'Italia',
+    format: get('Formato') || '750 ml',
+    date: normalizeImportDate(row, 'Data acquisto'),
+    shopCategory: get('Categoria acquisto') || null,
+    shop: get('Luogo') || null,
+    drink: get('Da bere') || null,
+    pairing: get('Abbinamento') || null,
+    notes: get('Note') || null,
+    degSchema: 'free',
+  };
+
+  IMPORT_NUMERIC_FIELDS.forEach(f => {
+    const raw = get(f.label);
+    if (!raw) { wine[f.key] = f.fallback; return; }
+    const cleaned = raw.replace(/[€$\s]/g, '').replace(',', '.');
+    const n = f.kind === 'int' ? parseInt(cleaned, 10) : parseFloat(cleaned);
+    if (isNaN(n) || n < f.min || n > f.max) {
+      warnings.push(`Riga ${rowNum}: "${f.label}" = "${raw}" non è un numero valido — campo lasciato ${f.fallback == null ? 'vuoto' : f.fallback}`);
+      wine[f.key] = f.fallback;
+    } else {
+      wine[f.key] = n;
+    }
+  });
+
+  return { wine, warnings };
+}
+
+// Il valore può già essere un oggetto Date (cella Excel formattata come
+// data, con cellDates:true in XLSX.read) oppure testo (cella testo, o un
+// file CSV) — in quel caso si prova gg/mm/aaaa (formato italiano più
+// comune) e aaaa-mm-gg (già normalizzato, es. un export di Enoscrigno).
+// Una data non riconosciuta si lascia vuota invece di far fallire la riga.
+function normalizeImportDate(row, label) {
+  const key = Object.keys(row).find(k => k.trim().toLowerCase() === label.toLowerCase());
+  if (key === undefined) return null;
+  const v = row[key];
+  if (v instanceof Date && !isNaN(v)) return v.toISOString().slice(0, 10);
+  const s = String(v || '').trim();
+  if (!s) return null;
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  return null;
+}
+
+async function handleImportFile(input) {
+  const file = input.files[0];
+  input.value = ''; // permette di ricaricare lo stesso file una seconda volta
+  if (!file) return;
+  const spin = document.getElementById('import-spin');
+  const spinLabel = document.getElementById('import-spin-label');
+  spin.style.display = 'flex';
+  spinLabel.textContent = 'Lettura del file…';
+  try {
+    await ensureXlsxLoaded();
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: 'array', cellDates: true });
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    const rawRows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+    const parsed = [];
+    let skipped = 0;
+    let warnings = [];
+    rawRows.forEach((r, i) => {
+      const { wine, warnings: w } = parseImportRow(r, i + 2); // +2: riga 1 è l'intestazione, righe dati partono da 2 come in Excel
+      if (wine) { parsed.push(wine); warnings = warnings.concat(w); } else skipped++;
+    });
+
+    if (!parsed.length) {
+      spin.style.display = 'none';
+      showExportMsg(skipped ? `Nessuna riga valida trovata — ${skipped} saltate per nome mancante` : 'Il file sembra vuoto');
+      return;
+    }
+
+    let msg = `Trovat${parsed.length === 1 ? 'a' : 'e'} ${parsed.length} vin${parsed.length === 1 ? 'o' : 'i'} da importare` + (skipped ? ` (${skipped} riga/e saltate per nome mancante)` : '') + '.';
+    if (warnings.length) {
+      msg += `\n\n⚠ ${warnings.length} valore/i non validi (lasciati vuoti invece di bloccare l'importazione):\n` + warnings.slice(0, 8).join('\n') + (warnings.length > 8 ? `\n… e altri ${warnings.length - 8}` : '');
+    }
+    msg += '\n\nProcedere?\n\nNota: righe già importate in precedenza verranno aggiunte di nuovo, non unite a quelle esistenti.';
+    if (!confirm(msg)) { spin.style.display = 'none'; return; }
+
+    let imported = 0;
+    for (let i = 0; i < parsed.length; i++) {
+      spinLabel.textContent = `Importazione in corso… ${i + 1}/${parsed.length}`;
+      const id = await dbSaveWine(parsed[i]);
+      if (id) imported++;
+    }
+
+    spin.style.display = 'none';
+    winesCache = await loadWines();
+    showExportMsg(`✓ ${imported} vin${imported === 1 ? 'o' : 'i'} importat${imported === 1 ? 'o' : 'i'}` + (imported < parsed.length ? ` (${parsed.length - imported} falliti)` : '') + (skipped ? `, ${skipped} riga/e saltate per nome mancante` : ''));
+  } catch (err) {
+    spin.style.display = 'none';
+    console.error('Import error:', err);
+    showExportMsg('Errore nella lettura del file — controlla che sia .xlsx o .csv');
+  }
+}
+
 function exportJSON() {
   const data = { user: { name: currentUser.name, assoc: currentUser.assoc, card: currentUser.card }, exportDate: new Date().toISOString(), wines: myWines() };
   dl('cantina_backup_' + new Date().toISOString().split('T')[0] + '.json', JSON.stringify(data, null, 2), 'application/json');
@@ -11570,6 +11742,7 @@ Object.assign(window, {
   openCellarSlotPicker, toggleSlotPick, confirmSlotPick, closeCellarSlotPicker,
   startStructureWizard, wizSubmitName, wizAnswerHasChildren, wizSubmitLayout, wizAnswerMoreSiblings, finishStructureWizard, closeStructureWizard,
   showCellarMapScreen, onCellarMapSlotClick, confirmFreeSlot, closeFreeSlotPicker,
+  downloadImportTemplate, handleImportFile,
   addDetailPosition, removeDetailPosition, onDetailPosL1Change, onDetailPosL2Change, onDetailPosL3Change,
   showWineryDetail, toggleWineryPreview, saveWineryDetails, uploadWineryLogo, goBackFromWinery, showAdminWineriesScreen, deleteWinery, searchAllWineries,
   saveScanLimits, resetScanUsage, searchScanUsersAdmin,
