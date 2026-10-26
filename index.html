@@ -9259,10 +9259,21 @@ function closeCellarSlotPicker() {
    invece del drag&drop (più affidabile su telefono, dove l'app è usata
    di più — vedi la scelta fatta insieme). ── */
 let cellarMapSource = null; // { l1, l2, l3, slot, wineId } oppure null
+let cellarMapL1 = null; // quale posizione principale (L1) è mostrata ora — null = non ancora scelta
 
 function showCellarMapScreen() {
   cellarMapSource = null;
+  cellarMapL1 = null;
   showScreen('screen-cellar-map');
+  renderCellarMap();
+}
+
+// Cambia la posizione principale mostrata nella Mappa cantina. La
+// selezione sorgente (cellarMapSource) NON si azzera: così si può
+// scegliere la bottiglia da spostare in una posizione e la destinazione
+// in un'altra (es. da "Garage" a "Armadio climatizzato").
+function setCellarMapL1(l1) {
+  cellarMapL1 = l1;
   renderCellarMap();
 }
 
@@ -9302,12 +9313,24 @@ function getSlotOccupancy(l1, l2, l3) {
 function renderCellarMap() {
   const body = document.getElementById('cellar-map-body');
   if (!body) return;
-  const nodes = getAllCapacityNodes();
-  if (!nodes.length) {
+  const allNodes = getAllCapacityNodes();
+  if (!allNodes.length) {
     body.innerHTML = `<div class="cellar-map-empty-hint"><i class="ti ti-grid-dots" style="font-size:28px;display:block;margin-bottom:8px;opacity:.5"></i>Nessuna posizione con capienza configurata.<br>Vai al <a href="#" onclick="showProfileScreen();return false;">tuo profilo</a> per impostarla (wizard o editor).</div>`;
     return;
   }
-  body.innerHTML = nodes.map(node => {
+  // Un selettore per L1 mostra una posizione principale alla volta — con
+  // più posizioni (es. "Armadio climatizzato" + "Garage") la vista
+  // sarebbe altrimenti troppo affollata con tutte le zone di tutte
+  // insieme. Con una sola L1 il selettore non serve, non c'è nulla da
+  // scegliere.
+  const l1List = [...new Set(allNodes.map(n => n.l1))];
+  if (!cellarMapL1 || !l1List.includes(cellarMapL1)) cellarMapL1 = l1List[0];
+  const nodes = allNodes.filter(n => n.l1 === cellarMapL1);
+  const l1SelectorHtml = l1List.length > 1 ? `
+    <div class="filter-chip-row" style="margin-bottom:16px">
+      ${l1List.map(l1 => `<div class="chip${l1 === cellarMapL1 ? ' active' : ''}" onclick="setCellarMapL1('${escapeAttr(l1)}')">${escapeAttr(l1)}</div>`).join('')}
+    </div>` : '';
+  const sectionsHtml = nodes.map(node => {
     const occ = getSlotOccupancy(node.l1, node.l2, node.l3);
     const pathLabel = [node.l1, node.l2, node.l3].filter(Boolean).join(' · ');
     const gridCols = node.cols || Math.min(node.capacity, 4);
@@ -9319,13 +9342,17 @@ function renderCellarMap() {
       const title = wine ? escapeAttr([wine.name, wine.producer].filter(Boolean).join(' — ')) : 'Libero';
       return `<div class="slot-circle cellar-map-slot ${cls}" onclick="onCellarMapSlotClick('${escapeAttr(node.l1)}','${escapeAttr(node.l2)}','${escapeAttr(node.l3)}',${n})" title="${title}">${label}</div>`;
     }).join('');
+    // niente scroll interno: con il selettore a mostrare una sola L1 per
+    // volta, tutti gli slot di ogni zona devono restare visibili tutti
+    // insieme (scorre la pagina, non la singola griglia).
     return `
       <div class="cellar-map-section">
         <div class="cellar-map-section-title">${pathLabel}</div>
         <div class="cellar-map-section-count">${occ.size}/${node.capacity} occupati</div>
-        <div class="slot-grid" style="grid-template-columns:repeat(${gridCols},1fr)">${slotsHtml}</div>
+        <div class="slot-grid" style="grid-template-columns:repeat(${gridCols},1fr);max-height:none;overflow:visible">${slotsHtml}</div>
       </div>`;
   }).join('');
+  body.innerHTML = l1SelectorHtml + sectionsHtml;
 }
 
 async function onCellarMapSlotClick(l1, l2, l3, slot) {
@@ -11848,7 +11875,7 @@ Object.assign(window, {
   openCellarSlotPicker, toggleSlotPick, confirmSlotPick, closeCellarSlotPicker,
   startStructureWizard, wizSubmitName, wizAnswerHasChildren, wizSubmitLayout, wizAnswerMoreSiblings, finishStructureWizard, closeStructureWizard,
   wizGoBack, wizConfirmClose,
-  showCellarMapScreen, onCellarMapSlotClick, confirmFreeSlot, closeFreeSlotPicker,
+  showCellarMapScreen, setCellarMapL1, onCellarMapSlotClick, confirmFreeSlot, closeFreeSlotPicker,
   downloadImportTemplate, handleImportFile,
   addDetailPosition, removeDetailPosition, onDetailPosL1Change, onDetailPosL2Change, onDetailPosL3Change,
   showWineryDetail, toggleWineryPreview, saveWineryDetails, uploadWineryLogo, goBackFromWinery, showAdminWineriesScreen, deleteWinery, searchAllWineries,
