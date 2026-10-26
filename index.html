@@ -661,9 +661,13 @@
     .pos-node-row .pos-capacity-input::placeholder { color: var(--muted); font-weight: 400; }
     .pos-node-row .pos-capacity-input:focus { outline: none; border-color: var(--gold-l); }
     .pos-node-row .pos-capacity-input:focus-visible { outline: 2px solid var(--gold-l); outline-offset: 1px; }
-    .slot-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 4px 0 6px; max-height: 260px; overflow-y: auto; }
+    /* repeat(N, minmax(0,1fr)) invece di 1fr: con tante colonne (es. uno
+       scaffale 8×14) i cerchi si restringono per stare nella larghezza
+       della card invece di spingerla a scorrere anche in orizzontale —
+       vedi .slot-circle sotto, che li segue in larghezza. */
+    .slot-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; margin: 4px 0 6px; }
     .slot-circle {
-      width: 48px; height: 48px; border-radius: 50%; margin: 0 auto;
+      width: 100%; aspect-ratio: 1; max-width: 48px; border-radius: 50%; margin: 0 auto;
       border: 2px dashed var(--border); display: flex; align-items: center; justify-content: center;
       font-size: 11.5px; color: var(--muted); cursor: pointer; transition: border-color .15s, background-color .15s, color .15s;
     }
@@ -1211,6 +1215,11 @@
       background: var(--surf); border: 0.5px solid var(--border); border-radius: 18px;
       padding: 1.6rem 1.35rem; max-width: 380px; width: 100%;
       box-shadow: 0 12px 40px rgba(0,0,0,.28); text-align: center;
+      /* Con contenuto lungo (es. una griglia di slot grande) la card
+         intera scorre in verticale come un unico blocco, pulsanti
+         compresi, invece di avere un riquadro con scroll separato al
+         suo interno — più leggibile, un solo gesto di scorrimento. */
+      max-height: calc(100vh - 2rem); overflow-y: auto;
     }
     .public-prompt-card > i { font-size: 34px; color: var(--wine); margin-bottom: 10px; display: block; }
     .public-prompt-card h3 { font-family: 'Cormorant Garamond', serif; font-size: 20px; color: var(--ink); margin-bottom: 8px; }
@@ -4133,7 +4142,7 @@
   <div class="public-prompt-card" style="max-width:420px;text-align:left">
     <div class="stitle" style="font-size:13px;margin-bottom:2px"><i class="ti ti-map-pin"></i>Posiziona in cantina</div>
     <div id="pos-tree-picker-breadcrumb" style="font-size:12px;color:var(--muted);margin-bottom:10px"></div>
-    <div id="pos-tree-picker-list" style="display:flex;flex-direction:column;gap:6px;max-height:340px;overflow-y:auto"></div>
+    <div id="pos-tree-picker-list" style="display:flex;flex-direction:column;gap:6px"></div>
     <div class="public-prompt-actions" style="margin-top:14px">
       <button class="btn sm" onclick="closePosTreePicker()">Annulla</button>
     </div>
@@ -9139,7 +9148,10 @@ function renderSlotPicker() {
   const grid = document.getElementById('slot-picker-grid');
   // Righe×colonne impostate dal wizard: la griglia rispecchia la
   // disposizione fisica reale invece delle 4 colonne fisse di default.
-  grid.style.gridTemplateColumns = `repeat(${s.cols || Math.min(s.capacity, 4)}, 1fr)`;
+  // minmax(0,1fr) invece di 1fr: con molte colonne i cerchi si
+  // restringono (vedi .slot-circle) invece di far scorrere la card anche
+  // in orizzontale.
+  grid.style.gridTemplateColumns = `repeat(${s.cols || Math.min(s.capacity, 4)}, minmax(0,1fr))`;
   grid.innerHTML = Array.from({ length: s.capacity }, (_, i) => i + 1).map(n => {
     const isOther = s.occupiedByOthers.has(n);
     const isMine = s.mineSlots.has(n);
