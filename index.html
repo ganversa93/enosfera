@@ -1777,6 +1777,29 @@
         </ul>
       </div>
     </div>
+
+    <div class="fsec collapsible collapsed" id="guide-11">
+      <div class="stitle fsec-header" onclick="toggleSection('guide-11')"><i class="ti ti-grid-dots"></i>Struttura cantina e posizionamento<i class="ti ti-chevron-down fsec-chevron"></i></div>
+      <div class="fsec-body">
+        <p style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">Tutto facoltativo: senza configurare nulla, Enoscrigno funziona come sempre. Impostandolo, puoi sapere esattamente dove si trova ogni bottiglia.</p>
+        <div class="guide-flag">
+          <div class="guide-flag-title"><i class="ti ti-sitemap"></i> Costruire la struttura <span class="guide-flag-where">Profilo → Posizioni in cantina</span></div>
+          <p>Una gerarchia a tre livelli: <b>posizione</b> (es. "Cantina", "Garage") → <b>zona</b> (es. "Rossi", "Legno") → <b>piano</b> (es. "Basso", "Ripiano 1"). Ogni livello è facoltativo: puoi fermarti anche a un solo livello se ti basta.</p>
+          <p>Il pulsante <b>"Costruisci con wizard guidato"</b> fa una domanda alla volta (nome → ha sotto-livelli? → quante bottiglie entrano qui? → un'altra voce?) — più comodo la prima volta. L'editor libero sotto resta sempre disponibile per aggiustare a mano.</p>
+          <p>Su una posizione che non ha (ancora) sotto-livelli puoi indicare quante bottiglie ci stanno, con <b>righe × colonne</b> se vuoi rispecchiare la disposizione fisica reale (es. 3×4), oppure un numero solo se non ti interessa la forma. Ricordati di premere <b>Salva</b> in fondo al profilo per rendere definitive le modifiche.</p>
+        </div>
+        <div class="guide-flag">
+          <div class="guide-flag-title"><i class="ti ti-map-pin"></i> Posizionare un vino <span class="guide-flag-where">form vino e scheda dettaglio</span></div>
+          <p>Scegliendo posizione/zona/piano, se quel punto ha una capienza impostata compare <b>"Posiziona in cantina"</b>: apre una griglia di slot, uno per bottiglia — tocchi quelli liberi per assegnarli (più di uno se il vino ha più bottiglie nello stesso punto). Chi è occupato da un altro vino è segnato e non selezionabile da qui.</p>
+          <p>Se il punto scelto non ha una capienza impostata, si comporta come prima: una tag generica senza slot preciso.</p>
+        </div>
+        <div class="guide-flag">
+          <div class="guide-flag-title"><i class="ti ti-grid-dots"></i> Mappa cantina <span class="guide-flag-where">icona accanto a Export, o dal menu</span></div>
+          <p>Vista grafica di tutte le posizioni con capienza, con le bottiglie presenti mostrate per nome. Tocca una bottiglia per selezionarla, poi tocca lo slot di destinazione: libero per spostarla, occupato per scambiarla con l'altra bottiglia.</p>
+        </div>
+        <p style="font-size:12px;color:var(--muted);margin-top:10px;line-height:1.6">Quando togli una bottiglia (lo <b>−</b> sulla scheda dettaglio, es. perché l'hai degustata) e aveva uno slot preciso, lo slot si libera da solo se era l'unico; con più bottiglie dello stesso vino sparse su più slot ti viene chiesto quale hai tolto. Un vino senza slot preciso (solo tag generiche, o mai posseduto fisicamente) non cambia nulla.</p>
+      </div>
+    </div>
   </div>
 
   <!-- ══ HIGHLIGHTS ══ -->
