@@ -3172,3 +3172,71 @@ create policy "events: eliminazione"
     or (winery_id is not null and winery_id in (select id from public.wineries where owner_user_id = auth.uid()))
     or (winery_id is null and created_by = auth.uid())
   );
+
+-- ════════════════════════════════════════════════════════════════
+-- 2026-10-26 — Finestra di consumo: aging_class sui vitigni
+--
+-- Obiettivo: suggerire la "finestra di consumo ottimale" (campo
+-- wines.drink, testo libero già esistente) PRIMA della degustazione,
+-- quindi basandosi solo su vitigno + annata — non sui parametri delle
+-- schede AIS/FISAR, che a quel punto non esistono ancora.
+--
+-- La classificazione per vitigno vive in questa stessa anagrafica curata
+-- in Approfondisci (public.grape_varieties), non in una tabella JS
+-- duplicata: una nuova colonna aging_class, compilabile anche a mano dal
+-- form admin del vitigno (stesso punto da cui si gestiscono colore bacca
+-- e aromaticità), con un primo popolamento bulk qui sotto per le varietà
+-- più comuni in cantina — stesso spirito dell'import iniziale RNV da 640
+-- varietà più sopra: copertura parziale e dichiarata (i vitigni meno
+-- comuni restano aging_class null, da compilare voce per voce quando
+-- serve), non un tentativo di classificare tutte le 640 righe.
+--
+-- Il match nei bulk update è su nome ufficiale O sinonimo (case
+-- insensitive), perché il nome comune di un vitigno spesso non è il nome
+-- ufficiale RNV (es. "Sauvignon Blanc" è sinonimo di "Sauvignon",
+-- "Gewürztraminer"/"Zinfandel" sono sinonimi di "Traminer Aromatico" e
+-- "Primitivo", "Nero d'Avola" è sinonimo di "Calabrese").
+-- ════════════════════════════════════════════════════════════════
+
+alter table public.grape_varieties
+  add column if not exists aging_class text
+  check (aging_class in ('immediato','breve','medio','medio_lungo','lungo','molto_lungo'));
+
+update public.grape_varieties gv set aging_class = 'immediato'
+where lower(gv.name) = any(array['pinot grigio','vermentino','glera','cortese','trebbiano toscano','trebbiano di soave','trebbiano giallo','trebbiano modenese','trebbiano romagnolo','trebbiano spoletino','trebbiano abruzzese','catarratto bianco comune','catarratto bianco lucido','bombino bianco','moscato bianco','moscato giallo','moscato rosa','moscato di scanzo','moscato di terracina','moscato nero di acqui','moscato ottonel','zibibbo','lambrusco di sorbara','lambrusco grasparossa','lambrusco maestri','lambrusco marani','lambrusco montericco','lambrusco salamino','lambrusco viadanese','lambrusco a foglia frastagliata','lambrusco oliva','lambrusco barghi','lambrusco benetti','lambrusco del pellegrino','malvasia bianca di candia','albarino','verdejo','macabeo'])
+   or exists (select 1 from unnest(gv.synonyms) s where lower(s) = any(array['pinot grigio','vermentino','glera','cortese','trebbiano toscano','bombino bianco','moscato bianco','albarino','verdejo','macabeo']));
+
+update public.grape_varieties gv set aging_class = 'breve'
+where lower(gv.name) = any(array['sauvignon','sauvignon blanc','pinot bianco','viognier','gamay','dolcetto','garganega','falanghina','vernaccia di s. gimignano','vernaccia di san gimignano','freisa','grignolino','arneis','ribuele','ribolla gialla','schiava','schiava gentile','schiava grigia','schiava grossa','grillo','passerina','ansonica','inzolia','bombino nero','bonarda','barbera bianca','muller thurgau','portoghese','portugieser']
+)
+   or exists (select 1 from unnest(gv.synonyms) s where lower(s) = any(array['sauvignon blanc','ribolla gialla','inzolia','portugieser']));
+
+update public.grape_varieties gv set aging_class = 'medio'
+where lower(gv.name) = any(array['sangiovese','chardonnay','merlot','cabernet franc','corvina','rondinella','molinara','montepulciano','nerello cappuccio','fiano','greco','greco bianco','greco nero','verdicchio bianco','croatina','tocai friulano','friulano','lagrein','teroldego','negro amaro','negroamaro','malvasia','pecorino','colorino','vespolina','traminer aromatico','kerner','semillon','sémillon','chenin','chenin blanc','godello','marsanne','primitivo','zinfandel','calabrese','nero d''avola','barbera','cannonau','alicante','tocai rosso','carignano'])
+   or exists (select 1 from unnest(gv.synonyms) s where lower(s) = any(array['negroamaro','gewürztraminer','gewurztraminer','friulano','zinfandel','nero d''avola']));
+
+update public.grape_varieties gv set aging_class = 'medio_lungo'
+where lower(gv.name) = any(array['cabernet sauvignon','syrah','tempranillo','petit verdot','nerello mascalese','timorasso','malbech','malbec','riesling italico','riesling renano','riesling']);
+
+update public.grape_varieties gv set aging_class = 'lungo'
+where lower(gv.name) = any(array['nebbiolo','aglianico','sagrantino','pignolo']);
+
+-- Ricerca per nome O sinonimo (stesso criterio dei bulk update sopra),
+-- usata dal form Aggiungi vino per risalire alla classe di ciascun
+-- vitigno scritto in scheda — spesso il nome comune scelto dall'utente
+-- (dall'autocomplete GRAPE_VARIETIES in data-geo.js) non è il nome
+-- ufficiale RNV salvato come "name" qui.
+create or replace function public.get_grape_aging_classes(p_names text[])
+returns table(input_name text, aging_class text)
+language sql
+stable
+as $$
+  select n, gv.aging_class
+  from unnest(p_names) as n
+  join public.grape_varieties gv
+    on lower(gv.name) = lower(n)
+    or exists (select 1 from unnest(gv.synonyms) s where lower(s) = lower(n))
+  where gv.aging_class is not null;
+$$;
+
+grant execute on function public.get_grape_aging_classes(text[]) to authenticated;

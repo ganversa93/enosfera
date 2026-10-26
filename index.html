@@ -1934,6 +1934,18 @@
           <option value="semi-aromatico">Semi-aromatico</option>
         </select>
       </div>
+      <div class="fg"><label>Finestra di consumo (classe)</label>
+        <select id="gv-aging">
+          <option value="">—</option>
+          <option value="immediato">Immediata (0–2 anni)</option>
+          <option value="breve">Breve (1–3 anni)</option>
+          <option value="medio">Media (2–6 anni)</option>
+          <option value="medio_lungo">Medio-lunga (4–10 anni)</option>
+          <option value="lungo">Lunga (6–15 anni)</option>
+          <option value="molto_lungo">Molto lunga (10–25 anni)</option>
+        </select>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">Usata per suggerire la finestra di consumo nella scheda vino, prima della degustazione.</div>
+      </div>
       <div class="fg"><label>Regioni (separate da virgola)</label><input type="text" id="gv-regions" placeholder="Toscana, Umbria…"></div>
       <div class="fg"><label>Sinonimi (separati da virgola)</label><input type="text" id="gv-synonyms" placeholder="Sangioveto, Brunello…"></div>
       <div class="fg"><label>Data registrazione</label><input type="date" id="gv-regdate"></div>
@@ -3566,7 +3578,14 @@
         </div>
       </div>
       <div class="fg"><label>Dettaglio luogo <span style="font-weight:400;color:var(--muted)">(facoltativo)</span></label><input type="text" id="f-shop" placeholder="es. Enoteca Bianchi, Milano · Compleanno di Marco"></div>
-      <div class="fg"><label>Finestra di consumo ottimale</label><input type="text" id="f-drink" placeholder="es. 2025–2038"></div>
+      <div class="fg">
+        <label style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+          <span>Finestra di consumo ottimale</span>
+          <button type="button" class="btn sm" style="font-size:11px;padding:4px 8px" onclick="applySuggestedDrinkWindow()"><i class="ti ti-sparkles"></i>Suggerisci</button>
+        </label>
+        <input type="text" id="f-drink" placeholder="es. 2025–2038">
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">Suggerimento indicativo da vitigno e annata (prima della degustazione) — da confermare o correggere.</div>
+      </div>
       <div class="frow">
         <div class="fg"><label>Data degustazione</label><input type="date" id="f-tastingdate"></div>
         <div class="fg"><label>Luogo degustazione</label><input type="text" id="f-tastingplace" placeholder="es. Ristorante Da Marco, Roma"></div>
@@ -4050,7 +4069,7 @@ import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 import {
   GEO_REGIONS, GEO_PROVINCES_ITALIA, ITALY_DOCG, FRANCE_AOC, GERMANY_DESIGNATIONS,
   USA_AVA, CHILE_DO, ARGENTINA_IG, NZ_GI, SOUTHAFRICA_WO, AUSTRALIA_GI,
-  SPAIN_DO, GRAPE_VARIETIES, DELEGAZIONI
+  SPAIN_DO, GRAPE_VARIETIES, DELEGAZIONI, AGING_CLASS_YEARS
 } from './data-geo.js';
 
 const SUPABASE_URL      = 'https://xvtbsanxvkshqyeqordp.supabase.co';
@@ -8531,6 +8550,58 @@ function syncGrapesHiddenInput() {
   if (hidden) hidden.value = str;
 }
 
+// Suggerisce la finestra di consumo PRIMA della degustazione, quindi solo
+// da vitigno + annata (+ tipologia per gli stili che la impongono a
+// prescindere dal vitigno, es. Spumante/Rosato pronti da subito,
+// Dolce/Passito vocati a invecchiamenti lunghi) — non dai parametri delle
+// schede AIS/FISAR, che a questo punto del form non esistono ancora.
+// La classe per vitigno vive in grape_varieties.aging_class (RPC
+// get_grape_aging_classes, risolve nome ufficiale o sinonimo); se un
+// vitigno scritto in scheda non ha ancora una classe assegnata, si usa
+// 'medio' come fallback neutro invece di bloccare il suggerimento.
+async function applySuggestedDrinkWindow() {
+  const vintage = parseInt(document.getElementById('f-vintage')?.value, 10);
+  if (!vintage) { toastErr('Indica prima l\'annata'); return; }
+  const type = document.getElementById('f-type')?.value || '';
+  const drinkInput = document.getElementById('f-drink');
+
+  let peakStart, peakEnd;
+  const forcedClass = (type === 'Spumante' || type === 'Rosato') ? 'breve'
+                     : (type === 'Dolce' || type === 'Passito') ? 'molto_lungo'
+                     : null;
+
+  if (forcedClass) {
+    ({ peakStart, peakEnd } = AGING_CLASS_YEARS[forcedClass]);
+  } else {
+    if (!selectedGrapes.length) { toastErr('Indica almeno un vitigno per suggerire la finestra'); return; }
+    const names = selectedGrapes.map(g => g.name).filter(Boolean);
+    const { data, error } = await sb.rpc('get_grape_aging_classes', { p_names: names });
+    if (error) { toastErr('Errore nel calcolo: ' + error.message); return; }
+    const classByInput = {};
+    (data || []).forEach(r => { classByInput[r.input_name.toLowerCase()] = r.aging_class; });
+    const pcts = selectedGrapes.map(g => parseFloat(g.pct) || 0);
+    const hasPct = pcts.some(p => p > 0);
+    let wStart = 0, wEnd = 0, wTot = 0;
+    names.forEach((name, i) => {
+      const cls = classByInput[name.toLowerCase()] || 'medio';
+      const y = AGING_CLASS_YEARS[cls];
+      const w = hasPct ? pcts[i] : 1;
+      wStart += y.peakStart * w;
+      wEnd += y.peakEnd * w;
+      wTot += w;
+    });
+    peakStart = Math.round(wStart / wTot);
+    peakEnd = Math.round(wEnd / wTot);
+  }
+
+  const suggestion = `${vintage + peakStart}–${vintage + peakEnd}`;
+  if (drinkInput.value.trim() && drinkInput.value.trim() !== suggestion) {
+    if (!confirm(`Sovrascrivere "${drinkInput.value.trim()}" con il suggerimento "${suggestion}"?`)) return;
+  }
+  drinkInput.value = suggestion;
+  toast(`✓ Suggerito ${suggestion} — stima indicativa, correggi se necessario`);
+}
+
 // Ricostruisce i tag a partire dalla stringa salvata (es. "Nebbiolo 100%, Barbera 10%")
 function applyGrapesToForm(grapesStr) {
   selectedGrapes = (grapesStr || '').split(',').map(s => s.trim()).filter(Boolean).map(token => {
@@ -9631,6 +9702,9 @@ async function deleteBlogPost() {
 // ── Archivio Vitigni ──
 function grapeColorBadgeClass(c) { return c === 'bianca' ? 'bb' : c === 'rosa' ? 'bro' : c === 'grigia' ? 'bgy' : 'br'; }
 function grapeColorLabel(c) { return c === 'bianca' ? 'Bianca' : c === 'rosa' ? 'Rosa' : c === 'grigia' ? 'Grigia' : 'Nera'; }
+function agingClassLabel(cls) {
+  return { immediato: 'immediata', breve: 'breve', medio: 'media', medio_lungo: 'medio-lunga', lungo: 'lunga', molto_lungo: 'molto lunga' }[cls] || cls;
+}
 
 function toggleApColorFilter(color, el) {
   if (apVitigniColorFilters.has(color)) { apVitigniColorFilters.delete(color); el.classList.remove('active'); }
@@ -9684,6 +9758,7 @@ async function showGrapeVarietyDetail(id) {
     document.getElementById('gv-rnv').value = gv?.rnv_number ?? '';
     document.getElementById('gv-color').value = gv?.berry_color || '';
     document.getElementById('gv-aromatic').value = gv?.aromatic || '';
+    document.getElementById('gv-aging').value = gv?.aging_class || '';
     document.getElementById('gv-regions').value = (gv?.regions || []).join(', ');
     document.getElementById('gv-synonyms').value = (gv?.synonyms || []).join(', ');
     document.getElementById('gv-regdate').value = gv?.registration_date || '';
@@ -9694,6 +9769,7 @@ async function showGrapeVarietyDetail(id) {
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem">
         ${gv.berry_color ? `<span class="gbadge ${grapeColorBadgeClass(gv.berry_color)}">${grapeColorLabel(gv.berry_color)}</span>` : ''}
         ${gv.aromatic ? `<span class="chip">${gv.aromatic === 'aromatico' ? 'Aromatico' : 'Semi-aromatico'}</span>` : ''}
+        ${gv.aging_class ? `<span class="chip">Consumo: ${agingClassLabel(gv.aging_class)}</span>` : ''}
       </div>
       ${gv.rnv_number ? `<p style="font-size:12.5px;color:var(--muted)">N° RNV ${gv.rnv_number}${gv.registration_date ? ' · registrato il ' + apFmtDate(gv.registration_date) : ''}</p>` : ''}
       ${gv.regions?.length ? `<div style="margin-top:1rem"><div class="stitle" style="font-size:12px"><i class="ti ti-map-pin"></i>Regioni</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">${gv.regions.map(r => `<span class="chip">${escapeAttr(r)}</span>`).join('')}</div></div>` : ''}
@@ -9712,6 +9788,7 @@ async function saveGrapeVariety() {
     rnv_number: g('gv-rnv') ? parseInt(g('gv-rnv'), 10) : null,
     berry_color: g('gv-color'),
     aromatic: g('gv-aromatic'),
+    aging_class: g('gv-aging'),
     regions: splitCsv(g('gv-regions')),
     synonyms: splitCsv(g('gv-synonyms')),
     registration_date: g('gv-regdate'),
@@ -10752,7 +10829,7 @@ Object.assign(window, {
   showNetworkScreen, showNetworkWinePreview, showProfileScreen, showScreen, startPremiumCheckout, stepQty, switchDeg, switchLTab, switchRegType, toast,
   showGuideScreen,
   showHighlightsScreen, setHighlightsView, hlBackGrapes, hlBackRegion, hlBackShop, onHlPeriodChange, applyHlCustomPeriod,
-  toggleAdvFilters, toggleFisarMethodField, toggleNavMenu, togglePairing, toggleSection, updateGrapePct, updateTonalitaColore, updateAisColore,
+  toggleAdvFilters, toggleFisarMethodField, toggleNavMenu, togglePairing, toggleSection, updateGrapePct, updateTonalitaColore, updateAisColore, updateFisColore,
   updateRegionOptions, updateProvinceOptions, dismissInstallBanner, triggerInstallPrompt, resetInstallBanner,
   dismissUpdateBanner, reloadApp, setTheme,
   setNetworkFilter, toggleNetworkAdvFilters, onNetworkCountryChange, resetNetworkFilters, renderNetworkFeed,
@@ -10777,7 +10854,8 @@ Object.assign(window, {
   showGrapeVarietyDetail, saveGrapeVariety, deleteGrapeVariety, searchGrapeVarieties, toggleApColorFilter,
   showDenominationDetail, saveDenomination, deleteDenomination, searchDenominations, toggleApTypeFilter, toggleDenomRegionMenu, toggleDnVersionChip, toggleDenomSortMenu, toggleDenomPreview, changeDenomPage,
   cycleDnGrapeBound, updateDnGrapePct, removeDnGrapeTag,
-  addDnAgingRow, updateDnAgingRow, removeDnAgingRow, updateDnParam
+  addDnAgingRow, updateDnAgingRow, removeDnAgingRow, updateDnParam,
+  applySuggestedDrinkWindow
 });
 </script>
 </body>

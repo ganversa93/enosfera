@@ -214,6 +214,28 @@ export const GRAPE_VARIETIES = [
   'Monastrell','Graciano','Cariñena (Mazuelo)'
 ];
 
+/* ══ FINESTRA DI CONSUMO — stima indicativa per vitigno ══
+   La classificazione per vitigno (quale vitigno invecchia quanto) vive nel
+   database, colonna grape_varieties.aging_class — stessa anagrafica curata
+   in Approfondisci, non una tabella JS duplicata (vedi migrazione SQL e RPC
+   get_grape_aging_classes). AGING_CLASS_YEARS qui è solo la conversione,
+   lato client, di ciascuna classe in uno scostamento (anni dall'annata) per
+   inizio/fine del periodo di maturità — non è un dato sul vitigno, è la
+   stessa tabella di traduzione usata dalla migrazione SQL per generare i
+   bulk update, ripetuta qui per calcolare la finestra senza round-trip
+   aggiuntivi. È una stima di massima basata sul vitigno da solo — non tiene
+   conto di denominazione, produttore o annata meteorologica — pensata per
+   un suggerimento in scheda PRIMA della degustazione, da confermare o
+   correggere manualmente. */
+export const AGING_CLASS_YEARS = {
+  immediato:   { peakStart: 0,  peakEnd: 2  },
+  breve:       { peakStart: 1,  peakEnd: 3  },
+  medio:       { peakStart: 2,  peakEnd: 6  },
+  medio_lungo: { peakStart: 4,  peakEnd: 10 },
+  lungo:       { peakStart: 6,  peakEnd: 15 },
+  molto_lungo: { peakStart: 10, peakEnd: 25 }
+};
+
 // Suggerimenti per il campo "Delegazione" (autocomplete, non un elenco chiuso —
 // vedi attachAutocomplete('p-delegazione', ...) in index.html). Non è l'elenco
 // ufficiale completo di ciascuna associazione (FISAR ne ha decine, organizzate
