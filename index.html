@@ -6960,13 +6960,15 @@ function resetAdvFilters() {
   renderGrid();
 }
 
-// Scorciatoia per non perdersi vini in cantina che andrebbero bevuti:
-// imposta solo il massimo a quest'anno, lasciando il minimo vuoto — mostra
-// quindi sia i vini nella finestra ottimale ora sia quelli già oltre
-// (finestra iniziata e già conclusa), non solo l'anno esatto.
+// Scorciatoia per vedere i vini nella finestra ottimale proprio ora:
+// compila sia "Da" sia "A" con l'anno corrente, così la ricerca per
+// intervallo sopra li tratta come un singolo anno da cercare (finestra
+// che lo contiene). I vini con finestra già conclusa prima d'ora sono
+// invece compito del chip "Da bere" in Stato, non di questo pulsante.
 function quickFilterReadyToDrink() {
-  document.getElementById('af-drink-min').value = '';
-  document.getElementById('af-drink-max').value = new Date().getFullYear();
+  const year = new Date().getFullYear();
+  document.getElementById('af-drink-min').value = year;
+  document.getElementById('af-drink-max').value = year;
   renderGrid();
 }
 
@@ -7118,8 +7120,16 @@ function renderGrid() {
     if (!isNaN(afDrinkMin) || !isNaN(afDrinkMax)) {
       const win = parseDrinkWindow(w.drink);
       if (!win) return false; // nessuna finestra compilata: escluso quando si filtra su questo campo
-      if (!isNaN(afDrinkMin) && win.end   < afDrinkMin) return false;
-      if (!isNaN(afDrinkMax) && win.start > afDrinkMax) return false;
+      // Se è compilato un solo lato (es. solo "A"), non ha senso trattare
+      // l'altro come senza limite: un vino con finestra già conclusa da
+      // anni avrebbe comunque "inizio prima di A" e comparirebbe sempre.
+      // Il campo lasciato vuoto riusa quindi il valore dell'altro, così un
+      // solo anno compilato cerca i vini la cui finestra include proprio
+      // quell'anno; con entrambi compilati resta un intervallo vero.
+      const effMin = !isNaN(afDrinkMin) ? afDrinkMin : afDrinkMax;
+      const effMax = !isNaN(afDrinkMax) ? afDrinkMax : afDrinkMin;
+      if (win.end < effMin) return false;
+      if (win.start > effMax) return false;
     }
     if (drinkDueFilter && !isDrinkWindowDue(w.drink)) return false;
     if (!matchesSearch(q, [w.name, w.producer, w.region, w.pairing])) return false;
@@ -7137,6 +7147,7 @@ function renderGrid() {
         ${w._pending ? `<div style="font-size:10px;color:var(--gold);font-weight:600;margin-bottom:3px"><i class="ti ti-cloud-off" style="font-size:11px;vertical-align:-1px"></i> Da sincronizzare</div>` : ''}
         <div class="wname">${w.name}</div>
         <div class="wprod">${[w.producer, w.vintage].filter(Boolean).join(' · ') || '—'}</div>
+        ${w.drink ? `<div style="font-size:11px;color:var(--muted);margin-top:1px"><i class="ti ti-calendar-event" style="font-size:11px;vertical-align:-1px;margin-right:2px"></i>${w.drink}</div>` : ''}
         <div class="wmeta"><span style="display:flex;align-items:center;gap:4px">${degSchemaTag(w)}<span class="stars">${starString(w.score)}</span></span><span class="wscore">${w.score || '—'}/100</span></div>
       </div>
     </div>`).join('');
