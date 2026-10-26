@@ -3854,6 +3854,7 @@
 
         <div class="subhead">Posizioni in cantina</div>
         <p style="font-size:12px;color:var(--muted);margin-bottom:12px">Costruisci una gerarchia a tre livelli per indicare dove tieni le bottiglie: ogni "zona" appartiene a una specifica posizione, ogni "piano" appartiene a una specifica zona (es. Cantina casa → Rossi → Piano 2). Potrai poi assegnare una o più posizioni a ciascun vino.</p>
+        <button type="button" class="btn sm" style="margin-bottom:12px" onclick="startStructureWizard()"><i class="ti ti-wand"></i>Costruisci con wizard guidato</button>
         <div id="pos-tree-container"></div>
       </div>
     </div>
@@ -4087,6 +4088,17 @@
       <button class="btn primary" onclick="confirmSlotPick()"><i class="ti ti-check"></i>Conferma</button>
       <button class="btn sm" onclick="closeCellarSlotPicker()">Annulla</button>
     </div>
+  </div>
+</div>
+
+<!-- WIZARD STRUTTURA CANTINA — costruzione guidata dell'albero posizioni,
+     una domanda alla volta, invece del solo editor libero. Scrive su
+     wizPosTree (separato da posTree) fino alla revisione finale, dove si
+     aggiunge a posTree — il salvataggio su DB resta quello del profilo. -->
+<div class="public-prompt-overlay" id="cellar-wizard-overlay">
+  <div class="public-prompt-card" style="max-width:420px;text-align:left">
+    <div class="stitle" style="font-size:13px;margin-bottom:12px"><i class="ti ti-wand"></i>Costruisci la tua cantina</div>
+    <div id="cellar-wizard-body"></div>
   </div>
 </div>
 
@@ -9033,7 +9045,7 @@ function openCellarSlotPicker(btnId) {
   } else {
     mineSlots = new Set(selectedWinePositions.filter(p => p.l1 === l1 && p.l2 === l2 && p.l3 === l3 && p.slot).map(p => p.slot));
   }
-  slotPickerState = { l1, l2, l3, capacity: node.capacity, occupiedByOthers, mineSlots, pendingSelected: new Set(), mode, btnId };
+  slotPickerState = { l1, l2, l3, capacity: node.capacity, cols: node.cols || null, occupiedByOthers, mineSlots, pendingSelected: new Set(), mode, btnId };
   renderSlotPicker();
   document.getElementById('cellar-slot-picker-overlay').classList.add('open');
 }
@@ -9043,6 +9055,9 @@ function renderSlotPicker() {
   if (!s) return;
   document.getElementById('slot-picker-title').textContent = [s.l1, s.l2, s.l3].filter(Boolean).join(' · ') + ` — ${s.capacity} posti`;
   const grid = document.getElementById('slot-picker-grid');
+  // Righe×colonne impostate dal wizard: la griglia rispecchia la
+  // disposizione fisica reale invece delle 4 colonne fisse di default.
+  grid.style.gridTemplateColumns = `repeat(${s.cols || Math.min(s.capacity, 4)}, 1fr)`;
   grid.innerHTML = Array.from({ length: s.capacity }, (_, i) => i + 1).map(n => {
     const isOther = s.occupiedByOthers.has(n);
     const isMine = s.mineSlots.has(n);
@@ -9296,6 +9311,169 @@ function updatePosNodeCapacity(pathStr, value) {
   if (!node) return;
   const n = parseInt(value, 10);
   node.capacity = (value && n > 0) ? n : null;
+}
+
+/* ── WIZARD STRUTTURA CANTINA ──
+   Costruzione guidata dello stesso albero dell'editor libero sopra, una
+   domanda alla volta: nome → ha sotto-livelli? → (se no) righe×colonne →
+   un'altra voce allo stesso livello? Un albero separato (wizPosTree) fino
+   alla revisione finale, per non toccare posTree finché l'utente non
+   conferma — a quel punto si accoda a posTree (non lo sostituisce: non si
+   perde quello già configurato se il wizard si usa una seconda volta).
+
+   wizStack: pila di "livelli in costruzione" — ogni frame è l'array dove
+   finiscono i nodi fratelli a quel livello (wizPosTree per la radice,
+   altrimenti i children del nodo padre) più il suo level (0/1/2). Finito
+   un frame (nessun altro fratello), si risale al frame genitore e si
+   richiede lì "un altro fratello?" — è il padre che aveva già risposto
+   "sì" ad avere sotto-livelli, non va richiesto di nuovo. */
+let wizPosTree = [];
+let wizStack = [];
+let wizCurrentNode = null;
+
+const WIZ_LEVEL_LABEL = ['posizione principale', 'zona', 'piano'];
+
+function startStructureWizard() {
+  wizPosTree = [];
+  wizStack = [{ arr: wizPosTree, level: 0 }];
+  wizCurrentNode = null;
+  document.getElementById('cellar-wizard-overlay').classList.add('open');
+  wizRenderAskName();
+}
+
+function wizCurrentFrame() { return wizStack[wizStack.length - 1]; }
+
+function wizRenderAskName() {
+  const frame = wizCurrentFrame();
+  const label = WIZ_LEVEL_LABEL[frame.level];
+  document.getElementById('cellar-wizard-body').innerHTML = `
+    <p style="font-size:13px;color:var(--ink);margin-bottom:10px">Come si chiama questa ${label}?</p>
+    <div class="fg"><input type="text" id="wiz-name-input" placeholder="es. ${frame.level === 0 ? 'Cantina, Garage…' : frame.level === 1 ? 'Rossi, Legno…' : 'Piano 1, Basso…'}" autocomplete="off"></div>
+    <div class="public-prompt-actions" style="margin-top:4px">
+      <button class="btn primary" onclick="wizSubmitName()"><i class="ti ti-check"></i>Avanti</button>
+      <button class="btn sm" onclick="closeStructureWizard()">Annulla</button>
+    </div>
+  `;
+  setTimeout(() => document.getElementById('wiz-name-input')?.focus(), 50);
+}
+
+function wizSubmitName() {
+  const input = document.getElementById('wiz-name-input');
+  const name = (input?.value || '').trim();
+  if (!name) { input?.focus(); return; }
+  const frame = wizCurrentFrame();
+  const node = { name, children: [], capacity: null };
+  frame.arr.push(node);
+  wizCurrentNode = node;
+  if (frame.level < 2) wizRenderAskHasChildren();
+  else wizRenderAskLayout(); // livello 3: è sempre una foglia
+}
+
+function wizRenderAskHasChildren() {
+  const frame = wizCurrentFrame();
+  const childLabel = frame.level === 0 ? 'zone' : 'piani';
+  document.getElementById('cellar-wizard-body').innerHTML = `
+    <p style="font-size:13px;color:var(--ink);margin-bottom:14px">"${wizCurrentNode.name}" è divisa in ${childLabel} distinti, o le bottiglie stanno direttamente qui?</p>
+    <div class="public-prompt-actions">
+      <button class="btn primary" onclick="wizAnswerHasChildren(true)"><i class="ti ti-sitemap"></i>È divisa in ${childLabel}</button>
+      <button class="btn sm" onclick="wizAnswerHasChildren(false)">Le bottiglie stanno qui</button>
+    </div>
+  `;
+}
+
+function wizAnswerHasChildren(yes) {
+  if (yes) {
+    wizStack.push({ arr: wizCurrentNode.children, level: wizCurrentFrame().level + 1 });
+    wizRenderAskName();
+  } else {
+    wizRenderAskLayout();
+  }
+}
+
+// Righe × colonne invece di un numero unico: oltre al totale (capacity,
+// usato per il conteggio occupati/liberi della griglia slot), righe e
+// colonne restano salvate sul nodo per disegnare la griglia nella stessa
+// disposizione fisica reale, non solo come lista piatta.
+function wizRenderAskLayout() {
+  document.getElementById('cellar-wizard-body').innerHTML = `
+    <p style="font-size:13px;color:var(--ink);margin-bottom:10px">Quante bottiglie entrano in "${wizCurrentNode.name}"? Facoltativo: dividi in righe e colonne se vuoi rispecchiare la disposizione reale.</p>
+    <div class="frow">
+      <div class="fg"><label>Righe</label><input type="number" id="wiz-rows-input" min="1" max="99" step="1" placeholder="es. 3"></div>
+      <div class="fg"><label>Colonne</label><input type="number" id="wiz-cols-input" min="1" max="99" step="1" placeholder="es. 4"></div>
+    </div>
+    <div class="public-prompt-actions" style="margin-top:4px">
+      <button class="btn primary" onclick="wizSubmitLayout()"><i class="ti ti-check"></i>Avanti</button>
+      <a href="#" onclick="wizSubmitLayout(true);return false;" style="font-size:11px;color:var(--muted);text-decoration:underline;text-align:center;margin-top:4px">Salta, non lo so ancora</a>
+    </div>
+  `;
+}
+
+function wizSubmitLayout(skip) {
+  if (!skip) {
+    const rows = parseInt(document.getElementById('wiz-rows-input')?.value, 10);
+    const cols = parseInt(document.getElementById('wiz-cols-input')?.value, 10);
+    if (rows > 0 && cols > 0) {
+      wizCurrentNode.rows = rows;
+      wizCurrentNode.cols = cols;
+      wizCurrentNode.capacity = rows * cols;
+    } else if (rows > 0) {
+      wizCurrentNode.capacity = rows;
+    } else if (cols > 0) {
+      wizCurrentNode.capacity = cols;
+    }
+  }
+  wizRenderAskMoreSiblings();
+}
+
+function wizRenderAskMoreSiblings() {
+  const frame = wizCurrentFrame();
+  const label = WIZ_LEVEL_LABEL[frame.level];
+  document.getElementById('cellar-wizard-body').innerHTML = `
+    <p style="font-size:13px;color:var(--ink);margin-bottom:14px">Vuoi aggiungere un'altra ${label} ${frame.level === 0 ? '' : 'allo stesso livello '}?</p>
+    <div class="public-prompt-actions">
+      <button class="btn primary" onclick="wizAnswerMoreSiblings(true)"><i class="ti ti-plus"></i>Sì, aggiungine un'altra</button>
+      <button class="btn sm" onclick="wizAnswerMoreSiblings(false)">No, ho finito qui</button>
+    </div>
+  `;
+}
+
+function wizAnswerMoreSiblings(yes) {
+  if (yes) { wizRenderAskName(); return; }
+  wizStack.pop();
+  if (wizStack.length === 0) wizRenderReview();
+  else wizRenderAskMoreSiblings();
+}
+
+function wizRenderReview() {
+  document.getElementById('cellar-wizard-body').innerHTML = `
+    <p style="font-size:13px;color:var(--ink);margin-bottom:10px">Ecco la struttura creata. Si aggiunge a quella già configurata (se c'è) — ricordati di premere <b>Salva</b> in fondo al profilo per renderla definitiva.</p>
+    <div style="margin-bottom:14px">${wizPosTree.map(n => wizReviewNodeHtml(n, 0)).join('')}</div>
+    <div class="public-prompt-actions">
+      <button class="btn primary" onclick="finishStructureWizard()"><i class="ti ti-check"></i>Aggiungi questa struttura</button>
+      <button class="btn sm" onclick="startStructureWizard()">Ricomincia da capo</button>
+      <a href="#" onclick="closeStructureWizard();return false;" style="font-size:11px;color:var(--muted);text-decoration:underline;text-align:center;margin-top:2px">Annulla</a>
+    </div>
+  `;
+}
+
+function wizReviewNodeHtml(node, level) {
+  const cap = node.capacity ? ` — ${node.rows && node.cols ? `${node.rows}×${node.cols} = ` : ''}${node.capacity} bott.` : '';
+  return `
+    <div style="margin-left:${level * 14}px;font-size:12.5px;color:var(--ink);padding:3px 0"><i class="ti ti-point-filled" style="font-size:8px;color:var(--wine);vertical-align:1px;margin-right:4px"></i>${node.name}${cap}</div>
+    ${node.children.map(c => wizReviewNodeHtml(c, level + 1)).join('')}
+  `;
+}
+
+function finishStructureWizard() {
+  posTree.push(...wizPosTree);
+  renderPosTree();
+  closeStructureWizard();
+  toast('✓ Struttura aggiunta — premi Salva per renderla definitiva');
+}
+
+function closeStructureWizard() {
+  document.getElementById('cellar-wizard-overlay').classList.remove('open');
+  wizPosTree = []; wizStack = []; wizCurrentNode = null;
 }
 
 function goBackFromProfile() { showScreen(profileReturnScreen); }
@@ -11129,6 +11307,7 @@ Object.assign(window, {
   confirmSumDuplicateQty, confirmSaveDuplicateAsNew, closeDuplicateWinePrompt,
   addPosNode, removePosNode, updatePosNodeCapacity, addWinePosition, removeWinePosition, onPosL1Change, onPosL2Change, onPosL3Change,
   openCellarSlotPicker, toggleSlotPick, confirmSlotPick, closeCellarSlotPicker,
+  startStructureWizard, wizSubmitName, wizAnswerHasChildren, wizSubmitLayout, wizAnswerMoreSiblings, finishStructureWizard, closeStructureWizard,
   addDetailPosition, removeDetailPosition, onDetailPosL1Change, onDetailPosL2Change, onDetailPosL3Change,
   showWineryDetail, toggleWineryPreview, saveWineryDetails, uploadWineryLogo, goBackFromWinery, showAdminWineriesScreen, deleteWinery, searchAllWineries,
   saveScanLimits, resetScanUsage, searchScanUsersAdmin,
