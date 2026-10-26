@@ -3592,7 +3592,7 @@
           <select id="f-pos-l2" onchange="onPosL2Change()"><option value="">Zona…</option></select>
           <select id="f-pos-l3" onchange="onPosL3Change()"><option value="">Piano…</option></select>
         </div>
-        <button type="button" class="btn sm" id="f-pos-slot-btn" style="display:none;margin-top:6px" onclick="openCellarSlotPicker()"><i class="ti ti-grid-dots"></i>Posiziona in cantina</button>
+        <button type="button" class="btn sm" id="f-pos-slot-btn" style="display:none;margin-top:6px" onclick="openCellarSlotPicker('f-pos-slot-btn')"><i class="ti ti-grid-dots"></i>Posiziona in cantina</button>
         <div class="pos-chip-row" id="wine-pos-tags"></div>
         <div id="f-pos-empty-hint" style="display:none;font-size:11px;color:var(--muted);margin-top:6px">Non hai ancora configurato posizioni per la cantina. Vai al <a href="#" onclick="showProfileScreen();return false;">tuo profilo</a> per aggiungerle.</div>
       </div>
@@ -8193,6 +8193,7 @@ function showDetail(id) {
           <select id="dp-pos-l2" onchange="onDetailPosL2Change()"><option value="">Zona…</option></select>
           <select id="dp-pos-l3" onchange="onDetailPosL3Change()"><option value="">Piano…</option></select>
         </div>
+        <button type="button" class="btn sm" id="dp-pos-slot-btn" style="display:none;margin-top:6px" onclick="openCellarSlotPicker('dp-pos-slot-btn')"><i class="ti ti-grid-dots"></i>Posiziona in cantina</button>
         <div id="detail-pos-empty-hint" style="display:none;font-size:11px;color:var(--muted)">Non hai ancora configurato posizioni per la cantina. Vai al <a href="#" onclick="showProfileScreen();return false;">tuo profilo</a> per aggiungerle.</div>
         <div class="pos-chip-row" id="detail-pos-tags"></div>
       </div>
@@ -8228,6 +8229,7 @@ function renderDetailPosSelects() {
   fillPosSelect('dp-pos-l1', ownerCellarPosTree.map(n => n.name), 'Posizione…');
   fillPosSelect('dp-pos-l2', [], 'Zona…');
   fillPosSelect('dp-pos-l3', [], 'Piano…');
+  hideSlotPickerButton('dp-pos-slot-btn');
   const hasAny = ownerCellarPosTree.length > 0;
   document.getElementById('detail-pos-selects-row').style.display = hasAny ? '' : 'none';
   const hint = document.getElementById('detail-pos-empty-hint');
@@ -8241,7 +8243,8 @@ function onDetailPosL1Change() {
   const l2opts = (node?.children || []).map(c => c.name);
   fillPosSelect('dp-pos-l2', l2opts, 'Zona…');
   fillPosSelect('dp-pos-l3', [], 'Piano…');
-  if (l1name && l2opts.length === 0) addDetailPosition();
+  if (l1name && l2opts.length === 0) maybeOfferSlotPicker(l1name, '', '', node, 'dp-pos-slot-btn', addDetailPosition);
+  else hideSlotPickerButton('dp-pos-slot-btn');
 }
 
 function onDetailPosL2Change() {
@@ -8251,11 +8254,19 @@ function onDetailPosL2Change() {
   const l2node = l1node?.children.find(c => c.name === l2name);
   const l3opts = (l2node?.children || []).map(c => c.name);
   fillPosSelect('dp-pos-l3', l3opts, 'Piano…');
-  if (l2name && l3opts.length === 0) addDetailPosition();
+  if (l2name && l3opts.length === 0) maybeOfferSlotPicker(l1name, l2name, '', l2node, 'dp-pos-slot-btn', addDetailPosition);
+  else hideSlotPickerButton('dp-pos-slot-btn');
 }
 
 function onDetailPosL3Change() {
-  if (document.getElementById('dp-pos-l3')?.value) addDetailPosition();
+  const l1name = document.getElementById('dp-pos-l1')?.value || '';
+  const l2name = document.getElementById('dp-pos-l2')?.value || '';
+  const l3name = document.getElementById('dp-pos-l3')?.value || '';
+  if (!l3name) { hideSlotPickerButton('dp-pos-slot-btn'); return; }
+  const l1node = ownerCellarPosTree.find(n => n.name === l1name);
+  const l2node = l1node?.children.find(c => c.name === l2name);
+  const l3node = l2node?.children.find(c => c.name === l3name);
+  maybeOfferSlotPicker(l1name, l2name, l3name, l3node, 'dp-pos-slot-btn', addDetailPosition);
 }
 
 function renderDetailPosChips(w) {
@@ -8263,7 +8274,7 @@ function renderDetailPosChips(w) {
   if (!box) return;
   box.innerHTML = (w.cellarPositions || []).map((p, i) => `
     <span class="pos-node-row">
-      ${[p.l1, p.l2, p.l3].filter(Boolean).join(' · ')}
+      ${[p.l1, p.l2, p.l3].filter(Boolean).join(' · ')}${p.slot ? ` · slot ${p.slot}` : ''}
       <span class="rm-btn" onclick="removeDetailPosition(${i})">×</span>
     </span>
   `).join('');
@@ -8914,7 +8925,7 @@ function renderWinePositionSelects() {
   fillPosSelect('f-pos-l1', ownerCellarPosTree.map(n => n.name), 'Posizione…');
   fillPosSelect('f-pos-l2', [], 'Zona…');
   fillPosSelect('f-pos-l3', [], 'Piano…');
-  hideSlotPickerButton();
+  hideSlotPickerButton('f-pos-slot-btn');
   const hasAny = ownerCellarPosTree.length > 0;
   document.getElementById('f-pos-selects-row').style.display = hasAny ? '' : 'none';
   const hint = document.getElementById('f-pos-empty-hint');
@@ -8928,8 +8939,8 @@ function onPosL1Change() {
   const l2opts = (node?.children || []).map(c => c.name);
   fillPosSelect('f-pos-l2', l2opts, 'Zona…');
   fillPosSelect('f-pos-l3', [], 'Piano…');
-  if (l1name && l2opts.length === 0) maybeOfferSlotPicker(l1name, '', '', node);
-  else hideSlotPickerButton();
+  if (l1name && l2opts.length === 0) maybeOfferSlotPicker(l1name, '', '', node, 'f-pos-slot-btn', addWinePosition);
+  else hideSlotPickerButton('f-pos-slot-btn');
 }
 
 function onPosL2Change() {
@@ -8939,19 +8950,19 @@ function onPosL2Change() {
   const l2node = l1node?.children.find(c => c.name === l2name);
   const l3opts = (l2node?.children || []).map(c => c.name);
   fillPosSelect('f-pos-l3', l3opts, 'Piano…');
-  if (l2name && l3opts.length === 0) maybeOfferSlotPicker(l1name, l2name, '', l2node);
-  else hideSlotPickerButton();
+  if (l2name && l3opts.length === 0) maybeOfferSlotPicker(l1name, l2name, '', l2node, 'f-pos-slot-btn', addWinePosition);
+  else hideSlotPickerButton('f-pos-slot-btn');
 }
 
 function onPosL3Change() {
   const l1name = document.getElementById('f-pos-l1')?.value || '';
   const l2name = document.getElementById('f-pos-l2')?.value || '';
   const l3name = document.getElementById('f-pos-l3')?.value || '';
-  if (!l3name) { hideSlotPickerButton(); return; }
+  if (!l3name) { hideSlotPickerButton('f-pos-slot-btn'); return; }
   const l1node = ownerCellarPosTree.find(n => n.name === l1name);
   const l2node = l1node?.children.find(c => c.name === l2name);
   const l3node = l2node?.children.find(c => c.name === l3name);
-  maybeOfferSlotPicker(l1name, l2name, l3name, l3node);
+  maybeOfferSlotPicker(l1name, l2name, l3name, l3node, 'f-pos-slot-btn', addWinePosition);
 }
 
 // Se la posizione raggiunta ha una capienza (impostata nel profilo), si
@@ -8959,20 +8970,23 @@ function onPosL3Change() {
 // bottiglia = uno slot) invece di aggiungere subito una tag generica
 // l1/l2/l3 come prima: altrimenti si rischierebbe di "consumare" la
 // selezione senza mai passare dalla griglia. Le posizioni senza capienza
-// restano invece col comportamento di sempre (tag aggiunta subito).
-function maybeOfferSlotPicker(l1, l2, l3, node) {
-  const btn = document.getElementById('f-pos-slot-btn');
+// restano invece col comportamento di sempre (tag aggiunta subito tramite
+// fallbackAddFn, lo stesso usato da sempre in quel contesto). Condivisa
+// tra form (Aggiungi/Modifica vino) e scheda di dettaglio: btnId distingue
+// quale pulsante/contesto attivare.
+function maybeOfferSlotPicker(l1, l2, l3, node, btnId, fallbackAddFn) {
+  const btn = document.getElementById(btnId);
   if (node?.capacity) {
     btn.dataset.l1 = l1; btn.dataset.l2 = l2; btn.dataset.l3 = l3;
     btn.style.display = '';
   } else {
-    hideSlotPickerButton();
-    addWinePosition();
+    hideSlotPickerButton(btnId);
+    fallbackAddFn();
   }
 }
 
-function hideSlotPickerButton() {
-  const btn = document.getElementById('f-pos-slot-btn');
+function hideSlotPickerButton(btnId) {
+  const btn = document.getElementById(btnId);
   if (btn) btn.style.display = 'none';
 }
 
@@ -8986,31 +9000,40 @@ function findPosTreeNode(l1, l2, l3) {
   return n2.children?.find(n => n.name === l3) || null;
 }
 
-let slotPickerState = null; // { l1, l2, l3, capacity, occupiedByOthers:Set, mineSlots:Set, pendingSelected:Set }
+let slotPickerState = null; // { l1, l2, l3, capacity, occupiedByOthers:Set, mineSlots:Set, pendingSelected:Set, mode:'form'|'detail', btnId }
 
 // occupiedByOthers: slot già presi da ALTRI vini in questa stessa
-// posizione (letti da myWines(), escluso il vino che si sta modificando).
-// mineSlots: slot già assegnati a QUESTO vino in questa sessione di
-// editing (selectedWinePositions, non ancora salvati se si sta
-// aggiungendo un vino nuovo) — mostrati ma non riselezionabili qui: si
-// rimuovono dalla chip, non dalla griglia.
-function openCellarSlotPicker() {
-  const btn = document.getElementById('f-pos-slot-btn');
+// posizione (letti da myWines(), escluso il vino che si sta modificando/
+// visualizzando). mineSlots: slot già assegnati a QUESTO vino — in form
+// da selectedWinePositions (sessione di editing, non ancora salvata se si
+// sta aggiungendo un vino nuovo), in dettaglio dal vino già salvato su DB
+// — mostrati ma non riselezionabili qui: si rimuovono dalla chip, non
+// dalla griglia. btnId distingue il contesto chiamante (form o scheda di
+// dettaglio): 'dp-pos-slot-btn' è la scheda di dettaglio, salva subito su
+// DB; qualunque altro id (oggi solo 'f-pos-slot-btn') è il form, accumula
+// in selectedWinePositions fino al salvataggio dell'intero vino.
+function openCellarSlotPicker(btnId) {
+  const btn = document.getElementById(btnId);
   const l1 = btn?.dataset.l1 || '', l2 = btn?.dataset.l2 || '', l3 = btn?.dataset.l3 || '';
   const node = findPosTreeNode(l1, l2, l3);
   if (!node?.capacity) return;
-  const editId = document.getElementById('f-edit-id')?.value || null;
+  const mode = btnId === 'dp-pos-slot-btn' ? 'detail' : 'form';
+  const excludeId = mode === 'detail' ? currentDetailId : (document.getElementById('f-edit-id')?.value || null);
   const occupiedByOthers = new Set();
   myWines().forEach(w => {
-    if (editId && w.id === editId) return;
+    if (excludeId && w.id === excludeId) return;
     (w.cellarPositions || []).forEach(p => {
       if (p.l1 === l1 && p.l2 === l2 && p.l3 === l3 && p.slot) occupiedByOthers.add(p.slot);
     });
   });
-  const mineSlots = new Set(
-    selectedWinePositions.filter(p => p.l1 === l1 && p.l2 === l2 && p.l3 === l3 && p.slot).map(p => p.slot)
-  );
-  slotPickerState = { l1, l2, l3, capacity: node.capacity, occupiedByOthers, mineSlots, pendingSelected: new Set() };
+  let mineSlots;
+  if (mode === 'detail') {
+    const w = winesCache.find(x => x.id === currentDetailId);
+    mineSlots = new Set((w?.cellarPositions || []).filter(p => p.l1 === l1 && p.l2 === l2 && p.l3 === l3 && p.slot).map(p => p.slot));
+  } else {
+    mineSlots = new Set(selectedWinePositions.filter(p => p.l1 === l1 && p.l2 === l2 && p.l3 === l3 && p.slot).map(p => p.slot));
+  }
+  slotPickerState = { l1, l2, l3, capacity: node.capacity, occupiedByOthers, mineSlots, pendingSelected: new Set(), mode, btnId };
   renderSlotPicker();
   document.getElementById('cellar-slot-picker-overlay').classList.add('open');
 }
@@ -9039,17 +9062,32 @@ function toggleSlotPick(n) {
   renderSlotPicker();
 }
 
-function confirmSlotPick() {
+async function confirmSlotPick() {
   const s = slotPickerState;
-  if (s?.pendingSelected.size) {
-    s.pendingSelected.forEach(n => selectedWinePositions.push({ l1: s.l1, l2: s.l2, l3: s.l3, slot: n }));
+  if (!s?.pendingSelected.size) { closeCellarSlotPicker(); return; }
+  const added = [...s.pendingSelected].map(n => ({ l1: s.l1, l2: s.l2, l3: s.l3, slot: n }));
+  if (s.mode === 'detail') {
+    const w = winesCache.find(x => x.id === currentDetailId);
+    if (w) {
+      const updated = [...(w.cellarPositions || []), ...added];
+      const ok = await dbUpdatePositions(w.id, updated);
+      if (ok) { w.cellarPositions = updated; renderDetailPosChips(w); }
+    }
+  } else {
+    added.forEach(p => selectedWinePositions.push(p));
     renderWinePositionChips();
   }
   closeCellarSlotPicker();
-  hideSlotPickerButton();
-  fillPosSelect('f-pos-l1', ownerCellarPosTree.map(n => n.name), 'Posizione…');
-  fillPosSelect('f-pos-l2', [], 'Zona…');
-  fillPosSelect('f-pos-l3', [], 'Piano…');
+  hideSlotPickerButton(s.btnId);
+  if (s.mode === 'detail') {
+    fillPosSelect('dp-pos-l1', ownerCellarPosTree.map(n => n.name), 'Posizione…');
+    fillPosSelect('dp-pos-l2', [], 'Zona…');
+    fillPosSelect('dp-pos-l3', [], 'Piano…');
+  } else {
+    fillPosSelect('f-pos-l1', ownerCellarPosTree.map(n => n.name), 'Posizione…');
+    fillPosSelect('f-pos-l2', [], 'Zona…');
+    fillPosSelect('f-pos-l3', [], 'Piano…');
+  }
 }
 
 function closeCellarSlotPicker() {
