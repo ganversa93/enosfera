@@ -668,6 +668,20 @@
     .slot-circle.selected { border-style: solid; border-color: var(--wine); background: var(--wine); color: #fff; }
     .slot-circle.mine { border-style: solid; border-color: var(--gold); background: var(--gold-l); color: #fff; cursor: default; }
     .slot-circle.occupied { border-style: solid; border-color: var(--border); background: var(--bg); color: var(--muted); cursor: not-allowed; opacity: .6; }
+    /* Mappa cantina: slot etichettati col nome del vino (non un numero),
+       tutti sempre cliccabili (nessuno "occupied" bloccato come nel
+       picker — qui occupato è una destinazione valida, per lo scambio). */
+    .cellar-map-section { margin-bottom: 24px; }
+    .cellar-map-section-title { font-size: 13px; font-weight: 600; color: var(--ink); margin-bottom: 2px; }
+    .cellar-map-section-count { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
+    .cellar-map-slot {
+      width: 58px; height: 58px; font-size: 9.5px; line-height: 1.15; padding: 3px;
+      overflow: hidden; word-break: break-word; cursor: pointer; border-style: solid;
+    }
+    .cellar-map-slot.empty-slot { border-style: dashed; color: var(--muted); font-size: 11px; }
+    .cellar-map-slot.filled-slot { border-color: var(--border); background: var(--wine-pale); color: var(--wine); }
+    .cellar-map-slot.source-selected { border-color: var(--wine); background: var(--wine); color: #fff; box-shadow: 0 0 0 3px var(--wine-pale); }
+    .cellar-map-empty-hint { font-size: 12.5px; color: var(--muted); text-align: center; padding: 2rem 1rem; }
     .pos-node-children { margin-left: 16px; padding-left: 10px; border-left: 1px dashed var(--border); margin-top: 6px; }
     .pos-add-row { display: flex; gap: 6px; margin: 4px 0 10px; }
     .pos-add-row input {
@@ -1455,6 +1469,7 @@
   <div class="nav-menu" id="nav-menu">
     <div class="nav-menu-item" onclick="closeNavMenu();showScreen('screen-home')"><i class="ti ti-home"></i>Home</div>
     <div class="nav-menu-item" onclick="closeNavMenu();showScreen('screen-list')"><i class="ti ti-bottle"></i>Cantina e Degustazioni</div>
+    <div class="nav-menu-item" onclick="closeNavMenu();showCellarMapScreen()"><i class="ti ti-grid-dots"></i>Mappa cantina</div>
     <div class="nav-menu-item" onclick="closeNavMenu();showHighlightsScreen()"><i class="ti ti-sparkles"></i>Highlights</div>
     <div class="nav-menu-item" onclick="closeNavMenu();showApprofondisciScreen()"><i class="ti ti-news"></i>Approfondisci</div>
     <div class="nav-menu-item" onclick="closeNavMenu();showEventsScreen()"><i class="ti ti-calendar-event"></i>Eventi</div>
@@ -2085,6 +2100,7 @@
           <span class="assoc-badge" id="nav-badge" style="display:none"></span>
           <i class="ti ti-chevron-right" style="font-size:11px;opacity:.5"></i>
         </div>
+        <button class="btn sm" onclick="showCellarMapScreen()" title="Mappa cantina"><i class="ti ti-grid-dots"></i></button>
         <button class="btn sm" onclick="showScreen('screen-export')"><i class="ti ti-download"></i>Export</button>
         <button class="btn sm danger" onclick="doLogout()" title="Esci"><i class="ti ti-logout"></i></button>
       </div>
@@ -2188,6 +2204,18 @@
       <i class="ti ti-bottle" aria-hidden="true"></i>
       <p>La tua cantina è vuota.<br>Aggiungi il primo vino!</p>
     </div>
+  </div>
+
+  <!-- ══ MAPPA CANTINA — vista grafica di tutte le posizioni con capienza,
+       spostamento bottiglie tocca-sorgente/tocca-destinazione (niente
+       drag&drop: più affidabile su telefono, dove l'app è usata di più) ══ -->
+  <div id="screen-cellar-map" class="screen">
+    <div class="nav" style="margin-bottom:.9rem">
+      <button class="btn sm" onclick="showScreen('screen-list')"><i class="ti ti-arrow-left"></i>Cantina</button>
+    </div>
+    <div class="cantina-heading">Mappa cantina</div>
+    <p style="font-size:12px;color:var(--muted);margin:-8px 0 14px">Tocca una bottiglia posizionata per selezionarla, poi tocca lo slot dove spostarla — libero per spostarla, occupato per scambiarla con l'altra bottiglia.</p>
+    <div id="cellar-map-body"></div>
   </div>
 
   <!-- ══ ADD FORM ══ -->
@@ -4088,6 +4116,18 @@
       <button class="btn primary" onclick="confirmSlotPick()"><i class="ti ti-check"></i>Conferma</button>
       <button class="btn sm" onclick="closeCellarSlotPicker()">Annulla</button>
     </div>
+  </div>
+</div>
+
+<!-- LIBERA SLOT ALLA DEGUSTAZIONE — con più bottiglie dello stesso vino su
+     più slot, quale si libera quando se ne toglie una va chiesto. -->
+<div class="public-prompt-overlay" id="free-slot-overlay">
+  <div class="public-prompt-card" style="max-width:380px">
+    <i class="ti ti-glass"></i>
+    <h3>Quale bottiglia hai tolto?</h3>
+    <p>Indica da dove hai preso la bottiglia di "<span id="free-slot-wine-name"></span>", così liberiamo lo slot giusto.</p>
+    <div id="free-slot-options" style="display:flex;flex-direction:column;gap:8px"></div>
+    <a href="#" onclick="closeFreeSlotPicker();return false;" style="font-size:11px;color:var(--muted);text-decoration:underline;margin-top:10px;display:block">Annulla</a>
   </div>
 </div>
 
@@ -8318,16 +8358,70 @@ async function removeDetailPosition(index) {
   if (ok) { w.cellarPositions = updated; renderDetailPosChips(w); }
 }
 
+// Quando si toglie una bottiglia (degustata/finita) e quella bottiglia
+// aveva uno slot preciso in cantina (non solo una tag l1/l2/l3 generica),
+// lo slot va liberato — altrimenti resterebbe "occupato" da un vino che
+// non è più lì. Un vino senza alcuno slot preciso (solo tag generiche, o
+// mai posseduto fisicamente — "degustato ma non posseduto", qty parte da
+// 0) non ha nulla da liberare: si procede senza toccare le posizioni,
+// esattamente come prima di questa funzionalità.
 async function adjustQty(id, delta) {
   const w = winesCache.find(x => x.id === id); if (!w) return;
-  const newQty = Math.max(0, (w.qty ?? 1) + delta);
-  const ok = await dbUpdateQty(id, newQty);
+  const oldQty = w.qty ?? 1;
+  const newQty = Math.max(0, oldQty + delta);
+  if (newQty >= oldQty) { await commitQtyChange(w, newQty); return; }
+  const slotEntries = (w.cellarPositions || []).filter(p => p.slot);
+  if (slotEntries.length === 1) { await freeSlotAndAdjustQty(w, newQty, slotEntries[0]); return; }
+  if (slotEntries.length > 1) { openFreeSlotPicker(w, newQty, slotEntries); return; }
+  await commitQtyChange(w, newQty);
+}
+
+async function commitQtyChange(w, newQty) {
+  const ok = await dbUpdateQty(w.id, newQty);
   if (ok) {
     w.qty = newQty;
-    const el = document.getElementById('qty-display-' + id);
+    const el = document.getElementById('qty-display-' + w.id);
     if (el) el.textContent = newQty;
     if (newQty === 0) toast('Bottiglia esaurita — considera di aggiornare l\'archivio');
   }
+}
+
+async function freeSlotAndAdjustQty(w, newQty, entryToRemove) {
+  const updated = (w.cellarPositions || []).filter(p => p !== entryToRemove);
+  const posOk = await dbUpdatePositions(w.id, updated);
+  if (posOk) {
+    w.cellarPositions = updated;
+    if (currentDetailId === w.id) renderDetailPosChips(w);
+  }
+  await commitQtyChange(w, newQty);
+}
+
+// Con più bottiglie dello stesso vino sparse su più slot non si può
+// indovinare quale sia stata aperta: si chiede.
+let freeSlotPickerState = null; // { wineId, newQty, entries }
+
+function openFreeSlotPicker(w, newQty, entries) {
+  freeSlotPickerState = { wineId: w.id, newQty, entries };
+  document.getElementById('free-slot-wine-name').textContent = w.name;
+  document.getElementById('free-slot-options').innerHTML = entries.map((p, i) => `
+    <button class="btn sm" onclick="confirmFreeSlot(${i})">${escapeAttr([p.l1, p.l2, p.l3].filter(Boolean).join(' · '))} · slot ${p.slot}</button>
+  `).join('');
+  document.getElementById('free-slot-overlay').classList.add('open');
+}
+
+async function confirmFreeSlot(index) {
+  const s = freeSlotPickerState;
+  if (!s) return;
+  const w = winesCache.find(x => x.id === s.wineId);
+  const entry = s.entries[index];
+  closeFreeSlotPicker();
+  if (!w || !entry) return;
+  await freeSlotAndAdjustQty(w, s.newQty, entry);
+}
+
+function closeFreeSlotPicker() {
+  document.getElementById('free-slot-overlay').classList.remove('open');
+  freeSlotPickerState = null;
 }
 
 async function deleteWine() {
@@ -9110,6 +9204,132 @@ function closeCellarSlotPicker() {
   slotPickerState = null;
 }
 
+/* ── MAPPA CANTINA (Fase B) — vista grafica di tutte le posizioni con
+   capienza, spostamento bottiglie tocca-sorgente/tocca-destinazione
+   invece del drag&drop (più affidabile su telefono, dove l'app è usata
+   di più — vedi la scelta fatta insieme). ── */
+let cellarMapSource = null; // { l1, l2, l3, slot, wineId } oppure null
+
+function showCellarMapScreen() {
+  cellarMapSource = null;
+  showScreen('screen-cellar-map');
+  renderCellarMap();
+}
+
+// Tutti i nodi con una capienza impostata, raccolti ricorsivamente
+// dall'intero albero (ownerCellarPosTree) — solo quelli hanno davvero
+// una griglia di slot da mostrare. Stesso criterio "solo nodi che sono
+// ORA foglie" usato in renderPosNode/maybeOfferSlotPicker: un nodo con
+// figli e una vecchia capienza rimasta (valore nascosto ma non perso)
+// non genera una griglia qui — si scende nei figli invece.
+function getAllCapacityNodes() {
+  const out = [];
+  function walk(nodes, parentPath) {
+    (nodes || []).forEach(n => {
+      const path = [...parentPath, n.name];
+      const hasChildren = n.children && n.children.length > 0;
+      if (!hasChildren && n.capacity) {
+        out.push({ l1: path[0] || '', l2: path[1] || '', l3: path[2] || '', capacity: n.capacity, cols: n.cols || null });
+      } else if (hasChildren) {
+        walk(n.children, path);
+      }
+    });
+  }
+  walk(ownerCellarPosTree, []);
+  return out;
+}
+
+function getSlotOccupancy(l1, l2, l3) {
+  const map = new Map(); // numero slot -> vino
+  myWines().forEach(w => {
+    (w.cellarPositions || []).forEach(p => {
+      if (p.l1 === l1 && p.l2 === l2 && p.l3 === l3 && p.slot) map.set(p.slot, w);
+    });
+  });
+  return map;
+}
+
+function renderCellarMap() {
+  const body = document.getElementById('cellar-map-body');
+  if (!body) return;
+  const nodes = getAllCapacityNodes();
+  if (!nodes.length) {
+    body.innerHTML = `<div class="cellar-map-empty-hint"><i class="ti ti-grid-dots" style="font-size:28px;display:block;margin-bottom:8px;opacity:.5"></i>Nessuna posizione con capienza configurata.<br>Vai al <a href="#" onclick="showProfileScreen();return false;">tuo profilo</a> per impostarla (wizard o editor).</div>`;
+    return;
+  }
+  body.innerHTML = nodes.map(node => {
+    const occ = getSlotOccupancy(node.l1, node.l2, node.l3);
+    const pathLabel = [node.l1, node.l2, node.l3].filter(Boolean).join(' · ');
+    const gridCols = node.cols || Math.min(node.capacity, 4);
+    const slotsHtml = Array.from({ length: node.capacity }, (_, i) => i + 1).map(n => {
+      const wine = occ.get(n);
+      const isSource = cellarMapSource && cellarMapSource.l1 === node.l1 && cellarMapSource.l2 === node.l2 && cellarMapSource.l3 === node.l3 && cellarMapSource.slot === n;
+      const cls = isSource ? 'source-selected' : wine ? 'filled-slot' : 'empty-slot';
+      const label = isSource ? '<i class="ti ti-check"></i>' : wine ? escapeAttr(wine.name) : n;
+      const title = wine ? escapeAttr([wine.name, wine.producer].filter(Boolean).join(' — ')) : 'Libero';
+      return `<div class="slot-circle cellar-map-slot ${cls}" onclick="onCellarMapSlotClick('${escapeAttr(node.l1)}','${escapeAttr(node.l2)}','${escapeAttr(node.l3)}',${n})" title="${title}">${label}</div>`;
+    }).join('');
+    return `
+      <div class="cellar-map-section">
+        <div class="cellar-map-section-title">${pathLabel}</div>
+        <div class="cellar-map-section-count">${occ.size}/${node.capacity} occupati</div>
+        <div class="slot-grid" style="grid-template-columns:repeat(${gridCols},1fr)">${slotsHtml}</div>
+      </div>`;
+  }).join('');
+}
+
+async function onCellarMapSlotClick(l1, l2, l3, slot) {
+  const occ = getSlotOccupancy(l1, l2, l3);
+  const wine = occ.get(slot);
+
+  if (!cellarMapSource) {
+    if (!wine) { toast('Questo slot è libero — tocca prima una bottiglia posizionata'); return; }
+    if (wine._pending) { toastErr('Questo vino non è ancora sincronizzato: sincronizzalo prima di spostarlo'); return; }
+    cellarMapSource = { l1, l2, l3, slot, wineId: wine.id };
+    renderCellarMap();
+    return;
+  }
+
+  const src = cellarMapSource;
+  // Tocco di nuovo la sorgente -> deseleziona invece di spostare su se stessa
+  if (src.l1 === l1 && src.l2 === l2 && src.l3 === l3 && src.slot === slot) {
+    cellarMapSource = null;
+    renderCellarMap();
+    return;
+  }
+
+  const sourceWine = myWines().find(w => w.id === src.wineId);
+  cellarMapSource = null;
+  if (!sourceWine) { renderCellarMap(); return; }
+
+  if (wine) {
+    if (wine._pending) { toastErr('Questo vino non è ancora sincronizzato: sincronizzalo prima di scambiarlo'); renderCellarMap(); return; }
+    const ok = await swapCellarPositions(sourceWine, src, wine, { l1, l2, l3, slot });
+    if (ok) toast(`✓ Scambiate le posizioni di "${sourceWine.name}" e "${wine.name}"`);
+  } else {
+    const ok = await moveCellarPosition(sourceWine, src, { l1, l2, l3, slot });
+    if (ok) toast(`✓ "${sourceWine.name}" spostato`);
+  }
+  renderCellarMap();
+}
+
+async function moveCellarPosition(wine, from, to) {
+  const positions = wine.cellarPositions || [];
+  const idx = positions.findIndex(p => p.l1 === from.l1 && p.l2 === from.l2 && p.l3 === from.l3 && p.slot === from.slot);
+  if (idx === -1) return false;
+  const updated = positions.slice();
+  updated[idx] = { l1: to.l1, l2: to.l2, l3: to.l3, slot: to.slot };
+  const ok = await dbUpdatePositions(wine.id, updated);
+  if (ok) wine.cellarPositions = updated;
+  return ok;
+}
+
+async function swapCellarPositions(wineA, posA, wineB, posB) {
+  const okA = await moveCellarPosition(wineA, posA, posB);
+  if (!okA) return false;
+  return await moveCellarPosition(wineB, posB, posA);
+}
+
 function renderWinePositionChips() {
   const box = document.getElementById('wine-pos-tags');
   if (!box) return;
@@ -9249,7 +9469,12 @@ function renderPosNode(node, path, level) {
     <div class="pos-node" style="margin-left:${level * 14}px">
       <div class="pos-node-row">
         <span>${node.name}</span>
-        ${isLeafNow ? `<input type="number" class="pos-capacity-input" min="1" max="999" step="1" placeholder="n° bott." title="Quante bottiglie entrano in questa posizione (facoltativo)" value="${node.capacity || ''}" onclick="event.stopPropagation()" oninput="updatePosNodeCapacity('${pathStr}', this.value)">` : ''}
+        ${isLeafNow ? `
+          <input type="number" class="pos-capacity-input" style="width:34px" min="1" max="99" step="1" placeholder="R" title="Righe (facoltativo)" value="${node.rows || ''}" onclick="event.stopPropagation()" oninput="updatePosNodeLayout('${pathStr}','rows',this.value)">
+          <span style="color:rgba(255,255,255,.45);font-size:11px">×</span>
+          <input type="number" class="pos-capacity-input" style="width:34px" min="1" max="99" step="1" placeholder="C" title="Colonne (facoltativo — se non ti interessano le righe, metti qui direttamente il totale bottiglie)" value="${node.cols || ''}" onclick="event.stopPropagation()" oninput="updatePosNodeLayout('${pathStr}','cols',this.value)">
+          <span id="pos-cap-label-${pathStr.replace(/,/g, '-')}" style="font-size:10px;color:rgba(255,255,255,.65)">${node.capacity ? `=${node.capacity}` : ''}</span>
+        ` : ''}
         <span class="rm-btn" onclick="removePosNode('${pathStr}')">×</span>
       </div>
       ${canHaveChildren ? `
@@ -9297,20 +9522,27 @@ function removePosNode(pathStr) {
   renderPosTree();
 }
 
-// Capienza (n° bottiglie) di una posizione — facoltativa, serve da base per
-// la futura gestione grafica degli slot in cantina. Può stare su qualunque
-// nodo dell'albero, non solo sulle foglie: un vino si può agganciare a
-// qualunque livello (vedi addWinePosition), quindi qualunque nodo può
-// essere la posizione "finale" usata davvero. Non ri-renderizza l'albero
-// (perderebbe il focus sull'input mentre si digita): muta solo il dato in
-// memoria, salvato poi con il resto del profilo.
-function updatePosNodeCapacity(pathStr, value) {
+// Righe/colonne di una posizione — facoltative, stesso dato che compila il
+// wizard (vedi wizSubmitLayout) ma modificabile anche qui per chi lo salta
+// lì o vuole correggerlo dopo. capacity si ricalcola da entrambe quando
+// presenti, o dalla sola compilata quando l'altra è vuota (così un numero
+// solo in "colonne" resta un modo valido per dare solo il totale, senza
+// doversi preoccupare delle righe). Non ri-renderizza l'albero (perderebbe
+// il focus sull'input mentre si digita): muta solo il dato in memoria,
+// salvato poi con il resto del profilo.
+function updatePosNodeLayout(pathStr, field, value) {
   const path = posPathArr(pathStr);
   const arr = posParentArrayFor(path);
   const node = arr[path[path.length - 1]];
   if (!node) return;
   const n = parseInt(value, 10);
-  node.capacity = (value && n > 0) ? n : null;
+  node[field] = (value && n > 0) ? n : null;
+  if (node.rows && node.cols) node.capacity = node.rows * node.cols;
+  else if (node.rows) node.capacity = node.rows;
+  else if (node.cols) node.capacity = node.cols;
+  else node.capacity = null;
+  const label = document.getElementById('pos-cap-label-' + pathStr.replace(/,/g, '-'));
+  if (label) label.textContent = node.capacity ? `=${node.capacity}` : '';
 }
 
 /* ── WIZARD STRUTTURA CANTINA ──
@@ -11305,9 +11537,10 @@ Object.assign(window, {
   dismissPublicPrompt, acceptPublicPrompt, markFScoreManual, dismissAssocPrompt, saveAssocPrompt, acceptPrivacyPrompt, openImageLightbox, closeImageLightbox,
   openTutorial, tutorialStep, skipTutorial,
   confirmSumDuplicateQty, confirmSaveDuplicateAsNew, closeDuplicateWinePrompt,
-  addPosNode, removePosNode, updatePosNodeCapacity, addWinePosition, removeWinePosition, onPosL1Change, onPosL2Change, onPosL3Change,
+  addPosNode, removePosNode, updatePosNodeLayout, addWinePosition, removeWinePosition, onPosL1Change, onPosL2Change, onPosL3Change,
   openCellarSlotPicker, toggleSlotPick, confirmSlotPick, closeCellarSlotPicker,
   startStructureWizard, wizSubmitName, wizAnswerHasChildren, wizSubmitLayout, wizAnswerMoreSiblings, finishStructureWizard, closeStructureWizard,
+  showCellarMapScreen, onCellarMapSlotClick, confirmFreeSlot, closeFreeSlotPicker,
   addDetailPosition, removeDetailPosition, onDetailPosL1Change, onDetailPosL2Change, onDetailPosL3Change,
   showWineryDetail, toggleWineryPreview, saveWineryDetails, uploadWineryLogo, goBackFromWinery, showAdminWineriesScreen, deleteWinery, searchAllWineries,
   saveScanLimits, resetScanUsage, searchScanUsersAdmin,
