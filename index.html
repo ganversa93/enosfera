@@ -2095,6 +2095,7 @@
           <div class="chip active" data-qf="all" onclick="setQtyFilter('all',this)"><i class="ti ti-bottle" style="font-size:11px;vertical-align:-1px;margin-right:3px"></i>Tutte</div>
           <div class="chip" data-qf="owned" onclick="setQtyFilter('owned',this)"><i class="ti ti-building-warehouse" style="font-size:11px;vertical-align:-1px;margin-right:3px"></i>In cantina</div>
           <div class="chip" data-qf="tasted" onclick="setQtyFilter('tasted',this)"><i class="ti ti-glass-full" style="font-size:11px;vertical-align:-1px;margin-right:3px"></i>Solo degustati</div>
+          <div class="chip" id="qf-drink-chip" onclick="toggleDrinkDueFilter(this)" title="Finestra di consumo già scaduta o in scadenza entro il prossimo anno"><i class="ti ti-alert-triangle" style="font-size:11px;vertical-align:-1px;margin-right:3px"></i>Da bere</div>
         </div>
       </div>
       <div class="adv-filter-divider"></div>
@@ -4123,6 +4124,7 @@ let attendingEventIds = new Set();  // id degli eventi a cui l'utente corrente h
 let eventAttendeeCounts = new Map(); // event_id -> numero di partecipanti totali (tutti gli utenti)
 let currentFilter    = 'all';
 let currentQtyFilter = 'all';
+let drinkDueFilter   = false; // toggle indipendente: "Da bere" (finestra scaduta o in scadenza), si combina con gli altri filtri Stato
 let sortField = 'created'; // 'created' | 'vintage' | 'price' | 'type' — cantina
 let sortDir   = 'desc';    // 'asc' | 'desc'
 let networkSortField = 'created'; // stessi valori, per il feed Network
@@ -6864,6 +6866,25 @@ function setQtyFilter(f, el) {
   renderGrid();
 }
 
+// Indipendente dal gruppo Stato sopra (non mutuamente esclusivo): si vuole
+// poter combinare "In cantina" + "Da bere" per trovare proprio le
+// bottiglie ancora possedute da non perdere di vista.
+function toggleDrinkDueFilter(el) {
+  drinkDueFilter = !drinkDueFilter;
+  el.classList.toggle('active', drinkDueFilter);
+  renderGrid();
+}
+
+// "Scaduta o in scadenza": la fine della finestra è già passata o cade
+// entro il prossimo anno — non semplicemente "nella finestra ora" (quello
+// lo fa già "Pronti da bere ora", che guarda l'inizio), qui l'urgenza è
+// sulla fine che si avvicina o è già passata.
+function isDrinkWindowDue(drink) {
+  const win = parseDrinkWindow(drink);
+  if (!win) return false;
+  return win.end <= new Date().getFullYear() + 1;
+}
+
 /* ── FILTRI AVANZATI: Paese / Regione / Abbinamento ──
    Le opzioni sono ricavate dai valori realmente presenti nella
    cantina dell'utente, non da un elenco fisso — così non si vedono
@@ -6933,6 +6954,8 @@ function resetAdvFilters() {
   document.getElementById('af-price-max').value = '';
   document.getElementById('af-drink-min').value = '';
   document.getElementById('af-drink-max').value = '';
+  drinkDueFilter = false;
+  document.getElementById('qf-drink-chip')?.classList.remove('active');
   populateAdvRegionOptions();
   renderGrid();
 }
@@ -6962,6 +6985,7 @@ function updateAdvFilterBadge() {
   let n = ['af-country','af-region','af-pairing','af-grape','af-shopcat','af-price-min','af-price-max','af-drink-min','af-drink-max'].filter(id => document.getElementById(id)?.value).length;
   if (currentFilter !== 'all') n++;
   if (currentQtyFilter !== 'all') n++;
+  if (drinkDueFilter) n++;
   const badge = document.getElementById('adv-filter-badge');
   const toggle = document.getElementById('adv-filter-toggle');
   if (n > 0) { badge.textContent = n; badge.style.display = 'inline-flex'; toggle.classList.add('active'); }
@@ -7097,6 +7121,7 @@ function renderGrid() {
       if (!isNaN(afDrinkMin) && win.end   < afDrinkMin) return false;
       if (!isNaN(afDrinkMax) && win.start > afDrinkMax) return false;
     }
+    if (drinkDueFilter && !isDrinkWindowDue(w.drink)) return false;
     if (!matchesSearch(q, [w.name, w.producer, w.region, w.pairing])) return false;
     return true;
   });
@@ -10898,7 +10923,7 @@ Object.assign(window, {
   showDenominationDetail, saveDenomination, deleteDenomination, searchDenominations, toggleApTypeFilter, toggleDenomRegionMenu, toggleDnVersionChip, toggleDenomSortMenu, toggleDenomPreview, changeDenomPage,
   cycleDnGrapeBound, updateDnGrapePct, removeDnGrapeTag,
   addDnAgingRow, updateDnAgingRow, removeDnAgingRow, updateDnParam,
-  applySuggestedDrinkWindow, quickFilterReadyToDrink
+  applySuggestedDrinkWindow, quickFilterReadyToDrink, toggleDrinkDueFilter
 });
 </script>
 </body>
