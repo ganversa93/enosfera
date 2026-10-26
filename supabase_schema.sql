@@ -3240,3 +3240,103 @@ as $$
 $$;
 
 grant execute on function public.get_grape_aging_classes(text[]) to authenticated;
+
+-- ════════════════════════════════════════════════════════════════
+-- 2026-10-26 — Backfill finestra di consumo sui vini esistenti
+--
+-- Applica una tantum, su tutti i vini già registrati (tutte le cantine,
+-- non solo quelle nuove), la stessa stima usata dal pulsante "Suggerisci"
+-- nel form Aggiungi/Modifica vino (vitigno + annata, con le stesse
+-- eccezioni di tipologia per Spumante/Rosato/Dolce/Passito) — qui in
+-- PL/pgSQL perché deve girare una volta sul database per tutti, non
+-- vino per vino dal client. Tocca solo wines.drink IS NULL OR = ''
+-- (nessun dato inserito a mano viene sovrascritto) e solo dove il
+-- calcolo produce un risultato (annata presente, e vitigno noto o
+-- tipologia che forza la finestra).
+-- ════════════════════════════════════════════════════════════════
+
+create or replace function public._parse_grape_tokens(p_grapes text)
+returns table(gname text, gpct numeric)
+language plpgsql
+immutable
+as $$
+declare
+  v_token text;
+begin
+  foreach v_token in array string_to_array(coalesce(p_grapes, ''), ',') loop
+    v_token := trim(v_token);
+    if v_token = '' then continue; end if;
+    if v_token ~ '\d+(\.\d+)?\s*%\s*$' then
+      gpct := substring(v_token from '(\d+(\.\d+)?)\s*%\s*$')::numeric;
+      gname := trim(regexp_replace(v_token, '\s*\d+(\.\d+)?\s*%\s*$', ''));
+    else
+      gpct := null;
+      gname := v_token;
+    end if;
+    return next;
+  end loop;
+end;
+$$;
+
+create or replace function public.compute_suggested_drink_window(p_vintage integer, p_type text, p_grapes text)
+returns text
+language plpgsql
+stable
+as $$
+declare
+  -- stessa tabella classe -> anni (peakStart/peakEnd) di AGING_CLASS_YEARS
+  -- in data-geo.js: se quella cambia, va aggiornata anche qui.
+  v_years jsonb := '{
+    "immediato":   {"start":0,  "end":2},
+    "breve":       {"start":1,  "end":3},
+    "medio":       {"start":2,  "end":6},
+    "medio_lungo": {"start":4,  "end":10},
+    "lungo":       {"start":6,  "end":15},
+    "molto_lungo": {"start":10, "end":25}
+  }'::jsonb;
+  v_has_pct boolean;
+  v_sum_start numeric := 0;
+  v_sum_end numeric := 0;
+  v_sum_w numeric := 0;
+  v_peak_start integer;
+  v_peak_end integer;
+  v_class text;
+  v_w numeric;
+  rec record;
+begin
+  if p_vintage is null then return null; end if;
+
+  if p_type in ('Spumante', 'Rosato') then
+    return (p_vintage + (v_years->'breve'->>'start')::int)::text || '–' || (p_vintage + (v_years->'breve'->>'end')::int)::text;
+  elsif p_type in ('Dolce', 'Passito') then
+    return (p_vintage + (v_years->'molto_lungo'->>'start')::int)::text || '–' || (p_vintage + (v_years->'molto_lungo'->>'end')::int)::text;
+  end if;
+
+  select bool_or(gpct is not null) into v_has_pct from public._parse_grape_tokens(p_grapes);
+  if v_has_pct is null then return null; end if; -- nessun vitigno in scheda
+
+  for rec in select * from public._parse_grape_tokens(p_grapes) loop
+    select gv.aging_class into v_class
+    from public.grape_varieties gv
+    where lower(gv.name) = lower(rec.gname)
+       or exists (select 1 from unnest(gv.synonyms) s where lower(s) = lower(rec.gname))
+    limit 1;
+    v_class := coalesce(v_class, 'medio'); -- vitigno non ancora classificato: fallback neutro, stesso criterio del pulsante Suggerisci
+    v_w := case when v_has_pct then coalesce(rec.gpct, 0) else 1 end;
+    v_sum_start := v_sum_start + (v_years->v_class->>'start')::int * v_w;
+    v_sum_end   := v_sum_end   + (v_years->v_class->>'end')::int   * v_w;
+    v_sum_w := v_sum_w + v_w;
+  end loop;
+
+  if v_sum_w = 0 then return null; end if;
+
+  v_peak_start := round(v_sum_start / v_sum_w);
+  v_peak_end   := round(v_sum_end   / v_sum_w);
+  return (p_vintage + v_peak_start)::text || '–' || (p_vintage + v_peak_end)::text;
+end;
+$$;
+
+update public.wines w
+set drink = public.compute_suggested_drink_window(w.vintage, w.type, w.grapes)
+where (w.drink is null or w.drink = '')
+  and public.compute_suggested_drink_window(w.vintage, w.type, w.grapes) is not null;
