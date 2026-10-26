@@ -2140,14 +2140,14 @@
         </div>
         <div class="adv-filter-field" style="flex:0 0 auto;min-width:170px">
           <label>Finestra di consumo (anno)</label>
-          <div style="display:flex;gap:6px;align-items:center">
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
             <input type="number" id="af-drink-min" placeholder="Da" min="1900" max="2100" step="1" oninput="renderGrid()" style="width:70px">
             <span style="color:var(--muted);font-size:12px">–</span>
             <input type="number" id="af-drink-max" placeholder="A" min="1900" max="2100" step="1" oninput="renderGrid()" style="width:70px">
+            <button class="btn sm" onclick="quickFilterReadyToDrink()"><i class="ti ti-glass"></i>Pronti da bere ora</button>
           </div>
         </div>
       </div>
-      <button class="btn sm" style="margin-top:4px" onclick="quickFilterReadyToDrink()"><i class="ti ti-glass"></i>Pronti da bere ora</button>
       <div class="adv-filter-divider"></div>
       <div class="adv-filter-group">
         <label class="adv-filter-group-label">Ordina per</label>
