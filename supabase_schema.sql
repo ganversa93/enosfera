@@ -3340,3 +3340,38 @@ update public.wines w
 set drink = public.compute_suggested_drink_window(w.vintage, w.type, w.grapes)
 where (w.drink is null or w.drink = '')
   and public.compute_suggested_drink_window(w.vintage, w.type, w.grapes) is not null;
+
+-- ════════════════════════════════════════════════════════════════
+-- 2026-10-27 — Chi ha inserito ogni cantina, nell'elenco admin "da
+-- completare"
+--
+-- wineries.created_by esiste già dalla creazione della tabella (sempre
+-- valorizzato da findOrCreateWinery lato client), ma la RLS di profiles
+-- non fa leggere all'admin il nome di un utente qualsiasi — solo profili
+-- pubblici, il proprio, o condivisi via follow/cantina. Stesso schema
+-- già usato per get_scan_usage_this_month(): una funzione SECURITY
+-- DEFINER che aggira la RLS, ma solo per l'admin (stessa query già fatta
+-- da loadWineriesToComplete() in index.html, con in più il nome).
+-- ════════════════════════════════════════════════════════════════
+create or replace function public.get_wineries_to_complete()
+returns table (id uuid, name text, created_at timestamptz, created_by_name text)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_admin() then
+    raise exception 'not authorized';
+  end if;
+  return query
+    select w.id, w.name, w.created_at, p.full_name
+    from public.wineries w
+    left join public.profiles p on p.id = w.created_by
+    where w.country is null and w.region is null and w.province is null
+      and w.website is null and w.description is null and w.logo_url is null
+    order by w.created_at desc;
+end;
+$$;
+revoke all on function public.get_wineries_to_complete() from public, anon;
+grant execute on function public.get_wineries_to_complete() to authenticated;

@@ -939,6 +939,7 @@
     .winery-row:last-child { border-bottom: none; }
     .winery-row-name { font-size: 13.5px; display: flex; align-items: center; gap: 8px; }
     .winery-row-name i { color: var(--wine); }
+    .winery-row-sub { font-size: 11px; color: var(--muted); margin: 2px 0 0 22px; }
     .winery-catalog-list { display: flex; flex-direction: column; gap: 2px; }
     .winery-catalog-row {
       display: flex; align-items: center; gap: 10px;
@@ -5939,11 +5940,12 @@ function goBackFromWinery() { showScreen(wineryReturnScreen || 'screen-list'); }
 
 // Elenco cantine create in automatico (dallo scan/salvataggio di un vino)
 // che non hanno ancora nessun dettaglio — per l'admin, da completare.
+// get_wineries_to_complete() (SECURITY DEFINER) invece di una query
+// diretta sulla tabella: serve anche il nome di chi ha creato ogni
+// cantina (wineries.created_by), e la RLS di profiles non lascia
+// all'admin leggere il profilo di un utente qualsiasi.
 async function loadWineriesToComplete() {
-  const { data, error } = await sb.from('wineries')
-    .select('id,name,created_at')
-    .is('country', null).is('region', null).is('province', null).is('website', null).is('description', null).is('logo_url', null)
-    .order('created_at', { ascending: false });
+  const { data, error } = await sb.rpc('get_wineries_to_complete');
   if (error) { toastErr('Errore caricamento cantine: ' + error.message); return []; }
   return data || [];
 }
@@ -6025,7 +6027,10 @@ async function showAdminWineriesScreen() {
   list.innerHTML = wineries.length
     ? wineries.map(w => `
       <div class="winery-row" onclick="showWineryDetail('${w.id}')">
-        <div class="winery-row-name"><i class="ti ti-building-warehouse"></i>${w.name}</div>
+        <div>
+          <div class="winery-row-name"><i class="ti ti-building-warehouse"></i>${w.name}</div>
+          ${w.created_by_name ? `<div class="winery-row-sub">Inserita da ${w.created_by_name}</div>` : ''}
+        </div>
         <i class="ti ti-chevron-right"></i>
       </div>`).join('')
     : '<div style="text-align:center;padding:2rem;color:var(--muted)">Nessuna cantina da completare 🎉</div>';
