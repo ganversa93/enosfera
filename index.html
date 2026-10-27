@@ -1209,6 +1209,24 @@
     .update-banner-dismiss:hover { color: var(--ink); }
     @media (min-width: 480px) { .update-banner { left: auto; right: 1.25rem; width: 380px; } }
 
+    /* ── CONSENSO PIXEL META (GDPR) ── stesso schema di install/update
+       banner: finché la scelta non è salvata, resta nascosto e non parte
+       nessun tracciamento — vedi lo script classico subito dopo <body>. */
+    .cookie-consent-banner {
+      display: none; align-items: center; gap: 12px;
+      position: fixed; left: 0.75rem; right: 0.75rem; bottom: max(0.75rem, env(safe-area-inset-bottom));
+      max-width: 460px; margin: 0 auto;
+      background: var(--surf); border: 0.5px solid var(--border); border-radius: 16px;
+      padding: 12px 14px; box-shadow: 0 -4px 24px rgba(0,0,0,.16); z-index: 215;
+    }
+    .cookie-consent-icon { font-size: 24px; color: var(--wine); flex-shrink: 0; }
+    .cookie-consent-text { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .cookie-consent-text b { font-size: 13px; color: var(--ink); }
+    .cookie-consent-text span { font-size: 11.5px; color: var(--muted); line-height: 1.4; }
+    .cookie-consent-dismiss { font-size: 11px; color: var(--muted); text-decoration: underline; margin-top: 2px; }
+    .cookie-consent-dismiss:hover { color: var(--ink); }
+    @media (min-width: 480px) { .cookie-consent-banner { left: auto; right: 1.25rem; width: 380px; } }
+
     /* ── POP-UP PROFILO PUBBLICO (primo accesso) ── */
     .public-prompt-overlay {
       display: none; position: fixed; inset: 0; z-index: 300;
@@ -1300,7 +1318,59 @@
   </style>
 </head>
 <body>
+<!-- CONSENSO PIXEL META (GDPR) — mostrato finché l'utente non sceglie,
+     vedi lo script classico subito sotto. Nessun img <noscript> di
+     fallback: senza JavaScript il banner non può nemmeno comparire, quindi
+     avviarlo comunque bypasserebbe il consenso. -->
+<div class="cookie-consent-banner" id="cookie-consent-banner" style="display:none">
+  <i class="ti ti-cookie cookie-consent-icon"></i>
+  <div class="cookie-consent-text">
+    <b>Cookie di misurazione pubblicitaria</b>
+    <span>Usiamo il Pixel Meta per misurare l'efficacia delle nostre campagne. Puoi rifiutarlo senza limitazioni per l'app.</span>
+    <a href="#" class="cookie-consent-dismiss" onclick="window.__cookieConsentDecide(false); return false;">Rifiuta</a>
+  </div>
+  <button class="btn sm primary" onclick="window.__cookieConsentDecide(true)">Accetta</button>
+</div>
 <script>
+  // Meta Pixel — sostituire con l'ID reale da Meta Business Suite
+  // (Gestione eventi → Origini dati → Pixel) prima di avviare le campagne.
+  var META_PIXEL_ID = 'INSERISCI_QUI_IL_PIXEL_ID';
+
+  function __loadMetaPixel() {
+    if (!META_PIXEL_ID || META_PIXEL_ID === 'INSERISCI_QUI_IL_PIXEL_ID') return;
+    !function(f,b,e,v,n,t,s)
+    {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+    n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+    if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+    n.queue=[];t=b.createElement(e);t.async=!0;
+    t.src=v;s=b.getElementsByTagName(e)[0];
+    s.parentNode.insertBefore(t,s)}(window, document,'script',
+    'https://connect.facebook.net/en_US/fbevents.js');
+    fbq('init', META_PIXEL_ID);
+    fbq('track', 'PageView');
+  }
+
+  // Salva la scelta (localStorage, per non richiederla ad ogni visita) e
+  // avvia il Pixel solo se accettato.
+  window.__cookieConsentDecide = function(accepted) {
+    try { localStorage.setItem('cookieConsent', accepted ? 'granted' : 'denied'); } catch (e) {}
+    var banner = document.getElementById('cookie-consent-banner');
+    if (banner) banner.style.display = 'none';
+    if (accepted) __loadMetaPixel();
+  };
+
+  (function() {
+    var consent = null;
+    try { consent = localStorage.getItem('cookieConsent'); } catch (e) {}
+    if (consent === 'granted') { __loadMetaPixel(); return; }
+    if (consent === 'denied') return;
+    // Nessuna scelta salvata: mostra il banner appena il DOM è pronto.
+    document.addEventListener('DOMContentLoaded', function() {
+      var banner = document.getElementById('cookie-consent-banner');
+      if (banner) banner.style.display = 'flex';
+    });
+  })();
+
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('sw.js').catch(() => {});
