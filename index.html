@@ -4219,6 +4219,7 @@
     <div id="pos-tree-picker-breadcrumb" style="font-size:12px;color:var(--muted);margin-bottom:10px"></div>
     <div id="pos-tree-picker-list" style="display:flex;flex-direction:column;gap:6px"></div>
     <div class="public-prompt-actions" style="margin-top:14px">
+      <span id="pos-tree-picker-back-area"></span>
       <button class="btn sm" onclick="closePosTreePicker()">Annulla</button>
     </div>
   </div>
@@ -4237,6 +4238,7 @@
     </div>
     <div class="public-prompt-actions" style="margin-top:14px">
       <button class="btn primary" onclick="confirmSlotPick()"><i class="ti ti-check"></i>Conferma</button>
+      <button class="btn sm" onclick="goBackFromSlotGrid()"><i class="ti ti-arrow-left"></i>Indietro</button>
       <button class="btn sm" onclick="closeCellarSlotPicker()">Annulla</button>
     </div>
   </div>
@@ -9138,11 +9140,22 @@ function renderPosTreePicker() {
     const icon = hasChildren ? 'ti-chevron-right' : n.capacity ? 'ti-grid-dots' : 'ti-check';
     return `<div class="pos-node-row" style="cursor:pointer" onclick="posTreePickerSelect('${escapeAttr(n.name)}')"><span>${escapeAttr(n.name)}</span><i class="ti ${icon}" style="margin-left:auto"></i></div>`;
   }).join('');
+  // Tasto "Indietro" di un livello — oltre alla breadcrumb, stesso schema
+  // del wizard struttura cantina: compare solo se c'è un livello sopra a
+  // cui tornare (al livello radice c'è solo "Annulla").
+  document.getElementById('pos-tree-picker-back-area').innerHTML = s.path.length
+    ? `<button class="btn sm" onclick="posTreePickerBack()"><i class="ti ti-arrow-left"></i>Indietro</button>` : '';
 }
 
 function posTreePickerGoTo(depth) {
   if (!posTreePickerState) return;
   posTreePickerState.path = posTreePickerState.path.slice(0, depth);
+  renderPosTreePicker();
+}
+
+function posTreePickerBack() {
+  if (!posTreePickerState || !posTreePickerState.path.length) return;
+  posTreePickerState.path.pop();
   renderPosTreePicker();
 }
 
@@ -9158,8 +9171,12 @@ async function posTreePickerSelect(name) {
     return;
   }
   const [l1, l2, l3] = [newPath[0] || '', newPath[1] || '', newPath[2] || ''];
+  // Il livello da cui si è scelta questa foglia (s.path non è ancora
+  // stato aggiornato con "name" in questo ramo) — serve per tornare lì
+  // se dalla griglia slot si preme "Indietro" (es. foglia sbagliata).
+  const returnPath = s.path.slice();
   closePosTreePicker();
-  if (node.capacity) openSlotGrid(l1, l2, l3, node, s.mode);
+  if (node.capacity) openSlotGrid(l1, l2, l3, node, s.mode, returnPath);
   else await commitPlainPosition(l1, l2, l3, s.mode);
 }
 
@@ -9198,8 +9215,10 @@ let slotPickerState = null; // { l1, l2, l3, capacity, occupiedByOthers:Set, min
 // dalla griglia. mode distingue il contesto chiamante: 'detail' salva
 // subito su DB, 'form' accumula in selectedWinePositions fino al
 // salvataggio dell'intero vino. Chiamata da posTreePickerSelect una volta
-// raggiunta una foglia con capienza.
-function openSlotGrid(l1, l2, l3, node, mode) {
+// raggiunta una foglia con capienza. returnPath: il livello dell'albero da
+// cui si è scelta questa foglia — se qui si preme "Indietro" (foglia
+// sbagliata) si riapre il popup di navigazione esattamente lì, non da capo.
+function openSlotGrid(l1, l2, l3, node, mode, returnPath) {
   const excludeId = mode === 'detail' ? currentDetailId : (document.getElementById('f-edit-id')?.value || null);
   const occupiedByOthers = new Set();
   myWines().forEach(w => {
@@ -9215,7 +9234,7 @@ function openSlotGrid(l1, l2, l3, node, mode) {
   } else {
     mineSlots = new Set(selectedWinePositions.filter(p => p.l1 === l1 && p.l2 === l2 && p.l3 === l3 && p.slot).map(p => p.slot));
   }
-  slotPickerState = { l1, l2, l3, capacity: node.capacity, cols: node.cols || null, occupiedByOthers, mineSlots, pendingSelected: new Set(), mode };
+  slotPickerState = { l1, l2, l3, capacity: node.capacity, cols: node.cols || null, occupiedByOthers, mineSlots, pendingSelected: new Set(), mode, returnPath: returnPath || [] };
   renderSlotPicker();
   document.getElementById('cellar-slot-picker-overlay').classList.add('open');
 }
@@ -9279,6 +9298,21 @@ async function confirmSlotPick() {
 function closeCellarSlotPicker() {
   document.getElementById('cellar-slot-picker-overlay').classList.remove('open');
   slotPickerState = null;
+}
+
+// "Indietro" dalla griglia slot: si è arrivati qui toccando la foglia
+// sbagliata (nessuna selezione ancora confermata) — richiude questo
+// popup e riapre la navigazione esattamente al livello da cui si era
+// partiti (returnPath), invece di dover ricominciare da "Cantina".
+function goBackFromSlotGrid() {
+  const s = slotPickerState;
+  if (!s) return;
+  const mode = s.mode;
+  const returnPath = s.returnPath || [];
+  closeCellarSlotPicker();
+  posTreePickerState = { mode, path: returnPath };
+  renderPosTreePicker();
+  document.getElementById('pos-tree-picker-overlay').classList.add('open');
 }
 
 /* ── MAPPA CANTINA (Fase B) — vista grafica di tutte le posizioni con
@@ -11933,8 +11967,8 @@ Object.assign(window, {
   openTutorial, tutorialStep, skipTutorial,
   confirmSumDuplicateQty, confirmSaveDuplicateAsNew, closeDuplicateWinePrompt,
   addPosNode, removePosNode, movePosNode, updatePosNodeLayout, togglePosL1Expanded, removeWinePosition,
-  openPosTreePicker, posTreePickerSelect, posTreePickerGoTo, closePosTreePicker,
-  toggleSlotPick, confirmSlotPick, closeCellarSlotPicker,
+  openPosTreePicker, posTreePickerSelect, posTreePickerGoTo, posTreePickerBack, closePosTreePicker,
+  toggleSlotPick, confirmSlotPick, closeCellarSlotPicker, goBackFromSlotGrid,
   startStructureWizard, wizSubmitName, wizAnswerHasChildren, wizSubmitLayout, wizAnswerMoreSiblings, finishStructureWizard, closeStructureWizard,
   wizGoBack, wizConfirmClose,
   showCellarMapScreen, setCellarMapL1, toggleCellarMapSection, onCellarMapSlotClick, confirmFreeSlot, closeFreeSlotPicker,
