@@ -5222,7 +5222,7 @@ function normalizeWineryName(s) {
 
 async function loadWineriesCache() {
   try {
-    const { data, error } = await sb.from('wineries').select('id,name,region,province,owner_user_id').order('name');
+    const { data, error } = await sb.from('wineries').select('id,name,region,province,country,owner_user_id').order('name');
     if (error) throw error;
     wineriesCache = data || [];
   } catch (err) {
@@ -9438,6 +9438,20 @@ function updateDocOptions() {
   docSuggestions = list;
 }
 
+// Compila Paese/Regione/Provincia da una cantina già in anagrafica
+// appena scelta dall'autocomplete "Produttore" — solo i campi ancora
+// vuoti, per non sovrascrivere qualcosa che l'utente avesse già scritto.
+function fillLocationFromWinery(w) {
+  const countryEl = document.getElementById('f-country');
+  const regionEl = document.getElementById('f-region');
+  const provinceEl = document.getElementById('f-province');
+  if (countryEl && !countryEl.value && w.country) countryEl.value = w.country;
+  updateRegionOptions();
+  if (regionEl && !regionEl.value && w.region) regionEl.value = w.region;
+  updateProvinceOptions();
+  if (provinceEl && !provinceEl.value && w.province) provinceEl.value = w.province;
+}
+
 function updateRegionOptions() {
   const country = document.getElementById('f-country')?.value;
   regionSuggestions = GEO_REGIONS[country] || [];
@@ -11796,6 +11810,7 @@ attachAutocomplete('f-producer', () => wineriesCache.map(wineryLabel), sel => {
   document.getElementById('f-producer').value = w ? w.name : sel;
   selectedWineryId = w ? w.id : null;
   updateWineryLinkVisibility();
+  if (w) fillLocationFromWinery(w);
 });
 document.getElementById('f-producer')?.addEventListener('input', () => { selectedWineryId = null; updateWineryLinkVisibility(); });
 
