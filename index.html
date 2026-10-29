@@ -4596,6 +4596,12 @@ async function doRegister() {
     return;
   }
 
+  // Registrazione riuscita — evento per il Pixel Meta (misura le campagne
+  // ads verso la landing, vedi il banner di consenso in testa al body).
+  // window.fbq esiste solo se l'utente ha accettato i cookie: chiamata
+  // opzionale per non rompere la registrazione quando non esiste ancora.
+  window.fbq?.('track', 'CompleteRegistration');
+
   // Il profilo (nome, associazione, tessera) viene creato automaticamente
   // lato database da un trigger su auth.users — funziona anche se la
   // conferma email è attiva e non c'è ancora una sessione autenticata.
