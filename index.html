@@ -1376,6 +1376,20 @@
       navigator.serviceWorker.register('sw.js').catch(() => {});
     });
   }
+
+  // Salva la provenienza (utm_source/utm_medium/utm_campaign, es. da una
+  // campagna ads) in localStorage finche' l'utente non si registra: puo'
+  // arrivare dalla landing, navigare un po' e iscriversi solo dopo.
+  (function() {
+    var utm = new URLSearchParams(window.location.search);
+    var src = utm.get('utm_source'), med = utm.get('utm_medium'), camp = utm.get('utm_campaign');
+    if (!src && !med && !camp) return;
+    var parts = [];
+    if (src) parts.push('utm_source=' + src);
+    if (med) parts.push('utm_medium=' + med);
+    if (camp) parts.push('utm_campaign=' + camp);
+    try { localStorage.setItem('signupSource', parts.join('&')); } catch (e) {}
+  })();
 </script>
 <div class="app-shell">
 
@@ -4607,12 +4621,16 @@ async function doRegister() {
   // conferma email è attiva e non c'è ancora una sessione autenticata.
   // Questo upsert è solo un tentativo "best effort" nel caso ci sia già sessione;
   // se fallisce (nessuna sessione) non è un problema: il trigger ha già fatto il lavoro.
+  let signupSource = '';
+  try { signupSource = localStorage.getItem('signupSource') || ''; } catch (e) {}
   try {
     await sb.from('profiles').upsert({
       id: data.user.id, full_name: firstname,
-      assoc, card, delegazione: '', privacy_accepted_at: new Date().toISOString()
+      assoc, card, delegazione: '', privacy_accepted_at: new Date().toISOString(),
+      signup_source: signupSource || null
     });
   } catch(_) { /* ignorato: il trigger DB copre già questo caso */ }
+  try { localStorage.removeItem('signupSource'); } catch (e) {}
 
   if (!data.session) {
     // Conferma email nativa attiva (caso non standard nella configurazione

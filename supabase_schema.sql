@@ -3375,3 +3375,13 @@ end;
 $$;
 revoke all on function public.get_wineries_to_complete() from public, anon;
 grant execute on function public.get_wineries_to_complete() to authenticated;
+
+-- ════════════════════════════════════════════════════════════════
+-- 2026-11-04 — Provenienza dell'iscrizione (campagne ads)
+--
+-- index.html salva utm_source/utm_medium/utm_campaign (se presenti
+-- nell'URL d'arrivo) in localStorage e li scrive qui in doRegister(),
+-- cosi' si puo' distinguere chi si e' iscritto da una campagna ads da
+-- chi arriva organicamente.
+-- ════════════════════════════════════════════════════════════════
+alter table public.profiles add column if not exists signup_source text;

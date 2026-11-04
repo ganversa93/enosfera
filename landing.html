@@ -400,6 +400,20 @@
   <script>
     document.getElementById('fyear').textContent = new Date().getFullYear();
 
+    // Propaga gli UTM (es. da una campagna ads) ai link "Registrati gratis"
+    // verso index.html, cosi' l'app puo' salvare la provenienza dell'iscrizione.
+    (function propagateUtm() {
+      const utm = new URLSearchParams(window.location.search);
+      const keep = new URLSearchParams();
+      ['utm_source', 'utm_medium', 'utm_campaign'].forEach(k => {
+        if (utm.get(k)) keep.set(k, utm.get(k));
+      });
+      if (![...keep].length) return;
+      document.querySelectorAll('a[href^="index.html?register=1"]').forEach(a => {
+        a.href = a.getAttribute('href') + '&' + keep.toString();
+      });
+    })();
+
     // Barra CTA fissa in fondo su mobile, comparsa dopo l'hero — tiene
     // sempre a portata di pollice l'azione principale mentre si scorre.
     const stickyCta = document.getElementById('stickyCta');
