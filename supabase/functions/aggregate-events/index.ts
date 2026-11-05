@@ -157,6 +157,31 @@ Deno.serve(async (req) => {
     const { data: profile } = await sbAdmin.from('profiles').select('is_admin').eq('id', userData.user.id).maybeSingle();
     if (!profile?.is_admin) return json({ error: 'forbidden', message: 'Solo un admin può usare questa funzione' }, 200);
 
+    const body = await req.json().catch(() => ({}));
+
+    // Modalità test (bottone "Testa" accanto a una fonte in Configurazione
+    // liste): verifica solo che l'URL risponda e contenga testo leggibile,
+    // nessuna chiamata AI — serve a scoprire subito una fonte morta/bloccata
+    // (es. anti-bot) invece che solo durante un'aggregazione vera, dove
+    // avrebbe già speso chiamate AI sulle altre fonti buone.
+    const testUrl = typeof body?.test_url === 'string' ? body.test_url.trim() : '';
+    if (testUrl) {
+      let parsedTest: URL;
+      try { parsedTest = new URL(testUrl); } catch { return json({ error: 'bad_request', message: 'URL non valido' }, 200); }
+      if (parsedTest.protocol !== 'http:' && parsedTest.protocol !== 'https:') return json({ error: 'bad_request', message: 'URL non valido' }, 200);
+      try {
+        const pageResp = await fetchWithTimeout(parsedTest.toString());
+        if (!pageResp.ok) return json({ error: 'fetch_error', message: `Il sito risponde con un errore (HTTP ${pageResp.status}) — probabilmente blocca le richieste automatiche.` }, 200);
+        const html = (await pageResp.text()).slice(0, MAX_HTML_BYTES);
+        const text = htmlToCleanText(html);
+        if (!text || text.length < 100) return json({ error: 'empty_page', message: 'La pagina risponde ma non contiene testo leggibile a sufficienza.' }, 200);
+        return json({ data: { ok: true, text_length: text.length, preview: text.slice(0, 200) } });
+      } catch (testErr) {
+        const reason = testErr instanceof Error && testErr.name === 'AbortError' ? 'Il sito ha impiegato troppo tempo a rispondere (timeout).' : `Impossibile raggiungere il sito: ${testErr instanceof Error ? testErr.message : String(testErr)}`;
+        return json({ error: 'fetch_error', message: reason }, 200);
+      }
+    }
+
     const { data: sourceRows } = await sbAdmin.from('config_lists').select('value').eq('list_key', 'event_source_url').order('sort_order');
     const sources = (sourceRows || []).map(r => r.value).filter(Boolean).slice(0, MAX_SOURCES);
     if (!sources.length) {

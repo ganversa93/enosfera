@@ -6292,6 +6292,31 @@ async function loadPendingEventsForAdmin() {
   return data || [];
 }
 
+// Verifica una singola fonte della lista "Fonti aggregazione eventi" prima
+// di lanciare l'aggregazione vera: chiama aggregate-events in modalità
+// test (body { test_url }), che fa solo il fetch + pulizia testo, senza
+// spendere una chiamata AI — mostra subito se una fonte è raggiungibile o
+// bloccata (es. anti-bot), invece di scoprirlo solo durante un'aggregazione
+// completa che ha già processato le altre fonti.
+async function testEventSource(id, url) {
+  const btn = document.getElementById(`config-test-btn-${id}`);
+  const result = document.getElementById(`config-test-result-${id}`);
+  if (btn) { btn.disabled = true; btn.textContent = 'Verifica…'; }
+  if (result) { result.textContent = ''; result.style.color = 'var(--muted)'; }
+  await sb.auth.refreshSession().catch(() => {});
+  const { data, error } = await sb.functions.invoke('aggregate-events', { body: { test_url: url } });
+  if (btn) { btn.disabled = false; btn.textContent = 'Testa'; }
+  if (error || data?.error) {
+    let msg = data?.message;
+    if (!msg && error?.context?.json) {
+      try { msg = (await error.context.json())?.message; } catch {}
+    }
+    if (result) { result.textContent = `✗ ${msg || error?.message || 'Non raggiungibile'}`; result.style.color = 'var(--danger, #c0392b)'; }
+    return;
+  }
+  if (result) { result.textContent = `✓ Raggiungibile (${data.data.text_length} caratteri di testo trovati)`; result.style.color = 'var(--success, #2e7d32)'; }
+}
+
 // Innesca la Edge Function aggregate-events (solo admin, bottone "Aggrega
 // nuovi eventi dal web" nella sezione omonima): scansiona le pagine fonte
 // configurate in Configurazione liste → Fonti aggregazione eventi e
@@ -6421,11 +6446,14 @@ async function renderConfigListValues() {
   if (!list) return;
   list.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--muted)">Caricamento…</div>';
   const values = await loadConfigList(currentConfigListKey);
+  const isSourceList = currentConfigListKey === 'event_source_url';
   list.innerHTML = values.length
     ? values.map(v => `
-      <div class="winery-catalog-row">
-        <div style="flex:1">${v.value}</div>
+      <div class="winery-catalog-row" style="${isSourceList ? 'flex-wrap:wrap' : ''}">
+        <div style="flex:1;word-break:break-all">${v.value}</div>
+        ${isSourceList ? `<button class="btn sm" data-url="${escapeAttr(v.value)}" id="config-test-btn-${v.id}" onclick="testEventSource('${v.id}', this.dataset.url)">Testa</button>` : ''}
         <span class="rm-btn" onclick="removeConfigListValue('${v.id}')">×</span>
+        ${isSourceList ? `<div id="config-test-result-${v.id}" style="flex-basis:100%;font-size:11.5px;color:var(--muted);margin-top:2px"></div>` : ''}
       </div>`).join('')
     : '<div style="text-align:center;padding:1.5rem;color:var(--muted)">Nessun valore ancora — aggiungine uno qui sotto.</div>';
 }
@@ -12033,7 +12061,7 @@ Object.assign(window, {
   downloadImportTemplate, handleImportFile,
   removeDetailPosition,
   showWineryDetail, toggleWineryPreview, saveWineryDetails, uploadWineryLogo, goBackFromWinery, showAdminWineriesScreen, deleteWinery, searchAllWineries,
-  aggregateEventsNow,
+  aggregateEventsNow, testEventSource,
   saveScanLimits, resetScanUsage, searchScanUsersAdmin,
   addWineryCatalogWine, removeWineryCatalogWine, useFaviconAsLogo,
   editWineryCatalogWine, cancelEditWineryCatalogWine, addWineryManually, importWineryCatalogFromShop, enrichWineryFromWebsite, enrichWineryCatalogGrapes,
