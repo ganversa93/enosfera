@@ -74,8 +74,23 @@ async function fetchWithTimeout(url: string) {
   }
 }
 
-function htmlToCleanText(html: string): string {
-  const text = html
+// baseUrl risolve gli href relativi ("/eventi/123") in URL assoluti: senza
+// non avrebbe senso scriverli nel testo, l'AI non potrebbe mai riusarli
+// come "website" di un evento.
+function htmlToCleanText(html: string, baseUrl?: string): string {
+  // I link vanno preservati PRIMA di buttare via il resto del markup,
+  // altrimenti l'AI non vede mai nessun URL e "website" resta sempre
+  // vuoto (il bug segnalato dall'utente): ogni <a href> diventa
+  // "testo del link (URL assoluto)" dentro il testo pulito.
+  const withLinks = html.replace(/<a\s+[^>]*href=["']([^"'#][^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi, (_m, href, inner) => {
+    let abs = href;
+    if (baseUrl) {
+      try { abs = new URL(href, baseUrl).toString(); } catch {}
+    }
+    const label = inner.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    return label ? ` ${label} (${abs}) ` : ` (${abs}) `;
+  });
+  const text = withLinks
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
     .replace(/<style[\s\S]*?<\/style>/gi, ' ')
     .replace(/<nav[\s\S]*?<\/nav>/gi, ' ')
@@ -106,7 +121,7 @@ interface ExtractedEvent {
 }
 
 async function extractEventsFromText(text: string, sourceUrl: string, categoryOptions: string[], todayIso: string): Promise<ExtractedEvent[]> {
-  const promptText = `Ecco il testo di una pagina che elenca eventi enologici (degustazioni, cantine aperte, fiere del vino, corsi/masterclass). La pagina è: ${sourceUrl}\n\nEstrai SOLO gli eventi enologici reali con una data chiara, futura o in corso rispetto a oggi (${todayIso}) — ignora eventi passati, voci di menu, link generici o contenuti non pertinenti al vino. Rispondi SOLO con un array JSON valido, zero testo extra, zero markdown, massimo ${MAX_EVENTS_PER_SOURCE} elementi. Schema di ogni elemento: {"name":"","category":"","date_from":"","date_to":"","region":"","province":"","location_name":"","address":"","website":"","description":""}.\n"name" è il titolo dell'evento, obbligatorio.\n"category" deve essere ESATTAMENTE uno tra questi valori se uno corrisponde chiaramente, altrimenti stringa vuota (non indovinare): ${categoryOptions.join(', ') || '(nessuna categoria configurata)'}.\n"date_from"/"date_to" in formato ISO yyyy-mm-dd; "date_to" vuoto se l'evento dura un solo giorno o la data di fine non è chiara.\n"region"/"province" solo se il testo le rende chiare (per l'Italia, sigla o nome provincia, es. "Verona"); altrimenti stringa vuota.\n"website" è un link specifico al programma/prenotazioni di QUESTO evento se presente nel testo, altrimenti stringa vuota (non inventare un URL, non usare l'URL della pagina sorgente).\n"description" è 1-2 frasi in italiano basate SOLO su quanto scritto nel testo, senza inventare dettagli.\nSe non trovi nessun evento valido, rispondi con un array vuoto [].\n\nTesto della pagina:\n${text}`;
+  const promptText = `Ecco il testo di una pagina che elenca eventi enologici (degustazioni, cantine aperte, fiere del vino, corsi/masterclass). La pagina è: ${sourceUrl}\n\nNel testo, ogni link originale è stato riscritto nella forma "testo del link (URL)" subito dopo il testo visibile — usa questi URL per il campo "website", scegliendo quello il cui testo/contesto riguarda chiaramente QUELL'evento specifico (es. "Programma e prenotazioni", "Scopri di più", il titolo dell'evento stesso), non un link generico di navigazione, social o la pagina indice da cui provengono tutti gli eventi.\n\nEstrai SOLO gli eventi enologici reali con una data chiara, futura o in corso rispetto a oggi (${todayIso}) — ignora eventi passati, voci di menu, link generici o contenuti non pertinenti al vino. Rispondi SOLO con un array JSON valido, zero testo extra, zero markdown, massimo ${MAX_EVENTS_PER_SOURCE} elementi. Schema di ogni elemento: {"name":"","category":"","date_from":"","date_to":"","region":"","province":"","location_name":"","address":"","website":"","description":""}.\n"name" è il titolo dell'evento, obbligatorio.\n"category" deve essere ESATTAMENTE uno tra questi valori se uno corrisponde chiaramente, altrimenti stringa vuota (non indovinare): ${categoryOptions.join(', ') || '(nessuna categoria configurata)'}.\n"date_from"/"date_to" in formato ISO yyyy-mm-dd; "date_to" vuoto se l'evento dura un solo giorno o la data di fine non è chiara.\n"region"/"province" solo se il testo le rende chiare (per l'Italia, sigla o nome provincia, es. "Verona"); altrimenti stringa vuota.\n"website" è l'URL (tra parentesi nel testo, vedi sopra) del link specifico a QUESTO evento, se presente, altrimenti stringa vuota — non inventare mai un URL che non compare nel testo.\n"description" è 1-2 frasi in italiano basate SOLO su quanto scritto nel testo, senza inventare dettagli.\nSe non trovi nessun evento valido, rispondi con un array vuoto [].\n\nTesto della pagina:\n${text}`;
 
   const aiResp = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -173,7 +188,7 @@ Deno.serve(async (req) => {
         const pageResp = await fetchWithTimeout(parsedTest.toString());
         if (!pageResp.ok) return json({ error: 'fetch_error', message: `Il sito risponde con un errore (HTTP ${pageResp.status}) — probabilmente blocca le richieste automatiche.` }, 200);
         const html = (await pageResp.text()).slice(0, MAX_HTML_BYTES);
-        const text = htmlToCleanText(html);
+        const text = htmlToCleanText(html, parsedTest.toString());
         if (!text || text.length < 100) return json({ error: 'empty_page', message: 'La pagina risponde ma non contiene testo leggibile a sufficienza.' }, 200);
         return json({ data: { ok: true, text_length: text.length, preview: text.slice(0, 200) } });
       } catch (testErr) {
@@ -210,7 +225,7 @@ Deno.serve(async (req) => {
         const pageResp = await fetchWithTimeout(parsed.toString());
         if (!pageResp.ok) { sourcesFailed.push({ url: sourceUrl, reason: `HTTP ${pageResp.status}` }); continue; }
         const html = (await pageResp.text()).slice(0, MAX_HTML_BYTES);
-        const text = htmlToCleanText(html);
+        const text = htmlToCleanText(html, parsed.toString());
         if (!text) { sourcesFailed.push({ url: sourceUrl, reason: 'Pagina vuota o illeggibile' }); continue; }
 
         const events = await extractEventsFromText(text, sourceUrl, categoryOptions, todayIso);
