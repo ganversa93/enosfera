@@ -3899,8 +3899,9 @@
     <div class="fsec collapsible collapsed" id="admin-sec-events" style="margin-top:.9rem">
       <div class="stitle fsec-header" onclick="toggleSection('admin-sec-events')"><i class="ti ti-calendar-event"></i>Eventi in attesa di approvazione (<span id="admin-pending-events-count">0</span>)<i class="ti ti-chevron-down fsec-chevron"></i></div>
       <div class="fsec-body">
-        <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Eventi inseriti da una cantina, non ancora visibili a tutti — apri per approvare o rifiutare.</p>
-        <div id="admin-pending-events-list"></div>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Eventi inseriti da una cantina o trovati automaticamente dal web, non ancora visibili a tutti — apri per approvare o rifiutare.</p>
+        <button class="btn sm" id="admin-aggregate-events-btn" onclick="aggregateEventsNow()"><i class="ti ti-robot"></i>Aggrega nuovi eventi dal web</button>
+        <div id="admin-pending-events-list" style="margin-top:10px"></div>
       </div>
     </div>
   </div>
@@ -6161,7 +6162,10 @@ async function showAdminWineriesScreen() {
   pendingEventsList.innerHTML = pendingEvents.length
     ? pendingEvents.map(e => `
       <div class="winery-row" onclick="showEventDetail('${e.id}')">
-        <div class="winery-row-name"><i class="ti ti-calendar-event"></i>${e.name}</div>
+        <div>
+          <div class="winery-row-name"><i class="ti ti-calendar-event"></i>${e.name}</div>
+          ${e.source ? `<div class="winery-row-sub"><i class="ti ti-robot" style="font-size:11px"></i> Aggregato da ${e.source}</div>` : ''}
+        </div>
         <i class="ti ti-chevron-right"></i>
       </div>`).join('')
     : '<div style="text-align:center;padding:1.5rem;color:var(--muted)">Nessun evento in attesa 🎉</div>';
@@ -6283,9 +6287,36 @@ async function rejectWineryClaim(claimId) {
 }
 
 async function loadPendingEventsForAdmin() {
-  const { data, error } = await sb.from('events').select('id,name').eq('status', 'pending').order('created_at', { ascending: false });
+  const { data, error } = await sb.from('events').select('id,name,source').eq('status', 'pending').order('created_at', { ascending: false });
   if (error) { console.warn('loadPendingEventsForAdmin', error); return []; }
   return data || [];
+}
+
+// Innesca la Edge Function aggregate-events (solo admin, bottone "Aggrega
+// nuovi eventi dal web" nella sezione omonima): scansiona le pagine fonte
+// configurate in Configurazione liste → Fonti aggregazione eventi e
+// inserisce quanto trova come eventi 'pending', nella stessa coda di
+// revisione degli eventi inseriti dalle cantine — non pubblica nulla da
+// sola, vedi supabase/functions/aggregate-events/index.ts.
+async function aggregateEventsNow() {
+  if (!currentUser?.isAdmin) return;
+  const btn = document.getElementById('admin-aggregate-events-btn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2"></i>Aggregazione in corso…'; }
+  await sb.auth.refreshSession().catch(() => {});
+  const { data, error } = await sb.functions.invoke('aggregate-events');
+  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-robot"></i>Aggrega nuovi eventi dal web'; }
+  if (error || data?.error) {
+    let msg = data?.message;
+    if (!msg && error?.context?.json) {
+      try { msg = (await error.context.json())?.message; } catch {}
+    }
+    toastErr(msg || error?.message || 'Aggregazione non riuscita');
+    return;
+  }
+  const r = data.data || {};
+  const failedNote = r.sources_failed?.length ? ` (${r.sources_failed.length} fonte/i non raggiungibile/i)` : '';
+  toast(`✓ ${r.inserted || 0} nuovo/i evento/i in attesa di approvazione${failedNote}`);
+  showAdminWineriesScreen();
 }
 
 function escapeAttr(s) {
@@ -6352,6 +6383,7 @@ async function loadEventOptionLists() {
 const CONFIG_LIST_LABELS = {
   event_category: 'Categoria eventi',
   event_association: 'Associazioni collegate',
+  event_source_url: 'Fonti aggregazione eventi',
   denomination_version: 'Versione denominazione',
   blog_tag: 'Tag articoli blog',
 };
@@ -6762,6 +6794,8 @@ async function showEventDetail(id, prefill) {
     <div class="fsec" style="margin-top:1.25rem">
       <div class="stitle"><i class="ti ti-edit"></i>${id ? 'Modifica evento' : 'Nuovo evento'}</div>
       ${(!currentUser?.isAdmin && !id) ? `<p style="font-size:12px;color:var(--muted);margin:-4px 0 1rem">L'evento sarà visibile a tutti solo dopo l'approvazione di un admin.</p>` : ''}
+      ${(currentUser?.isAdmin && ev?.source) ? `
+        <p style="font-size:12px;color:var(--muted);margin:-4px 0 1rem"><i class="ti ti-robot" style="font-size:12px"></i> Aggregato automaticamente da <b>${ev.source}</b>${ev.source_url ? ` — <a href="${ev.source_url}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">apri la pagina fonte</a>` : ''}. Verifica i dati prima di approvare.</p>` : ''}
       ${(currentUser?.isAdmin && ev && ev.status !== 'approved') ? `
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem">
           <button class="btn sm primary" onclick="setEventStatus('approved')"><i class="ti ti-check"></i>Approva</button>
@@ -11999,6 +12033,7 @@ Object.assign(window, {
   downloadImportTemplate, handleImportFile,
   removeDetailPosition,
   showWineryDetail, toggleWineryPreview, saveWineryDetails, uploadWineryLogo, goBackFromWinery, showAdminWineriesScreen, deleteWinery, searchAllWineries,
+  aggregateEventsNow,
   saveScanLimits, resetScanUsage, searchScanUsersAdmin,
   addWineryCatalogWine, removeWineryCatalogWine, useFaviconAsLogo,
   editWineryCatalogWine, cancelEditWineryCatalogWine, addWineryManually, importWineryCatalogFromShop, enrichWineryFromWebsite, enrichWineryCatalogGrapes,

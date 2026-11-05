@@ -3385,3 +3385,16 @@ grant execute on function public.get_wineries_to_complete() to authenticated;
 -- chi arriva organicamente.
 -- ════════════════════════════════════════════════════════════════
 alter table public.profiles add column if not exists signup_source text;
+
+-- ════════════════════════════════════════════════════════════════
+-- 2026-11-05 — Aggregazione automatica eventi (edge function
+-- aggregate-events)
+--
+-- source/source_url tracciano la provenienza di un evento aggregato
+-- automaticamente dal web (dominio e pagina esatta da cui è stato
+-- estratto), cosi' l'admin puo' verificarla prima di approvarlo nella
+-- coda "Eventi in attesa di approvazione" — restano null per gli
+-- eventi inseriti a mano (admin o cantina) come sempre.
+-- ════════════════════════════════════════════════════════════════
+alter table public.events add column if not exists source text;
+alter table public.events add column if not exists source_url text;
