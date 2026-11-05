@@ -6339,8 +6339,11 @@ async function aggregateEventsNow() {
     return;
   }
   const r = data.data || {};
-  const failedNote = r.sources_failed?.length ? ` (${r.sources_failed.length} fonte/i non raggiungibile/i)` : '';
-  toast(`✓ ${r.inserted || 0} nuovo/i evento/i in attesa di approvazione${failedNote}`);
+  const notes = [];
+  if (r.sources_failed?.length) notes.push(`${r.sources_failed.length} fonte/i non raggiungibile/i`);
+  if (r.skipped_out_of_area) notes.push(`${r.skipped_out_of_area} fuori dal Triveneto scartati`);
+  const note = notes.length ? ` (${notes.join(', ')})` : '';
+  toast(`✓ ${r.inserted || 0} nuovo/i evento/i in attesa di approvazione${note}`);
   showAdminWineriesScreen();
 }
 

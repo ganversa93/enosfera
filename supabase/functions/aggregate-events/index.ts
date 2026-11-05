@@ -107,6 +107,27 @@ function hostnameOf(url: string): string {
   try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
 }
 
+// Filtro geografico: per ora Enoscrigno punta sul Triveneto, quindi
+// l'aggregazione scarta eventi esplicitamente fuori da queste tre regioni
+// — "esplicitamente", perché se l'AI non è riuscita a capire dove si
+// svolge un evento (region/province vuoti) lo lasciamo passare piuttosto
+// che perdere eventi validi solo mal estratti; li vaglia comunque un admin.
+const TRIVENETO_REGIONS = ['veneto', 'trentino', 'alto adige', 'trentino-alto adige', 'trentino alto adige', 'südtirol', 'sudtirol', 'friuli', 'friuli-venezia giulia', 'friuli venezia giulia'];
+const TRIVENETO_PROVINCES = [
+  'verona', 'vicenza', 'venezia', 'padova', 'padua', 'treviso', 'rovigo', 'belluno', 'vr', 'vi', 've', 'pd', 'tv', 'ro', 'bl',
+  'trento', 'bolzano', 'tn', 'bz',
+  'udine', 'trieste', 'gorizia', 'pordenone', 'ud', 'ts', 'go', 'pn',
+];
+
+function isTriveneto(region: string, province: string): boolean {
+  const r = (region || '').trim().toLowerCase();
+  const p = (province || '').trim().toLowerCase();
+  if (!r && !p) return true; // non siamo riusciti a capirlo: non scartare, lo vaglia un admin
+  if (r && TRIVENETO_REGIONS.some(v => r.includes(v))) return true;
+  if (p && TRIVENETO_PROVINCES.includes(p)) return true;
+  return false;
+}
+
 interface ExtractedEvent {
   name: string;
   category: string;
@@ -121,7 +142,7 @@ interface ExtractedEvent {
 }
 
 async function extractEventsFromText(text: string, sourceUrl: string, categoryOptions: string[], todayIso: string): Promise<ExtractedEvent[]> {
-  const promptText = `Ecco il testo di una pagina che elenca eventi enologici (degustazioni, cantine aperte, fiere del vino, corsi/masterclass). La pagina è: ${sourceUrl}\n\nNel testo, ogni link originale è stato riscritto nella forma "testo del link (URL)" subito dopo il testo visibile — usa questi URL per il campo "website", scegliendo quello il cui testo/contesto riguarda chiaramente QUELL'evento specifico (es. "Programma e prenotazioni", "Scopri di più", il titolo dell'evento stesso), non un link generico di navigazione, social o la pagina indice da cui provengono tutti gli eventi.\n\nEstrai SOLO gli eventi enologici reali con una data chiara, futura o in corso rispetto a oggi (${todayIso}) — ignora eventi passati, voci di menu, link generici o contenuti non pertinenti al vino. Rispondi SOLO con un array JSON valido, zero testo extra, zero markdown, massimo ${MAX_EVENTS_PER_SOURCE} elementi. Schema di ogni elemento: {"name":"","category":"","date_from":"","date_to":"","region":"","province":"","location_name":"","address":"","website":"","description":""}.\n"name" è il titolo dell'evento, obbligatorio.\n"category" deve essere ESATTAMENTE uno tra questi valori se uno corrisponde chiaramente, altrimenti stringa vuota (non indovinare): ${categoryOptions.join(', ') || '(nessuna categoria configurata)'}.\n"date_from"/"date_to" in formato ISO yyyy-mm-dd; "date_to" vuoto se l'evento dura un solo giorno o la data di fine non è chiara.\n"region"/"province" solo se il testo le rende chiare (per l'Italia, sigla o nome provincia, es. "Verona"); altrimenti stringa vuota.\n"website" è l'URL (tra parentesi nel testo, vedi sopra) del link specifico a QUESTO evento, se presente, altrimenti stringa vuota — non inventare mai un URL che non compare nel testo.\n"description" è 1-2 frasi in italiano basate SOLO su quanto scritto nel testo, senza inventare dettagli.\nSe non trovi nessun evento valido, rispondi con un array vuoto [].\n\nTesto della pagina:\n${text}`;
+  const promptText = `Ecco il testo di una pagina che elenca eventi enologici (degustazioni, cantine aperte, fiere del vino, corsi/masterclass). La pagina è: ${sourceUrl}\n\nEnoscrigno si rivolge per ora solo al Triveneto (Veneto, Trentino-Alto Adige, Friuli-Venezia Giulia): se la pagina elenca anche eventi altrove in Italia o all'estero, includi SOLO quelli che si svolgono in una di queste tre regioni (deducendolo da città/provincia/regione citate). Se da un evento non riesci a capire dove si svolge, includilo comunque — meglio un admin che lo scarta lui, che perderlo per un'estrazione incerta.\n\nNel testo, ogni link originale è stato riscritto nella forma "testo del link (URL)" subito dopo il testo visibile — usa questi URL per il campo "website", scegliendo quello il cui testo/contesto riguarda chiaramente QUELL'evento specifico (es. "Programma e prenotazioni", "Scopri di più", il titolo dell'evento stesso), non un link generico di navigazione, social o la pagina indice da cui provengono tutti gli eventi.\n\nEstrai SOLO gli eventi enologici reali con una data chiara, futura o in corso rispetto a oggi (${todayIso}) — ignora eventi passati, voci di menu, link generici o contenuti non pertinenti al vino. Rispondi SOLO con un array JSON valido, zero testo extra, zero markdown, massimo ${MAX_EVENTS_PER_SOURCE} elementi. Schema di ogni elemento: {"name":"","category":"","date_from":"","date_to":"","region":"","province":"","location_name":"","address":"","website":"","description":""}.\n"name" è il titolo dell'evento, obbligatorio.\n"category" deve essere ESATTAMENTE uno tra questi valori se uno corrisponde chiaramente, altrimenti stringa vuota (non indovinare): ${categoryOptions.join(', ') || '(nessuna categoria configurata)'}.\n"date_from"/"date_to" in formato ISO yyyy-mm-dd; "date_to" vuoto se l'evento dura un solo giorno o la data di fine non è chiara.\n"region"/"province" solo se il testo le rende chiare (per l'Italia, sigla o nome provincia, es. "Verona"); altrimenti stringa vuota.\n"website" è l'URL (tra parentesi nel testo, vedi sopra) del link specifico a QUESTO evento, se presente, altrimenti stringa vuota — non inventare mai un URL che non compare nel testo.\n"description" è 1-2 frasi in italiano basate SOLO su quanto scritto nel testo, senza inventare dettagli.\nSe non trovi nessun evento valido, rispondi con un array vuoto [].\n\nTesto della pagina:\n${text}`;
 
   const aiResp = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -214,6 +235,7 @@ Deno.serve(async (req) => {
     let inserted = 0;
     let skippedDuplicate = 0;
     let skippedPast = 0;
+    let skippedOutOfArea = 0;
     const sourcesFailed: { url: string; reason: string }[] = [];
 
     for (const sourceUrl of sources) {
@@ -236,6 +258,7 @@ Deno.serve(async (req) => {
           if (!name) continue;
           const dateFrom = /^\d{4}-\d{2}-\d{2}$/.test(e.date_from || '') ? e.date_from : null;
           if (dateFrom && dateFrom < todayIso) { skippedPast++; continue; }
+          if (!isTriveneto(e.region, e.province)) { skippedOutOfArea++; continue; }
           const sourceKey = `${sourceUrl}|${name.toLowerCase()}|${dateFrom || ''}`;
           const nameDateKey = `${name.toLowerCase()}|${dateFrom || ''}`;
           if (existingBySourceKey.has(sourceKey) || existingByNameDate.has(nameDateKey)) { skippedDuplicate++; continue; }
@@ -268,7 +291,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    return json({ data: { inserted, skipped_duplicate: skippedDuplicate, skipped_past: skippedPast, sources_scanned: sources.length, sources_failed: sourcesFailed } });
+    return json({ data: { inserted, skipped_duplicate: skippedDuplicate, skipped_past: skippedPast, skipped_out_of_area: skippedOutOfArea, sources_scanned: sources.length, sources_failed: sourcesFailed } });
   } catch (err) {
     console.error('aggregate-events error:', err);
     await notifyAdminError('aggregate-events', err);
