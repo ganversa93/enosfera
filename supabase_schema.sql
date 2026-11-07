@@ -3460,3 +3460,67 @@ create policy "premium_plans: scrittura solo admin"
 
 alter table public.profiles add column if not exists scan_monthly_limit integer;
 alter table public.profiles add column if not exists premium_plan_id uuid references public.premium_plans(id) on delete set null;
+
+-- ════════════════════════════════════════════════════════════════
+-- 2026-11-07 — Prova gratuita scan AI (5 scansioni a vita) + statistica
+-- app installata vs browser
+--
+-- free_scans_used conta le scansioni fatte da chi NON ha un piano
+-- Premium — a differenza di scan_usage (mensile, si azzera ogni mese),
+-- questo e' un contatore a vita: raggiunto scan_limits.free_trial_limit
+-- (default 5, modificabile dall'admin da "Monitoraggio Scan AI" come
+-- gli altri due limiti), scan-label nega la scansione finche' l'utente
+-- non sceglie un piano.
+--
+-- uses_standalone_app registra se l'ultima sessione dell'utente era
+-- dall'app installata (PWA) o dal browser — solo a scopo statistico
+-- (vedi "Utenti via app installata" nel pannello admin), scritto dal
+-- client (index.html, trackStandaloneUsage()) via isStandaloneApp().
+-- ════════════════════════════════════════════════════════════════
+alter table public.profiles add column if not exists free_scans_used integer not null default 0;
+alter table public.profiles add column if not exists uses_standalone_app boolean;
+alter table public.scan_limits add column if not exists free_trial_limit integer not null default 5;
+
+create or replace function public.get_admin_stats()
+returns table (
+  total_users bigint,
+  new_users_7d bigint,
+  new_users_30d bigint,
+  public_profiles bigint,
+  premium_users bigint,
+  total_wines bigint,
+  total_wineries bigint,
+  wineries_incomplete bigint,
+  scan_usage_global_current integer,
+  scan_usage_global_limit integer,
+  standalone_app_users bigint
+)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_admin() then
+    raise exception 'not authorized';
+  end if;
+  return query
+    select
+      (select count(*) from public.profiles)::bigint,
+      (select count(*) from public.profiles where created_at >= now() - interval '7 days')::bigint,
+      (select count(*) from public.profiles where created_at >= now() - interval '30 days')::bigint,
+      (select count(*) from public.profiles where is_public = true)::bigint,
+      (select count(*) from public.profiles where ai_scan_enabled = true)::bigint,
+      (select count(*) from public.wines)::bigint,
+      (select count(*) from public.wineries)::bigint,
+      (select count(*) from public.wineries
+        where country is null and region is null and province is null
+          and website is null and description is null and logo_url is null)::bigint,
+      coalesce((select su.count from public.scan_usage su
+        where su.scope = 'global' and su.period = to_char(now(), 'YYYY-MM')), 0),
+      coalesce((select sl.global_monthly_limit from public.scan_limits sl where sl.id), 800),
+      (select count(*) from public.profiles where uses_standalone_app = true)::bigint;
+end;
+$$;
+revoke all on function public.get_admin_stats() from public, anon;
+grant execute on function public.get_admin_stats() to authenticated;

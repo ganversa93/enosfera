@@ -19,8 +19,9 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const DEFAULT_PER_USER_MONTHLY_LIMIT = 40;    // scansioni per utente al mese
+const DEFAULT_PER_USER_MONTHLY_LIMIT = 40;    // scansioni per utente Premium al mese (fallback)
 const DEFAULT_GLOBAL_MONTHLY_LIMIT   = 800;   // scansioni totali per TUTTA l'app al mese
+const DEFAULT_FREE_TRIAL_LIMIT       = 5;     // scansioni di prova gratuite A VITA per chi non è Premium
 
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')!;
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -78,27 +79,38 @@ Deno.serve(async (req) => {
     const userId = userData.user.id;
     const period = currentPeriod();
 
-    // ── 2. Verifica che l'utente abbia accesso alla funzione (flag premium) ──
+    // ── 2. Stato dell'utente: Premium con piano, o prova gratuita a vita ──
     const { data: profile, error: profileErr } = await sbAdmin
-      .from('profiles').select('ai_scan_enabled, scan_monthly_limit').eq('id', userId).maybeSingle();
-    if (profileErr || !profile?.ai_scan_enabled) {
+      .from('profiles').select('ai_scan_enabled, scan_monthly_limit, free_scans_used').eq('id', userId).maybeSingle();
+    if (profileErr || !profile) {
+      return json({ error: 'not_enabled', message: 'Profilo non trovato.' }, 403);
+    }
+    const isPremium = !!profile.ai_scan_enabled;
+
+    const { data: limitsRow } = await sbAdmin
+      .from('scan_limits').select('per_user_monthly_limit, global_monthly_limit, free_trial_limit').eq('id', true).maybeSingle();
+    const GLOBAL_MONTHLY_LIMIT = limitsRow?.global_monthly_limit ?? DEFAULT_GLOBAL_MONTHLY_LIMIT;
+    const FREE_TRIAL_LIMIT = limitsRow?.free_trial_limit ?? DEFAULT_FREE_TRIAL_LIMIT;
+
+    // Non Premium: 5 scansioni di prova gratuite A VITA (free_scans_used
+    // non si azzera mai, a differenza di scan_usage sotto che è mensile) —
+    // esaurite quelle, la scansione resta bloccata finché non si sceglie
+    // un piano dal profilo.
+    if (!isPremium && (profile.free_scans_used || 0) >= FREE_TRIAL_LIMIT) {
       return json({
-        error: 'not_enabled',
-        message: 'La scansione etichette con AI è una funzione premium — scegli un piano dal tuo profilo per attivarla.'
+        error: 'free_trial_exhausted',
+        message: `Hai usato tutte le ${FREE_TRIAL_LIMIT} scansioni di prova gratuite. Scegli un piano Premium dal tuo profilo per continuare.`
       }, 403);
     }
 
-    // ── 3. Controlla i due limiti PRIMA di chiamare Anthropic ──
-    // Il limite per utente dipende dal piano Premium scelto
-    // (profiles.scan_monthly_limit, impostato dal webhook Stripe in base
-    // al piano acquistato — vedi premium_plans). scan_limits resta un
-    // fallback per chi ha ai_scan_enabled senza un piano associato (es.
-    // abilitato a mano dall'admin) e continua a fare da tetto globale.
-    const { data: limitsRow } = await sbAdmin
-      .from('scan_limits').select('per_user_monthly_limit, global_monthly_limit').eq('id', true).maybeSingle();
-    const PER_USER_MONTHLY_LIMIT = profile.scan_monthly_limit ?? limitsRow?.per_user_monthly_limit ?? DEFAULT_PER_USER_MONTHLY_LIMIT;
-    const GLOBAL_MONTHLY_LIMIT = limitsRow?.global_monthly_limit ?? DEFAULT_GLOBAL_MONTHLY_LIMIT;
-
+    // ── 3. Controlla i limiti PRIMA di chiamare Anthropic ──
+    // Il limite mensile per utente vale solo per chi è Premium (dipende
+    // dal piano scelto, profiles.scan_monthly_limit — impostato dal
+    // webhook Stripe, vedi premium_plans; scan_limits.per_user_monthly_limit
+    // resta un fallback per chi ha ai_scan_enabled senza un piano
+    // associato, es. abilitato a mano dall'admin). Chi è in prova
+    // gratuita è già stato filtrato sopra dal limite a vita, non da
+    // questo. Il limite globale invece vale sempre, per chiunque.
     const { data: globalRow } = await sbAdmin
       .from('scan_usage').select('count').eq('scope', 'global').eq('period', period).maybeSingle();
     const globalCount = globalRow?.count || 0;
@@ -112,11 +124,14 @@ Deno.serve(async (req) => {
     const { data: userRow } = await sbAdmin
       .from('scan_usage').select('count').eq('scope', userId).eq('period', period).maybeSingle();
     const userCount = userRow?.count || 0;
-    if (userCount >= PER_USER_MONTHLY_LIMIT) {
-      return json({
-        error: 'limit_user',
-        message: `Hai raggiunto il limite di ${PER_USER_MONTHLY_LIMIT} scansioni AI questo mese. Riprova il mese prossimo o inserisci i dati manualmente.`
-      }, 429);
+    if (isPremium) {
+      const PER_USER_MONTHLY_LIMIT = profile.scan_monthly_limit ?? limitsRow?.per_user_monthly_limit ?? DEFAULT_PER_USER_MONTHLY_LIMIT;
+      if (userCount >= PER_USER_MONTHLY_LIMIT) {
+        return json({
+          error: 'limit_user',
+          message: `Hai raggiunto il limite di ${PER_USER_MONTHLY_LIMIT} scansioni AI questo mese. Riprova il mese prossimo o inserisci i dati manualmente.`
+        }, 429);
+      }
     }
 
     // ── 4. Leggi le immagini dal body della richiesta (fronte + eventuale retro,
@@ -182,6 +197,12 @@ Deno.serve(async (req) => {
     await sbAdmin.from('scan_usage').upsert({
       scope: userId, period, count: userCount + 1, updated_at: new Date().toISOString()
     });
+    // Oltre al contatore mensile sopra (che serve solo per monitoraggio/
+    // limite globale), chi non è Premium consuma anche la prova gratuita
+    // a vita — mai per chi è Premium, che non ne ha bisogno.
+    if (!isPremium) {
+      await sbAdmin.from('profiles').update({ free_scans_used: (profile.free_scans_used || 0) + 1 }).eq('id', userId);
+    }
 
     return json({ data: parsed });
 

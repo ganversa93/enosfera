@@ -3849,6 +3849,7 @@
         <div class="stat"><div class="stat-n" id="admin-stat-wines">—</div><div class="stat-l">Vini in app</div></div>
         <div class="stat"><div class="stat-n" id="admin-stat-wineries">—</div><div class="stat-l">Cantine anagrafica</div></div>
         <div class="stat"><div class="stat-n" id="admin-stat-scans">—</div><div class="stat-l">Scan AI (mese)</div></div>
+        <div class="stat"><div class="stat-n" id="admin-stat-standalone">—</div><div class="stat-l">Via app installata</div></div>
       </div>
     </div>
 
@@ -3856,8 +3857,11 @@
       <div class="stitle fsec-header" onclick="toggleSection('admin-sec-scanlimits')"><i class="ti ti-scan"></i>Monitoraggio Scan AI<i class="ti ti-chevron-down fsec-chevron"></i></div>
       <div class="fsec-body">
         <div class="frow">
-          <div class="fg"><label>Limite per utente (al mese)</label><input type="number" id="admin-scan-limit-user" min="1"></div>
+          <div class="fg"><label>Limite per utente Premium (al mese)</label><input type="number" id="admin-scan-limit-user" min="1"></div>
           <div class="fg"><label>Limite globale (al mese)</label><input type="number" id="admin-scan-limit-global" min="1"></div>
+        </div>
+        <div class="frow">
+          <div class="fg"><label>Prova gratuita (scansioni a vita)</label><input type="number" id="admin-scan-limit-trial" min="1"></div>
         </div>
         <button class="btn sm primary" onclick="saveScanLimits()"><i class="ti ti-device-floppy"></i>Salva limiti</button>
         <button class="btn sm" style="margin-left:8px" onclick="resetScanUsage('global')"><i class="ti ti-refresh"></i>Azzera contatore globale</button>
@@ -4737,6 +4741,8 @@ async function loadProfile(authUser) {
     card:              profile?.card  || '',
     delegazione:       profile?.delegazione || profile?.delegazione_custom || '',
     aiScanEnabled:     profile?.ai_scan_enabled || false,
+    freeScansUsed:     profile?.free_scans_used || 0,
+    usesStandaloneApp: profile?.uses_standalone_app ?? null,
     avatarBase64:      profile?.avatar_base64 || '',
     isPublic:          profile?.is_public || false,
     publicPromptSeen:  profile?.public_prompt_seen || false,
@@ -5136,6 +5142,19 @@ function isIosDevice() {
   return /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
 }
 
+// Scrive una volta per sessione se l'utente sta usando l'app installata
+// (standalone) o il browser — serve solo per la statistica admin "Utenti
+// via app installata", non cambia nulla nel comportamento dell'app.
+let standaloneUsageTracked = false;
+async function trackStandaloneUsage() {
+  if (standaloneUsageTracked || !currentUser) return;
+  standaloneUsageTracked = true;
+  const standalone = isStandaloneApp();
+  if (currentUser.usesStandaloneApp === standalone) return; // già coerente, non serve scrivere
+  await sb.from('profiles').update({ uses_standalone_app: standalone }).eq('id', currentUser.id);
+  currentUser.usesStandaloneApp = standalone;
+}
+
 function maybeShowInstallBanner() {
   if (isStandaloneApp() || localStorage.getItem(INSTALL_DISMISS_KEY) === '1') return;
   if (isIosDevice()) showInstallBanner('ios');
@@ -5529,7 +5548,7 @@ function renderWineryContactsSection(wineryId, contacts, editId) {
     <div class="fsec" style="margin-top:1.25rem">
       <div class="stitle"><i class="ti ti-address-book"></i>I miei contatti per questa cantina</div>
       <div id="wy-contacts-list">${listHtml}</div>
-      ${currentUser?.aiScanEnabled ? `
+      ${canUseAiScan() ? `
       <input type="file" id="wy-contact-bizcard-input" accept="image/*" capture="environment" style="display:none" onchange="scanBusinessCard(this, 'wy-contact')">
       <button type="button" class="btn gold sm" style="margin-top:10px" onclick="document.getElementById('wy-contact-bizcard-input').click()"><i class="ti ti-sparkles"></i>Scansiona biglietto da visita</button>
       <div class="spin-wrap" id="wy-contact-bizcard-spin"><div class="spin"></div><span style="font-size:12px;color:var(--muted)">Lettura biglietto in corso…</span></div>` : ''}
@@ -5589,7 +5608,7 @@ async function showWineryContactsScreen() {
   // della scansione etichette: va mostrata solo a chi ha ai_scan_enabled,
   // stesso trattamento del banner AI nel form vino (vedi renderAiBanner).
   const bizcardWrap = document.getElementById('wcl-bizcard-wrap');
-  if (bizcardWrap) bizcardWrap.style.display = currentUser?.aiScanEnabled ? '' : 'none';
+  if (bizcardWrap) bizcardWrap.style.display = canUseAiScan() ? '' : 'none';
   const box = document.getElementById('wcl-list');
   if (box) box.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted)">Caricamento…</div>';
   const { data, error } = await sb.from('winery_contacts')
@@ -6220,21 +6239,24 @@ async function loadAdminStats() {
   document.getElementById('admin-stat-wines').textContent = s.total_wines;
   document.getElementById('admin-stat-wineries').textContent = s.total_wineries;
   document.getElementById('admin-stat-scans').textContent = `${s.scan_usage_global_current}/${s.scan_usage_global_limit}`;
+  document.getElementById('admin-stat-standalone').textContent = s.standalone_app_users;
 }
 
 /* ── Monitoraggio Scan AI: limiti configurabili + azzeramento contatori ── */
 async function loadScanLimits() {
-  const { data } = await sb.from('scan_limits').select('per_user_monthly_limit, global_monthly_limit').eq('id', true).maybeSingle();
+  const { data } = await sb.from('scan_limits').select('per_user_monthly_limit, global_monthly_limit, free_trial_limit').eq('id', true).maybeSingle();
   document.getElementById('admin-scan-limit-user').value = data?.per_user_monthly_limit ?? 40;
   document.getElementById('admin-scan-limit-global').value = data?.global_monthly_limit ?? 800;
+  document.getElementById('admin-scan-limit-trial').value = data?.free_trial_limit ?? 5;
 }
 
 async function saveScanLimits() {
   const perUser = parseInt(document.getElementById('admin-scan-limit-user').value, 10);
   const global = parseInt(document.getElementById('admin-scan-limit-global').value, 10);
-  if (!perUser || !global || perUser < 1 || global < 1) { toastErr('Inserisci valori validi (numeri maggiori di zero)'); return; }
+  const trial = parseInt(document.getElementById('admin-scan-limit-trial').value, 10);
+  if (!perUser || !global || !trial || perUser < 1 || global < 1 || trial < 1) { toastErr('Inserisci valori validi (numeri maggiori di zero)'); return; }
   const { error } = await sb.from('scan_limits')
-    .update({ per_user_monthly_limit: perUser, global_monthly_limit: global, updated_at: new Date().toISOString() })
+    .update({ per_user_monthly_limit: perUser, global_monthly_limit: global, free_trial_limit: trial, updated_at: new Date().toISOString() })
     .eq('id', true);
   if (error) { toastErr('Errore salvataggio: ' + error.message); return; }
   toast('✓ Limiti aggiornati');
@@ -7126,6 +7148,7 @@ async function initApp() {
   loadWineriesCache();
   loadEventOptionLists();
   loadDonationLink();
+  trackStandaloneUsage();
   // Carica vini dal DB
   showLoadingOverlay(true);
   winesCache = await loadWines();
@@ -7903,16 +7926,30 @@ function calcONAV() {
 function recalcONAV() { return calcONAV(); }
 
 /* ── IMAGES ── */
+// Numero di scansioni di prova gratuite "a vita" per chi non ha un piano
+// Premium — rispecchia il default lato server (scan_limits.free_trial_limit,
+// non leggibile dal client perché quella tabella è solo-admin). È solo per
+// il testo mostrato qui: il blocco vero avviene sempre in scan-label, che
+// legge il valore reale (eventualmente diverso se l'admin l'ha cambiato).
+const FREE_TRIAL_SCAN_LIMIT = 5;
+function freeScansRemaining() {
+  return Math.max(0, FREE_TRIAL_SCAN_LIMIT - (currentUser?.freeScansUsed || 0));
+}
+function canUseAiScan() {
+  return !!currentUser?.aiScanEnabled || freeScansRemaining() > 0;
+}
+
 function renderAiBanner() {
   const el = document.getElementById('ai-banner');
   if (!el) return;
-  if (currentUser?.aiScanEnabled) {
+  if (canUseAiScan()) {
     el.style.display = '';
     el.className = 'ai-banner';
     const hasImg = !!(frontImg || backImg);
+    const trialNote = currentUser?.aiScanEnabled ? '' : ` — ${freeScansRemaining()} scansion${freeScansRemaining() === 1 ? 'e' : 'i'} di prova gratuit${freeScansRemaining() === 1 ? 'a' : 'e'} rimast${freeScansRemaining() === 1 ? 'a' : 'e'}`;
     el.innerHTML = `
       <span class="ai-pill"><i class="ti ti-sparkles" style="font-size:10px"></i> AI</span>
-      <span class="ai-txt">${hasImg ? "Carica anche la controetichetta se vuoi più dettagli, poi analizza" : "Carica almeno la foto del fronte, poi analizza l'etichetta"}</span>
+      <span class="ai-txt">${hasImg ? "Carica anche la controetichetta se vuoi più dettagli, poi analizza" : "Carica almeno la foto del fronte, poi analizza l'etichetta"}${trialNote}</span>
       <button class="btn gold sm" onclick="scanBothLabels()" ${hasImg ? '' : 'disabled'}>
         <i class="ti ti-sparkles"></i>Analizza con AI
       </button>
@@ -7922,7 +7959,7 @@ function renderAiBanner() {
     el.className = 'ai-banner';
     el.innerHTML = `
       <span class="ai-pill"><i class="ti ti-sparkles" style="font-size:10px"></i> AI</span>
-      <span class="ai-txt">Scansiona l'etichetta e lascia che l'AI compili la scheda — disponibile nei piani Premium</span>
+      <span class="ai-txt">Hai esaurito le scansioni di prova gratuite — passa a un piano Premium per continuare</span>
       <button class="btn gold sm" onclick="showProfileScreen()"><i class="ti ti-sparkles"></i>Scopri i piani</button>
     `;
   }
@@ -8161,6 +8198,7 @@ async function scanBusinessCard(input, context) {
       set(`${context}-telefono`, d.telefono);
       set(`${context}-email`, d.email);
       if (context === 'wcl' && d.cantina) { selectedContactWineryId = null; set('wcl-winery-name', d.cantina); }
+      if (!currentUser?.aiScanEnabled) currentUser.freeScansUsed = (currentUser.freeScansUsed || 0) + 1;
       toast('Biglietto letto! Controlla e completa i dati.');
     }
   } catch (err) {
@@ -8283,6 +8321,11 @@ async function scanBothLabels() {
       toast(result.message || 'Limite scansioni raggiunto');
     } else if (result?.data) {
       fillForm(result.data);
+      // Aggiorna subito il contatore di prova locale (se non Premium), così
+      // il banner mostra il numero giusto di scansioni rimaste senza dover
+      // ricaricare la pagina — il conteggio vero resta comunque quello del
+      // server, questo è solo per l'interfaccia.
+      if (!currentUser?.aiScanEnabled) { currentUser.freeScansUsed = (currentUser.freeScansUsed || 0) + 1; renderAiBanner(); }
       toast('Etichette analizzate! Controlla e completa i dati.');
     }
   } catch(err) {
