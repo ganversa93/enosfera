@@ -88,13 +88,21 @@ Deno.serve(async (req) => {
             const resolved = await resolvePlan(sub.items.data[0]?.price?.id);
             planId = resolved.planId; limit = resolved.limit;
           }
-          await supabase.from('profiles').update({
+          const { error: updErr } = await supabase.from('profiles').update({
             ai_scan_enabled: true,
             subscription_status: 'active',
             stripe_subscription_id: subId,
             premium_plan_id: planId,
             scan_monthly_limit: limit,
           }).eq('id', userId);
+          // Un errore qui (es. colonna mancante, come e' successo la prima
+          // volta che questo flusso e' stato acceso) non fa fallire la
+          // risposta a Stripe con un errore HTTP — risponderemmo comunque
+          // 200 perche' l'evento in se' e' stato gestito correttamente —
+          // ma va segnalato subito: altrimenti un pagamento riuscito
+          // lascerebbe l'utente senza Premium in silenzio, scoperto solo
+          // per caso.
+          if (updErr) { console.error('profiles update error (checkout.session.completed):', updErr); await notifyAdminError('stripe-webhook (DB update)', updErr); }
         }
         break;
       }
@@ -104,12 +112,13 @@ Deno.serve(async (req) => {
         const sub = event.data.object as Stripe.Subscription;
         const active = sub.status === 'active' || sub.status === 'trialing';
         const { planId, limit } = active ? await resolvePlan(sub.items.data[0]?.price?.id) : { planId: null, limit: null };
-        await supabase.from('profiles').update({
+        const { error: updErr } = await supabase.from('profiles').update({
           ai_scan_enabled: active,
           subscription_status: sub.status,
           premium_plan_id: planId,
           scan_monthly_limit: limit,
         }).eq('stripe_customer_id', sub.customer as string);
+        if (updErr) { console.error(`profiles update error (${event.type}):`, updErr); await notifyAdminError('stripe-webhook (DB update)', updErr); }
         break;
       }
     }
