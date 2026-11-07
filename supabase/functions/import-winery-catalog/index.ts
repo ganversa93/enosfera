@@ -264,7 +264,21 @@ Deno.serve(async (req) => {
     const isOwner = winery.owner_user_id && winery.owner_user_id === userData.user.id;
     if (!profile?.is_admin && !isOwner) return json({ error: 'Non hai i permessi per farlo' }, 200);
 
-    const pageResp = await fetchWithTimeout(parsed.toString());
+    // Alcuni siti hanno intoppi di rete/HTTP2 occasionali (osservato con
+    // errori tipo "stream error received: unspecific protocol error") che
+    // un secondo tentativo a freddo risolve da solo — non sono un errore
+    // nostro, quindi niente notifica admin se anche il retry fallisce: solo
+    // un messaggio che invita a riprovare.
+    let pageResp: Response;
+    try {
+      pageResp = await fetchWithTimeout(parsed.toString());
+    } catch {
+      try {
+        pageResp = await fetchWithTimeout(parsed.toString());
+      } catch {
+        return json({ error: 'Impossibile raggiungere il sito (problema di rete temporaneo). Riprova tra qualche istante.' }, 200);
+      }
+    }
     if (!pageResp.ok) return json({ error: `Impossibile raggiungere la pagina (${pageResp.status})` }, 200);
     const html = (await pageResp.text()).slice(0, MAX_HTML_BYTES);
 
