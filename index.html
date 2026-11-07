@@ -3888,7 +3888,8 @@
           <div class="fg"><label>Limite scansioni/mese</label><input type="number" id="admin-plan-limit" min="1" placeholder="20"></div>
           <div class="fg"><label>Prezzo da mostrare</label><input type="text" id="admin-plan-price-label" placeholder="€1/mese"></div>
         </div>
-        <button class="btn sm" onclick="addPremiumPlan()"><i class="ti ti-plus"></i>Aggiungi piano</button>
+        <button class="btn sm primary" id="admin-plan-submit-btn" onclick="savePremiumPlan()"><i class="ti ti-plus"></i>Aggiungi piano</button>
+        <button class="btn sm" id="admin-plan-cancel-btn" onclick="cancelEditPremiumPlan()" style="display:none">Annulla</button>
       </div>
     </div>
 
@@ -6298,12 +6299,19 @@ async function saveDonationLink() {
   toast('✓ Link salvato');
 }
 
+// id del piano in modifica, o null se il form sotto alla lista sta
+// per aggiungerne uno nuovo — savePremiumPlan() guarda questa variabile
+// per decidere se fare un insert o un update.
+let editingPremiumPlanId = null;
+let premiumPlansCache = [];
+
 async function renderAdminPremiumPlans() {
   const list = document.getElementById('admin-premium-plans-list');
   if (!list) return;
   list.innerHTML = '<div style="text-align:center;padding:1rem;color:var(--muted)">Caricamento…</div>';
   const { data: plans, error } = await sb.from('premium_plans').select('id,name,stripe_price_id,monthly_scan_limit,price_label,active').order('sort_order');
   if (error) { list.innerHTML = '<div style="text-align:center;padding:1rem;color:var(--muted)">Errore nel caricamento.</div>'; return; }
+  premiumPlansCache = plans || [];
   list.innerHTML = plans?.length
     ? plans.map(p => `
       <div class="winery-row">
@@ -6312,6 +6320,7 @@ async function renderAdminPremiumPlans() {
           <div class="winery-row-sub">${escapeAttr(p.price_label)} — fino a ${p.monthly_scan_limit} scansioni/mese — ${escapeAttr(p.stripe_price_id)}</div>
         </div>
         <div style="display:flex;gap:6px;flex-shrink:0">
+          <button class="btn sm" data-id="${p.id}" onclick="editPremiumPlan(this.dataset.id)"><i class="ti ti-edit"></i></button>
           <button class="btn sm" data-id="${p.id}" data-active="${p.active}" onclick="togglePremiumPlanActive(this.dataset.id, this.dataset.active === 'true')">${p.active ? 'Disattiva' : 'Attiva'}</button>
           <button class="btn sm danger" data-id="${p.id}" onclick="deletePremiumPlan(this.dataset.id)"><i class="ti ti-trash"></i></button>
         </div>
@@ -6319,18 +6328,57 @@ async function renderAdminPremiumPlans() {
     : '<div style="text-align:center;padding:1rem;color:var(--muted)">Nessun piano ancora — aggiungine uno qui sotto.</div>';
 }
 
-async function addPremiumPlan() {
+// Precompila il form sotto alla lista con i dati del piano scelto e lo
+// mette in "modalità modifica" — lo stesso form serve sia per aggiungere
+// che per modificare, così non serve duplicare i campi.
+function editPremiumPlan(id) {
+  const p = premiumPlansCache.find(x => x.id === id);
+  if (!p) return;
+  editingPremiumPlanId = id;
+  document.getElementById('admin-plan-name').value = p.name;
+  document.getElementById('admin-plan-price-id').value = p.stripe_price_id;
+  document.getElementById('admin-plan-limit').value = p.monthly_scan_limit;
+  document.getElementById('admin-plan-price-label').value = p.price_label;
+  const submitBtn = document.getElementById('admin-plan-submit-btn');
+  if (submitBtn) submitBtn.innerHTML = '<i class="ti ti-device-floppy"></i>Salva modifiche';
+  const cancelBtn = document.getElementById('admin-plan-cancel-btn');
+  if (cancelBtn) cancelBtn.style.display = '';
+  document.getElementById('admin-plan-name')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function cancelEditPremiumPlan() {
+  editingPremiumPlanId = null;
+  ['admin-plan-name', 'admin-plan-price-id', 'admin-plan-limit', 'admin-plan-price-label'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  const submitBtn = document.getElementById('admin-plan-submit-btn');
+  if (submitBtn) submitBtn.innerHTML = '<i class="ti ti-plus"></i>Aggiungi piano';
+  const cancelBtn = document.getElementById('admin-plan-cancel-btn');
+  if (cancelBtn) cancelBtn.style.display = 'none';
+}
+
+async function savePremiumPlan() {
   const name = document.getElementById('admin-plan-name')?.value.trim();
   const stripePriceId = document.getElementById('admin-plan-price-id')?.value.trim();
   const limit = parseInt(document.getElementById('admin-plan-limit')?.value, 10);
   const priceLabel = document.getElementById('admin-plan-price-label')?.value.trim();
   if (!name || !stripePriceId || !limit || !priceLabel) { toastErr('Compila tutti i campi'); return; }
-  const { data: existing } = await sb.from('premium_plans').select('sort_order').order('sort_order', { ascending: false }).limit(1);
-  const nextOrder = (existing?.[0]?.sort_order ?? -1) + 1;
-  const { error } = await sb.from('premium_plans').insert({ name, stripe_price_id: stripePriceId, monthly_scan_limit: limit, price_label: priceLabel, sort_order: nextOrder });
-  if (error) { toastErr('Errore: ' + (error.message.includes('duplicate') ? 'Price ID già usato da un altro piano' : error.message)); return; }
-  ['admin-plan-name', 'admin-plan-price-id', 'admin-plan-limit', 'admin-plan-price-label'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
-  toast('✓ Piano aggiunto');
+
+  if (editingPremiumPlanId) {
+    const { error } = await sb.from('premium_plans').update({ name, stripe_price_id: stripePriceId, monthly_scan_limit: limit, price_label: priceLabel }).eq('id', editingPremiumPlanId);
+    if (error) { toastErr('Errore: ' + (error.message.includes('duplicate') ? 'Price ID già usato da un altro piano' : error.message)); return; }
+    toast('✓ Piano aggiornato');
+    // Chi ha già questo piano attivo tiene il vecchio scan_monthly_limit
+    // finché Stripe non manda un nuovo evento sul suo abbonamento (es. al
+    // rinnovo) — cambiare qui il limite di un piano non lo aggiorna
+    // retroattivamente per chi l'ha già comprato, stessa logica di
+    // qualunque cambio prezzo/piano lato Stripe.
+  } else {
+    const { data: existing } = await sb.from('premium_plans').select('sort_order').order('sort_order', { ascending: false }).limit(1);
+    const nextOrder = (existing?.[0]?.sort_order ?? -1) + 1;
+    const { error } = await sb.from('premium_plans').insert({ name, stripe_price_id: stripePriceId, monthly_scan_limit: limit, price_label: priceLabel, sort_order: nextOrder });
+    if (error) { toastErr('Errore: ' + (error.message.includes('duplicate') ? 'Price ID già usato da un altro piano' : error.message)); return; }
+    toast('✓ Piano aggiunto');
+  }
+  cancelEditPremiumPlan();
   renderAdminPremiumPlans();
 }
 
@@ -6344,6 +6392,7 @@ async function deletePremiumPlan(id) {
   if (!confirm('Eliminare questo piano? Chi lo ha già acquistato non viene disdetto, ma non comparirà più tra le scelte per i nuovi abbonati.')) return;
   const { error } = await sb.from('premium_plans').delete().eq('id', id);
   if (error) { toastErr('Errore: ' + error.message); return; }
+  if (editingPremiumPlanId === id) cancelEditPremiumPlan();
   toast('✓ Piano eliminato');
   renderAdminPremiumPlans();
 }
@@ -12246,7 +12295,7 @@ Object.assign(window, {
   showWineryDetail, toggleWineryPreview, saveWineryDetails, uploadWineryLogo, goBackFromWinery, showAdminWineriesScreen, deleteWinery, searchAllWineries,
   aggregateEventsNow, testEventSource,
   saveScanLimits, resetScanUsage, searchScanUsersAdmin,
-  saveDonationLink, addPremiumPlan, togglePremiumPlanActive, deletePremiumPlan,
+  saveDonationLink, savePremiumPlan, editPremiumPlan, cancelEditPremiumPlan, togglePremiumPlanActive, deletePremiumPlan,
   addWineryCatalogWine, removeWineryCatalogWine, useFaviconAsLogo,
   editWineryCatalogWine, cancelEditWineryCatalogWine, addWineryManually, importWineryCatalogFromShop, enrichWineryFromWebsite, enrichWineryCatalogGrapes,
   linkProducerToWinery, approveWineryClaim, rejectWineryClaim, submitWineryClaim, cancelWineryClaim, myWineryIds,
