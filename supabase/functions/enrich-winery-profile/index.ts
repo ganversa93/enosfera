@@ -125,6 +125,10 @@ Deno.serve(async (req) => {
     try { parsed = new URL(website); } catch { return json({ error: 'bad_request', message: 'Link non valido' }, 200); }
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return json({ error: 'bad_request', message: 'Link non valido' }, 200);
 
+    // Alcuni siti hanno intoppi di rete/HTTP2 occasionali (es. "stream
+    // error received: unspecific protocol error") che un secondo tentativo
+    // a freddo risolve da solo — ritentiamo una volta prima di arrenderci,
+    // stesso trattamento di import-winery-catalog.
     let pageResp: Response;
     try {
       pageResp = await fetchWithTimeout(parsed.toString());
@@ -132,7 +136,14 @@ Deno.serve(async (req) => {
       if (fetchErr instanceof Error && fetchErr.name === 'AbortError') {
         return json({ error: 'timeout', message: 'Il sito ha impiegato troppo tempo a rispondere. Riprova o compila a mano.' }, 200);
       }
-      return json({ error: 'fetch_error', message: `Impossibile raggiungere il sito: ${fetchErr instanceof Error ? fetchErr.message : String(fetchErr)}` }, 200);
+      try {
+        pageResp = await fetchWithTimeout(parsed.toString());
+      } catch (retryErr) {
+        if (retryErr instanceof Error && retryErr.name === 'AbortError') {
+          return json({ error: 'timeout', message: 'Il sito ha impiegato troppo tempo a rispondere. Riprova o compila a mano.' }, 200);
+        }
+        return json({ error: 'fetch_error', message: `Impossibile raggiungere il sito: ${retryErr instanceof Error ? retryErr.message : String(retryErr)}` }, 200);
+      }
     }
     if (!pageResp.ok) return json({ error: 'fetch_error', message: `Impossibile raggiungere il sito (${pageResp.status})` }, 200);
     const html = (await pageResp.text()).slice(0, MAX_HTML_BYTES);
