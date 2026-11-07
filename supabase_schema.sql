@@ -3398,3 +3398,65 @@ alter table public.profiles add column if not exists signup_source text;
 -- ════════════════════════════════════════════════════════════════
 alter table public.events add column if not exists source text;
 alter table public.events add column if not exists source_url text;
+
+-- ════════════════════════════════════════════════════════════════
+-- 2026-11-07 — Piani Premium a scaglioni + impostazioni app (link
+-- donazioni)
+--
+-- Finora la scansione AI era un flag binario (profiles.ai_scan_enabled)
+-- dietro un unico prezzo Stripe mai attivato in UI. Ora diventano più
+-- piani, ciascuno con un proprio limite mensile di scansioni — la
+-- tabella premium_plans è gestita dall'admin (nome, Price ID Stripe,
+-- limite, etichetta prezzo da mostrare in UI) senza bisogno di un
+-- deploy quando cambiano prezzi/limiti. profiles.scan_monthly_limit è
+-- il limite effettivo dell'utente (scritto dal webhook Stripe in base
+-- al piano acquistato); scan-label lo usa al posto del vecchio limite
+-- unico per tutti, con scan_limits.per_user_monthly_limit come
+-- fallback per chi ha ai_scan_enabled senza un piano associato (es.
+-- abilitato a mano dall'admin).
+--
+-- app_settings è un piccolo registro chiave/valore generico per
+-- impostazioni singole che non sono una "lista" (a differenza di
+-- config_lists) — per ora solo donation_link, il link di pagamento
+-- Stripe a importo libero dietro il bottone "Sostieni il progetto"
+-- in home.
+-- ════════════════════════════════════════════════════════════════
+create table if not exists public.app_settings (
+  key text primary key,
+  value text,
+  updated_at timestamptz not null default now()
+);
+alter table public.app_settings enable row level security;
+
+drop policy if exists "app_settings: lettura" on public.app_settings;
+create policy "app_settings: lettura"
+  on public.app_settings for select to authenticated using (true);
+
+drop policy if exists "app_settings: scrittura solo admin" on public.app_settings;
+create policy "app_settings: scrittura solo admin"
+  on public.app_settings for all to authenticated
+  using (public.is_admin()) with check (public.is_admin());
+
+create table if not exists public.premium_plans (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  stripe_price_id text not null unique,
+  monthly_scan_limit integer not null,
+  price_label text not null,
+  sort_order integer not null default 0,
+  active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+alter table public.premium_plans enable row level security;
+
+drop policy if exists "premium_plans: lettura" on public.premium_plans;
+create policy "premium_plans: lettura"
+  on public.premium_plans for select to authenticated using (true);
+
+drop policy if exists "premium_plans: scrittura solo admin" on public.premium_plans;
+create policy "premium_plans: scrittura solo admin"
+  on public.premium_plans for all to authenticated
+  using (public.is_admin()) with check (public.is_admin());
+
+alter table public.profiles add column if not exists scan_monthly_limit integer;
+alter table public.profiles add column if not exists premium_plan_id uuid references public.premium_plans(id) on delete set null;

@@ -80,18 +80,23 @@ Deno.serve(async (req) => {
 
     // ── 2. Verifica che l'utente abbia accesso alla funzione (flag premium) ──
     const { data: profile, error: profileErr } = await sbAdmin
-      .from('profiles').select('ai_scan_enabled').eq('id', userId).maybeSingle();
+      .from('profiles').select('ai_scan_enabled, scan_monthly_limit').eq('id', userId).maybeSingle();
     if (profileErr || !profile?.ai_scan_enabled) {
       return json({
         error: 'not_enabled',
-        message: 'La scansione etichette con AI è una funzione premium non ancora attiva per il tuo account.'
+        message: 'La scansione etichette con AI è una funzione premium — scegli un piano dal tuo profilo per attivarla.'
       }, 403);
     }
 
     // ── 3. Controlla i due limiti PRIMA di chiamare Anthropic ──
+    // Il limite per utente dipende dal piano Premium scelto
+    // (profiles.scan_monthly_limit, impostato dal webhook Stripe in base
+    // al piano acquistato — vedi premium_plans). scan_limits resta un
+    // fallback per chi ha ai_scan_enabled senza un piano associato (es.
+    // abilitato a mano dall'admin) e continua a fare da tetto globale.
     const { data: limitsRow } = await sbAdmin
       .from('scan_limits').select('per_user_monthly_limit, global_monthly_limit').eq('id', true).maybeSingle();
-    const PER_USER_MONTHLY_LIMIT = limitsRow?.per_user_monthly_limit ?? DEFAULT_PER_USER_MONTHLY_LIMIT;
+    const PER_USER_MONTHLY_LIMIT = profile.scan_monthly_limit ?? limitsRow?.per_user_monthly_limit ?? DEFAULT_PER_USER_MONTHLY_LIMIT;
     const GLOBAL_MONTHLY_LIMIT = limitsRow?.global_monthly_limit ?? DEFAULT_GLOBAL_MONTHLY_LIMIT;
 
     const { data: globalRow } = await sbAdmin

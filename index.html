@@ -1550,6 +1550,9 @@
       <a class="home-feedback-btn" href="contattaci.html?tipo=idea" title="Proponi un'idea o una funzione">
         <i class="ti ti-bulb"></i><span>Richiesta o idea</span>
       </a>
+      <a class="home-feedback-btn" id="home-donate-btn" href="#" target="_blank" rel="noopener" title="Sostieni il progetto con una donazione libera" style="display:none">
+        <i class="ti ti-heart"></i><span>Sostieni il progetto</span>
+      </a>
     </div>
   </div>
 
@@ -3864,6 +3867,31 @@
       </div>
     </div>
 
+    <div class="fsec collapsible collapsed" id="admin-sec-premium" style="margin-top:.9rem">
+      <div class="stitle fsec-header" onclick="toggleSection('admin-sec-premium')"><i class="ti ti-sparkles"></i>Piani Premium e donazioni<i class="ti ti-chevron-down fsec-chevron"></i></div>
+      <div class="fsec-body">
+        <div class="subhead" style="margin-top:0">Link donazioni ("Sostieni il progetto" in home)</div>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:8px">Un Payment Link Stripe a importo libero — il pagamento avviene fuori dall'app, su Stripe. Lascia vuoto per nascondere il bottone.</p>
+        <div class="frow">
+          <div class="fg" style="flex:1"><input type="text" id="admin-donation-link" placeholder="https://buy.stripe.com/..."></div>
+          <button class="btn sm primary" onclick="saveDonationLink()" style="flex-shrink:0;align-self:flex-start;margin-top:0">Salva</button>
+        </div>
+
+        <div class="subhead">Piani Premium (scansione etichette AI)</div>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Ogni piano corrisponde a un prezzo ricorrente creato su Stripe — crealo prima lì, poi incolla qui il suo Price ID.</p>
+        <div id="admin-premium-plans-list" style="margin-bottom:14px"></div>
+        <div class="frow">
+          <div class="fg"><label>Nome piano</label><input type="text" id="admin-plan-name" placeholder="es. Base"></div>
+          <div class="fg"><label>Price ID Stripe</label><input type="text" id="admin-plan-price-id" placeholder="price_..."></div>
+        </div>
+        <div class="frow">
+          <div class="fg"><label>Limite scansioni/mese</label><input type="number" id="admin-plan-limit" min="1" placeholder="20"></div>
+          <div class="fg"><label>Prezzo da mostrare</label><input type="text" id="admin-plan-price-label" placeholder="€1/mese"></div>
+        </div>
+        <button class="btn sm" onclick="addPremiumPlan()"><i class="ti ti-plus"></i>Aggiungi piano</button>
+      </div>
+    </div>
+
     <div class="fsec collapsible collapsed" id="admin-sec-search">
       <div class="stitle fsec-header" onclick="toggleSection('admin-sec-search')"><i class="ti ti-search"></i>Tutte le cantine<i class="ti ti-chevron-down fsec-chevron"></i></div>
       <div class="fsec-body">
@@ -3959,6 +3987,12 @@
         <div class="fg"><label>Conferma nuova password</label><input type="password" id="p-pwd-confirm" placeholder="••••••••"></div>
       </div>
       <div style="font-size:11px;color:var(--muted);margin-top:4px">Lascia vuoto per non modificare la password.</div>
+    </div>
+
+    <!-- Piano Premium — scansione etichette con AI -->
+    <div class="fsec" id="premium-section">
+      <div class="stitle"><i class="ti ti-sparkles"></i>Piano Premium</div>
+      <div id="premium-section-body"><div style="text-align:center;padding:1rem;color:var(--muted)">Caricamento…</div></div>
     </div>
 
     <!-- Richieste di follow in attesa -->
@@ -6108,6 +6142,7 @@ async function showAdminWineriesScreen() {
   loadAdminStats();
   loadScanLimits();
   loadScanUsageList();
+  loadAdminPremiumSection();
   document.getElementById('admin-all-wineries-search').value = '';
   loadAllWineriesForAdmin('').then(renderAllWineriesList);
   const list = document.getElementById('admin-wineries-list');
@@ -6247,6 +6282,70 @@ async function resetScanUsage(scope) {
   loadAdminStats();
   const query = document.getElementById('admin-scan-search')?.value.trim();
   if (query) searchScanUsersAdmin(); else loadScanUsageList();
+}
+
+async function loadAdminPremiumSection() {
+  const { data: setting } = await sb.from('app_settings').select('value').eq('key', 'donation_link').maybeSingle();
+  const linkInput = document.getElementById('admin-donation-link');
+  if (linkInput) linkInput.value = setting?.value || '';
+  await renderAdminPremiumPlans();
+}
+
+async function saveDonationLink() {
+  const value = document.getElementById('admin-donation-link')?.value.trim() || null;
+  const { error } = await sb.from('app_settings').upsert({ key: 'donation_link', value, updated_at: new Date().toISOString() });
+  if (error) { toastErr('Errore: ' + error.message); return; }
+  toast('✓ Link salvato');
+}
+
+async function renderAdminPremiumPlans() {
+  const list = document.getElementById('admin-premium-plans-list');
+  if (!list) return;
+  list.innerHTML = '<div style="text-align:center;padding:1rem;color:var(--muted)">Caricamento…</div>';
+  const { data: plans, error } = await sb.from('premium_plans').select('id,name,stripe_price_id,monthly_scan_limit,price_label,active').order('sort_order');
+  if (error) { list.innerHTML = '<div style="text-align:center;padding:1rem;color:var(--muted)">Errore nel caricamento.</div>'; return; }
+  list.innerHTML = plans?.length
+    ? plans.map(p => `
+      <div class="winery-row">
+        <div style="flex:1;min-width:0">
+          <div class="winery-row-name">${escapeAttr(p.name)} ${p.active ? '' : '<span class="dchip" style="background:var(--muted);color:#fff">Disattivato</span>'}</div>
+          <div class="winery-row-sub">${escapeAttr(p.price_label)} — fino a ${p.monthly_scan_limit} scansioni/mese — ${escapeAttr(p.stripe_price_id)}</div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0">
+          <button class="btn sm" data-id="${p.id}" data-active="${p.active}" onclick="togglePremiumPlanActive(this.dataset.id, this.dataset.active === 'true')">${p.active ? 'Disattiva' : 'Attiva'}</button>
+          <button class="btn sm danger" data-id="${p.id}" onclick="deletePremiumPlan(this.dataset.id)"><i class="ti ti-trash"></i></button>
+        </div>
+      </div>`).join('')
+    : '<div style="text-align:center;padding:1rem;color:var(--muted)">Nessun piano ancora — aggiungine uno qui sotto.</div>';
+}
+
+async function addPremiumPlan() {
+  const name = document.getElementById('admin-plan-name')?.value.trim();
+  const stripePriceId = document.getElementById('admin-plan-price-id')?.value.trim();
+  const limit = parseInt(document.getElementById('admin-plan-limit')?.value, 10);
+  const priceLabel = document.getElementById('admin-plan-price-label')?.value.trim();
+  if (!name || !stripePriceId || !limit || !priceLabel) { toastErr('Compila tutti i campi'); return; }
+  const { data: existing } = await sb.from('premium_plans').select('sort_order').order('sort_order', { ascending: false }).limit(1);
+  const nextOrder = (existing?.[0]?.sort_order ?? -1) + 1;
+  const { error } = await sb.from('premium_plans').insert({ name, stripe_price_id: stripePriceId, monthly_scan_limit: limit, price_label: priceLabel, sort_order: nextOrder });
+  if (error) { toastErr('Errore: ' + (error.message.includes('duplicate') ? 'Price ID già usato da un altro piano' : error.message)); return; }
+  ['admin-plan-name', 'admin-plan-price-id', 'admin-plan-limit', 'admin-plan-price-label'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  toast('✓ Piano aggiunto');
+  renderAdminPremiumPlans();
+}
+
+async function togglePremiumPlanActive(id, currentlyActive) {
+  const { error } = await sb.from('premium_plans').update({ active: !currentlyActive }).eq('id', id);
+  if (error) { toastErr('Errore: ' + error.message); return; }
+  renderAdminPremiumPlans();
+}
+
+async function deletePremiumPlan(id) {
+  if (!confirm('Eliminare questo piano? Chi lo ha già acquistato non viene disdetto, ma non comparirà più tra le scelte per i nuovi abbonati.')) return;
+  const { error } = await sb.from('premium_plans').delete().eq('id', id);
+  if (error) { toastErr('Errore: ' + error.message); return; }
+  toast('✓ Piano eliminato');
+  renderAdminPremiumPlans();
 }
 
 async function loadWineryClaims() {
@@ -6977,6 +7076,7 @@ async function initApp() {
   await loadOwnerCellarPositionLabels();
   loadWineriesCache();
   loadEventOptionLists();
+  loadDonationLink();
   // Carica vini dal DB
   showLoadingOverlay(true);
   winesCache = await loadWines();
@@ -7769,11 +7869,13 @@ function renderAiBanner() {
       </button>
     `;
   } else {
-    // La scansione AI è riservata a un piano Premium non ancora attivo
-    // (nessun pagamento in app al momento): niente prezzo né upsell,
-    // il banner resta semplicemente nascosto per chi non ce l'ha.
-    el.style.display = 'none';
-    el.innerHTML = '';
+    el.style.display = '';
+    el.className = 'ai-banner';
+    el.innerHTML = `
+      <span class="ai-pill"><i class="ti ti-sparkles" style="font-size:10px"></i> AI</span>
+      <span class="ai-txt">Scansiona l'etichetta e lascia che l'AI compili la scheda — disponibile nei piani Premium</span>
+      <button class="btn gold sm" onclick="showProfileScreen()"><i class="ti ti-sparkles"></i>Scopri i piani</button>
+    `;
   }
 }
 
@@ -8019,20 +8121,97 @@ async function scanBusinessCard(input, context) {
   input.value = '';
 }
 
-async function startPremiumCheckout() {
+// Bottone "Sostieni il progetto" in home: compare solo se l'admin ha
+// configurato un link (Payment Link Stripe a importo libero, vedi
+// Configurazione → Piani Premium e donazioni) — niente pagamento gestito
+// dentro l'app, si apre semplicemente il link in una nuova scheda.
+async function loadDonationLink() {
+  const { data } = await sb.from('app_settings').select('value').eq('key', 'donation_link').maybeSingle();
+  const btn = document.getElementById('home-donate-btn');
+  if (!btn) return;
+  if (data?.value) { btn.href = data.value; btn.style.display = ''; }
+  else btn.style.display = 'none';
+}
+
+// Carica e mostra la card "Piano Premium" nel profilo: se l'utente ha già
+// un abbonamento attivo mostra il piano corrente + il bottone per gestirlo
+// (portale Stripe), altrimenti la lista dei piani disponibili (da
+// premium_plans, gestiti dall'admin in Configurazione — vedi
+// renderAdminPremiumPlans) con un bottone di acquisto ciascuno.
+async function loadPremiumSection() {
+  const body = document.getElementById('premium-section-body');
+  if (!body) return;
+  if (currentUser?.aiScanEnabled) {
+    const { data: profile } = await sb.from('profiles').select('premium_plan_id, scan_monthly_limit').eq('id', currentUser.id).maybeSingle();
+    let planName = 'Premium';
+    if (profile?.premium_plan_id) {
+      const { data: plan } = await sb.from('premium_plans').select('name').eq('id', profile.premium_plan_id).maybeSingle();
+      if (plan?.name) planName = plan.name;
+    }
+    const limitTxt = profile?.scan_monthly_limit ? `fino a ${profile.scan_monthly_limit} scansioni AI al mese` : 'scansioni AI incluse';
+    body.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <span class="ai-pill"><i class="ti ti-sparkles" style="font-size:10px"></i> AI</span>
+        <div>
+          <div style="font-weight:600;font-size:14px">${escapeAttr(planName)} attivo</div>
+          <div style="font-size:12px;color:var(--muted)">${limitTxt}</div>
+        </div>
+      </div>
+      <button class="btn sm" id="premium-portal-btn" onclick="openPremiumPortal()"><i class="ti ti-settings"></i>Gestisci abbonamento</button>`;
+    return;
+  }
+  const { data: plans } = await sb.from('premium_plans').select('id,name,stripe_price_id,monthly_scan_limit,price_label').eq('active', true).order('sort_order');
+  if (!plans?.length) {
+    body.innerHTML = '<p style="font-size:12px;color:var(--muted)">La scansione etichette con AI non è ancora disponibile — torna a trovarci presto.</p>';
+    return;
+  }
+  body.innerHTML = `
+    <p style="font-size:12px;color:var(--muted);margin-bottom:12px">Scansiona le etichette e lascia che l'AI compili la scheda del vino al posto tuo. Scegli un piano:</p>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      ${plans.map(p => `
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--border,#e5e0da);border-radius:10px;padding:10px 12px">
+          <div>
+            <div style="font-weight:600;font-size:13.5px">${escapeAttr(p.name)}</div>
+            <div style="font-size:12px;color:var(--muted)">${escapeAttr(p.price_label)} — fino a ${p.monthly_scan_limit} scansioni/mese</div>
+          </div>
+          <button class="btn sm primary" data-price="${escapeAttr(p.stripe_price_id)}" onclick="startPremiumCheckout(this.dataset.price, this)">Scegli</button>
+        </div>`).join('')}
+    </div>`;
+}
+
+async function startPremiumCheckout(priceId, btn) {
   if (!navigator.onLine) { toast('📴 L\'attivazione di Premium richiede una connessione'); return; }
-  const btn = document.getElementById('premium-upgrade-btn');
+  if (!priceId) return;
+  const prevHtml = btn?.innerHTML;
   if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2"></i>Attendere…'; }
   try {
     const { data: sessionData } = await sb.auth.getSession();
     const { data, error } = await sb.functions.invoke('create-checkout-session', {
-      headers: { Authorization: `Bearer ${sessionData.session.access_token}` }
+      headers: { Authorization: `Bearer ${sessionData.session.access_token}` },
+      body: { price_id: priceId }
     });
     if (error || !data?.url) throw error || new Error('URL di pagamento non ricevuto');
     window.location.href = data.url; // Stripe gestisce il pagamento, mai i dati della carta nella nostra app
   } catch (err) {
     toastErr('Errore: ' + (err.message || 'impossibile avviare il pagamento'));
-    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-sparkles"></i>Passa a Premium'; }
+    if (btn) { btn.disabled = false; btn.innerHTML = prevHtml; }
+  }
+}
+
+async function openPremiumPortal() {
+  if (!navigator.onLine) { toast('📴 Serve una connessione per gestire l\'abbonamento'); return; }
+  const btn = document.getElementById('premium-portal-btn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2"></i>Attendere…'; }
+  try {
+    const { data: sessionData } = await sb.auth.getSession();
+    const { data, error } = await sb.functions.invoke('create-portal-session', {
+      headers: { Authorization: `Bearer ${sessionData.session.access_token}` }
+    });
+    if (error || !data?.url) throw error || new Error('URL del portale non ricevuto');
+    window.location.href = data.url;
+  } catch (err) {
+    toastErr('Errore: ' + (err.message || 'impossibile aprire la gestione abbonamento'));
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-settings"></i>Gestisci abbonamento'; }
   }
 }
 
@@ -10118,6 +10297,7 @@ function showProfileScreen() {
   loadFollowRequests();
   loadCellarShareMembers();
   loadCellarInvitesReceived();
+  loadPremiumSection();
 }
 
 let pendingAvatarBase64 = null;
@@ -12045,7 +12225,7 @@ Object.assign(window, {
   goBackFromProfile, searchUsersToShareCellar, switchCellarOwner,
   scanBothLabels, searchNetworkUsers, sendFollowRequest, setFilter, setQtyFilter, showAdd, showComingSoon, showDetail,
   setSortField, toggleSortDir, setNetworkSortField, toggleNetworkSortDir,
-  showNetworkScreen, showNetworkWinePreview, showProfileScreen, showScreen, startPremiumCheckout, stepQty, switchDeg, switchLTab, switchRegType, toast,
+  showNetworkScreen, showNetworkWinePreview, showProfileScreen, showScreen, startPremiumCheckout, openPremiumPortal, stepQty, switchDeg, switchLTab, switchRegType, toast,
   showGuideScreen,
   showHighlightsScreen, setHighlightsView, hlBackGrapes, hlBackRegion, hlBackShop, onHlPeriodChange, applyHlCustomPeriod,
   toggleAdvFilters, toggleFisarMethodField, toggleNavMenu, togglePairing, toggleSection, updateGrapePct, updateTonalitaColore, updateAisColore, updateFisColore,
@@ -12066,6 +12246,7 @@ Object.assign(window, {
   showWineryDetail, toggleWineryPreview, saveWineryDetails, uploadWineryLogo, goBackFromWinery, showAdminWineriesScreen, deleteWinery, searchAllWineries,
   aggregateEventsNow, testEventSource,
   saveScanLimits, resetScanUsage, searchScanUsersAdmin,
+  saveDonationLink, addPremiumPlan, togglePremiumPlanActive, deletePremiumPlan,
   addWineryCatalogWine, removeWineryCatalogWine, useFaviconAsLogo,
   editWineryCatalogWine, cancelEditWineryCatalogWine, addWineryManually, importWineryCatalogFromShop, enrichWineryFromWebsite, enrichWineryCatalogGrapes,
   linkProducerToWinery, approveWineryClaim, rejectWineryClaim, submitWineryClaim, cancelWineryClaim, myWineryIds,

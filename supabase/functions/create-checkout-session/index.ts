@@ -12,7 +12,6 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import Stripe from 'https://esm.sh/stripe@17?target=deno';
 
 const STRIPE_SECRET_KEY = Deno.env.get('STRIPE_SECRET_KEY')!;
-const STRIPE_PRICE_ID   = Deno.env.get('STRIPE_PRICE_ID')!;
 const SUPABASE_URL      = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const APP_URL           = Deno.env.get('APP_URL') || 'https://ganversa93.github.io/enosfera';
@@ -56,6 +55,15 @@ Deno.serve(async (req) => {
     const { data: { user }, error: authErr } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
     if (authErr || !user) return json({ error: 'Non autenticato' }, 401);
 
+    // Il piano scelto arriva dal frontend (vedi la card "Piano Premium" nel
+    // profilo), ma va sempre verificato contro premium_plans — mai fidarsi
+    // di un Price ID passato dal client senza controllo, altrimenti
+    // chiunque potrebbe forzare un prezzo arbitrario nella richiesta.
+    const { price_id: priceId } = await req.json().catch(() => ({}));
+    if (!priceId || typeof priceId !== 'string') return json({ error: 'Piano non specificato' }, 400);
+    const { data: plan } = await supabase.from('premium_plans').select('stripe_price_id').eq('stripe_price_id', priceId).eq('active', true).maybeSingle();
+    if (!plan) return json({ error: 'Piano non valido o non più disponibile' }, 400);
+
     // Recupera o crea il cliente Stripe per questo utente
     const { data: profile } = await supabase.from('profiles').select('stripe_customer_id, full_name').eq('id', user.id).single();
 
@@ -73,7 +81,7 @@ Deno.serve(async (req) => {
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: 'subscription',
-      line_items: [{ price: STRIPE_PRICE_ID, quantity: 1 }],
+      line_items: [{ price: priceId, quantity: 1 }],
       success_url: `${APP_URL}?premium=success`,
       cancel_url: `${APP_URL}?premium=cancelled`,
       client_reference_id: user.id,
