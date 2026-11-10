@@ -3529,9 +3529,12 @@ grant execute on function public.get_admin_stats() to authenticated;
 -- 2026-11-10 — Completamento automatico cantine, livello 1 (gratis)
 --
 -- infer_wineries_from_wines() precompila Paese/Regione/Provincia di
--- una cantina ancora completamente vuota (stessi criteri di
--- get_wineries_to_complete()) usando il valore più frequente tra i
--- vini degli utenti già agganciati a quella cantina (wines.winery_id).
+-- una cantina ancora completamente vuota (tutti e sei i campi della
+-- scheda nulli — un criterio più stretto di get_wineries_to_complete()
+-- qui sotto, volutamente: tocca solo le cantine mai toccate da nessuno,
+-- non quelle a cui un admin ha già compilato qualcosa a mano) usando
+-- il valore più frequente tra i vini degli utenti già agganciati a
+-- quella cantina (wines.winery_id).
 -- Sono dati che gli utenti hanno già scritto di loro iniziativa per i
 -- propri vini, non un'invenzione dell'AI: vengono scritti
 -- direttamente, senza passare da una coda di revisione come per gli
@@ -3581,3 +3584,83 @@ end;
 $$;
 revoke all on function public.infer_wineries_from_wines() from public, anon;
 grant execute on function public.infer_wineries_from_wines() to authenticated;
+
+-- ════════════════════════════════════════════════════════════════
+-- 2026-11-10 — "Cantine da completare": criterio ridotto a Sito/
+-- Descrizione/Logo
+--
+-- Con infer_wineries_from_wines() (sopra) che riempie da solo Paese/
+-- Regione/Provincia, il vecchio criterio "tutti e sei i campi vuoti"
+-- faceva sparire una cantina dalla coda "da completare" non appena
+-- quei tre venivano dedotti — anche se Sito/Descrizione/Logo
+-- restavano vuoti, e nessun admin se ne sarebbe più accorto. Ora una
+-- cantina resta "da completare" finché manca anche solo UNO tra Sito/
+-- Descrizione/Logo, indipendentemente da Paese/Regione/Provincia
+-- (che ormai si riempiono da soli e non sono più un buon indicatore).
+-- Stessa identica firma di ritorno di prima: solo il filtro WHERE
+-- cambia, nessun drop function necessario.
+-- ════════════════════════════════════════════════════════════════
+create or replace function public.get_wineries_to_complete()
+returns table (id uuid, name text, created_at timestamptz, created_by_name text)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_admin() then
+    raise exception 'not authorized';
+  end if;
+  return query
+    select w.id, w.name, w.created_at, p.full_name
+    from public.wineries w
+    left join public.profiles p on p.id = w.created_by
+    where w.website is null or w.description is null or w.logo_url is null
+    order by w.created_at desc;
+end;
+$$;
+revoke all on function public.get_wineries_to_complete() from public, anon;
+grant execute on function public.get_wineries_to_complete() to authenticated;
+
+create or replace function public.get_admin_stats()
+returns table (
+  total_users bigint,
+  new_users_7d bigint,
+  new_users_30d bigint,
+  public_profiles bigint,
+  premium_users bigint,
+  total_wines bigint,
+  total_wineries bigint,
+  wineries_incomplete bigint,
+  scan_usage_global_current integer,
+  scan_usage_global_limit integer,
+  standalone_app_users bigint
+)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_admin() then
+    raise exception 'not authorized';
+  end if;
+  return query
+    select
+      (select count(*) from public.profiles)::bigint,
+      (select count(*) from public.profiles where created_at >= now() - interval '7 days')::bigint,
+      (select count(*) from public.profiles where created_at >= now() - interval '30 days')::bigint,
+      (select count(*) from public.profiles where is_public = true)::bigint,
+      (select count(*) from public.profiles where ai_scan_enabled = true)::bigint,
+      (select count(*) from public.wines)::bigint,
+      (select count(*) from public.wineries)::bigint,
+      (select count(*) from public.wineries
+        where website is null or description is null or logo_url is null)::bigint,
+      coalesce((select su.count from public.scan_usage su
+        where su.scope = 'global' and su.period = to_char(now(), 'YYYY-MM')), 0),
+      coalesce((select sl.global_monthly_limit from public.scan_limits sl where sl.id), 800),
+      (select count(*) from public.profiles where uses_standalone_app = true)::bigint;
+end;
+$$;
+revoke all on function public.get_admin_stats() from public, anon;
+grant execute on function public.get_admin_stats() to authenticated;

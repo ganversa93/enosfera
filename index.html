@@ -6143,9 +6143,11 @@ async function updateWineryLogoUrl(logoUrl, successMsg) {
 
 function goBackFromWinery() { showScreen(wineryReturnScreen || 'screen-list'); }
 
-// Elenco cantine create in automatico (dallo scan/salvataggio di un vino)
-// che non hanno ancora nessun dettaglio — per l'admin, da completare.
-// get_wineries_to_complete() (SECURITY DEFINER) invece di una query
+// Elenco cantine a cui manca ancora Sito web, Descrizione o Logo — per
+// l'admin, da completare (Paese/Regione/Provincia non contano più per
+// questo elenco: si riempiono da soli gratis, vedi
+// inferWineriesFromWines()). get_wineries_to_complete() (SECURITY
+// DEFINER) invece di una query
 // diretta sulla tabella: serve anche il nome di chi ha creato ogni
 // cantina (wineries.created_by), e la RLS di profiles non lascia
 // all'admin leggere il profilo di un utente qualsiasi.
