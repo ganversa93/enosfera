@@ -3746,12 +3746,9 @@
       </div>
       <div class="fg"><label>Dettaglio luogo <span style="font-weight:400;color:var(--muted)">(facoltativo)</span></label><input type="text" id="f-shop" placeholder="es. Enoteca Bianchi, Milano · Compleanno di Marco"></div>
       <div class="fg">
-        <label style="display:flex;align-items:center;justify-content:space-between;gap:8px">
-          <span>Finestra di consumo ottimale</span>
-          <button type="button" class="btn sm" style="font-size:11px;padding:4px 8px" onclick="applySuggestedDrinkWindow()"><i class="ti ti-sparkles"></i>Suggerisci</button>
-        </label>
+        <label>Finestra di consumo ottimale</label>
         <input type="text" id="f-drink" placeholder="es. 2025–2038">
-        <div style="font-size:11px;color:var(--muted);margin-top:4px">Suggerimento indicativo da vitigno e annata (prima della degustazione) — da confermare o correggere.</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">Se lasciata vuota, al salvataggio viene proposta in automatico da vitigno e annata — correggila pure se non ti convince.</div>
       </div>
       <div class="frow">
         <div class="fg"><label>Data degustazione</label><input type="date" id="f-tastingdate"></div>
@@ -8377,6 +8374,7 @@ function fillForm(d) {
 async function saveWine() {
   const name = (document.getElementById('f-name')?.value || '').trim();
   if (!name) { toast('Inserisci il nome del vino'); return; }
+  await maybeAutoFillDrinkWindow();
   const aisScore   = recalcAIS();
   const fisarScore = recalcFISAR();
   const onavScore  = recalcONAV();
@@ -9229,11 +9227,14 @@ function syncGrapesHiddenInput() {
 // get_grape_aging_classes, risolve nome ufficiale o sinonimo); se un
 // vitigno scritto in scheda non ha ancora una classe assegnata, si usa
 // 'medio' come fallback neutro invece di bloccare il suggerimento.
-async function applySuggestedDrinkWindow() {
+// Calcolo puro, nessun effetto su DOM/toast — usato da maybeAutoFillDrinkWindow
+// al salvataggio (solo se il campo "Finestra di consumo" è ancora vuoto).
+// Restituisce null se annata o vitigni mancano e non è un caso di categoria
+// forzata (Spumante/Rosato/Dolce/Passito, che non dipende dal vitigno).
+async function computeSuggestedDrinkWindow() {
   const vintage = parseInt(document.getElementById('f-vintage')?.value, 10);
-  if (!vintage) { toastErr('Indica prima l\'annata'); return; }
+  if (!vintage) return null;
   const type = document.getElementById('f-type')?.value || '';
-  const drinkInput = document.getElementById('f-drink');
 
   let peakStart, peakEnd;
   const forcedClass = (type === 'Spumante' || type === 'Rosato') ? 'breve'
@@ -9243,10 +9244,10 @@ async function applySuggestedDrinkWindow() {
   if (forcedClass) {
     ({ peakStart, peakEnd } = AGING_CLASS_YEARS[forcedClass]);
   } else {
-    if (!selectedGrapes.length) { toastErr('Indica almeno un vitigno per suggerire la finestra'); return; }
+    if (!selectedGrapes.length) return null;
     const names = selectedGrapes.map(g => g.name).filter(Boolean);
     const { data, error } = await sb.rpc('get_grape_aging_classes', { p_names: names });
-    if (error) { toastErr('Errore nel calcolo: ' + error.message); return; }
+    if (error) return null;
     const classByInput = {};
     (data || []).forEach(r => { classByInput[r.input_name.toLowerCase()] = r.aging_class; });
     const pcts = selectedGrapes.map(g => parseFloat(g.pct) || 0);
@@ -9264,12 +9265,19 @@ async function applySuggestedDrinkWindow() {
     peakEnd = Math.round(wEnd / wTot);
   }
 
-  const suggestion = `${vintage + peakStart}–${vintage + peakEnd}`;
-  if (drinkInput.value.trim() && drinkInput.value.trim() !== suggestion) {
-    if (!confirm(`Sovrascrivere "${drinkInput.value.trim()}" con il suggerimento "${suggestion}"?`)) return;
-  }
-  drinkInput.value = suggestion;
-  toast(`✓ Suggerito ${suggestion} — stima indicativa, correggi se necessario`);
+  return `${vintage + peakStart}–${vintage + peakEnd}`;
+}
+
+// Al salvataggio, se il campo "Finestra di consumo" è ancora vuoto e il
+// calcolo è possibile (annata + vitigni presenti, o una categoria che non
+// dipende dal vitigno), lo riempie da solo — silenzioso, nessun toast:
+// non deve sembrare un'azione dell'utente. Non tocca mai un valore già
+// presente, scritto a mano o da un "Suggerisci" precedente.
+async function maybeAutoFillDrinkWindow() {
+  const drinkInput = document.getElementById('f-drink');
+  if (!drinkInput || drinkInput.value.trim()) return;
+  const suggestion = await computeSuggestedDrinkWindow();
+  if (suggestion) drinkInput.value = suggestion;
 }
 
 // Ricostruisce i tag a partire dalla stringa salvata (es. "Nebbiolo 100%, Barbera 10%")
@@ -12354,7 +12362,7 @@ Object.assign(window, {
   showDenominationDetail, saveDenomination, deleteDenomination, searchDenominations, toggleApTypeFilter, toggleDenomRegionMenu, toggleDnVersionChip, toggleDenomSortMenu, toggleDenomPreview, changeDenomPage,
   cycleDnGrapeBound, updateDnGrapePct, removeDnGrapeTag,
   addDnAgingRow, updateDnAgingRow, removeDnAgingRow, updateDnParam,
-  applySuggestedDrinkWindow, quickFilterReadyToDrink, toggleDrinkDueFilter
+  quickFilterReadyToDrink, toggleDrinkDueFilter
 });
 </script>
 </body>
