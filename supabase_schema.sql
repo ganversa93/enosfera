@@ -3524,3 +3524,60 @@ end;
 $$;
 revoke all on function public.get_admin_stats() from public, anon;
 grant execute on function public.get_admin_stats() to authenticated;
+
+-- ════════════════════════════════════════════════════════════════
+-- 2026-11-10 — Completamento automatico cantine, livello 1 (gratis)
+--
+-- infer_wineries_from_wines() precompila Paese/Regione/Provincia di
+-- una cantina ancora completamente vuota (stessi criteri di
+-- get_wineries_to_complete()) usando il valore più frequente tra i
+-- vini degli utenti già agganciati a quella cantina (wines.winery_id).
+-- Sono dati che gli utenti hanno già scritto di loro iniziativa per i
+-- propri vini, non un'invenzione dell'AI: vengono scritti
+-- direttamente, senza passare da una coda di revisione come per gli
+-- eventi aggregati dal web — è lo stesso livello di fiducia di un
+-- admin che li copiasse a mano dalla lista vini della cantina.
+--
+-- Zero costo (nessuna chiamata AI): va eseguita per prima (pulsante
+-- "Completa dai vini già inseriti" in index.html) e riduce l'elenco
+-- "Cantine da completare", lasciando al livello 2 — a pagamento, vedi
+-- supabase/functions/find-winery-info — solo le cantine che restano
+-- davvero senza alcun indizio tra i vini già inseriti dagli utenti.
+-- ════════════════════════════════════════════════════════════════
+create or replace function public.infer_wineries_from_wines()
+returns table (id uuid, name text, country text, region text, province text)
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_admin() then
+    raise exception 'not authorized';
+  end if;
+  return query
+  with candidates as (
+    select w.id as winery_id
+    from public.wineries w
+    where w.country is null and w.region is null and w.province is null
+      and w.website is null and w.description is null and w.logo_url is null
+  ),
+  inferred as (
+    select
+      c.winery_id,
+      mode() within group (order by wn.country) filter (where wn.country is not null) as country,
+      mode() within group (order by wn.region)  filter (where wn.region  is not null) as region,
+      mode() within group (order by wn.province) filter (where wn.province is not null) as province
+    from candidates c
+    join public.wines wn on wn.winery_id = c.winery_id
+    group by c.winery_id
+  )
+  update public.wineries w
+  set country = i.country, region = i.region, province = i.province, updated_at = now()
+  from inferred i
+  where w.id = i.winery_id
+    and (i.country is not null or i.region is not null or i.province is not null)
+  returning w.id, w.name, w.country, w.region, w.province;
+end;
+$$;
+revoke all on function public.infer_wineries_from_wines() from public, anon;
+grant execute on function public.infer_wineries_from_wines() to authenticated;

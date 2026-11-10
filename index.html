@@ -3906,6 +3906,8 @@
     <div class="fsec collapsible collapsed" id="admin-sec-incomplete" style="margin-top:.9rem">
       <div class="stitle fsec-header" onclick="toggleSection('admin-sec-incomplete')"><i class="ti ti-building-warehouse"></i>Cantine da completare (<span id="admin-wineries-count">0</span>)<i class="ti ti-chevron-down fsec-chevron"></i></div>
       <div class="fsec-body">
+        <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Precompila Paese/Regione/Provincia dai vini degli utenti già agganciati a ciascuna cantina (nessuna chiamata AI, gratis) — apri poi una singola cantina per cercarla online con AI se restano ancora senza indizi.</p>
+        <button class="btn sm" id="admin-infer-wineries-btn" style="margin-bottom:10px" onclick="inferWineriesFromWines()"><i class="ti ti-wand"></i>Completa dai vini già inseriti (gratis)</button>
         <div id="admin-wineries-list"></div>
       </div>
     </div>
@@ -5808,6 +5810,7 @@ function renderWineryBody(w, wines, catalog, manage) {
         <label>Sito web</label>
         <input type="text" id="wy-website" value="${w.website || ''}" placeholder="https://…">
         ${currentUser?.isAdmin ? `<button type="button" class="btn sm" id="wy-enrich-btn" style="margin-top:8px" onclick="enrichWineryFromWebsite()"><i class="ti ti-sparkles"></i>Compila con AI</button>` : ''}
+        ${currentUser?.isAdmin ? `<button type="button" class="btn sm" id="wy-find-btn" style="margin-top:8px;margin-left:6px" onclick="findWineryInfoOnline()"><i class="ti ti-world"></i>Cerca online con AI</button>` : ''}
       </div>
       <div class="fg"><label>Descrizione / storia</label><textarea id="wy-description" rows="4" placeholder="Storia, filosofia della cantina…">${w.description || ''}</textarea></div>
       <div class="fg">
@@ -6000,6 +6003,60 @@ async function enrichWineryFromWebsite() {
   set('wy-province', info.province);
   set('wy-description', info.description);
   toast('✓ Proposta AI compilata — controlla e salva');
+}
+
+// Livello 2 (a pagamento) del completamento automatico cantine: a
+// differenza di enrichWineryFromWebsite() qui non serve già conoscere
+// il sito — Claude lo cerca da solo a partire dal nome della cantina
+// (vedi supabase/functions/find-winery-info), usando il modello e il
+// tool di ricerca più economici disponibili per questo tipo di
+// chiamata. Pensata per essere lanciata una cantina alla volta dalla
+// sua scheda, non in batch: vedi inferWineriesFromWines() per il
+// livello 1 gratuito da provare sempre prima su tutte le cantine.
+async function findWineryInfoOnline() {
+  if (!currentUser?.isAdmin || !currentWineryId) return;
+  await sb.auth.refreshSession().catch(() => {});
+  const btn = document.getElementById('wy-find-btn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2"></i>Ricerca in corso…'; }
+  const { data, error } = await sb.functions.invoke('find-winery-info', { body: { wineryId: currentWineryId } });
+  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-world"></i>Cerca online con AI'; }
+  if (error || data?.error) {
+    let msg = data?.message;
+    if (!msg && error?.context?.json) {
+      try { msg = (await error.context.json())?.message; } catch {}
+    }
+    toastErr(msg || error?.message || 'Ricerca non riuscita');
+    return;
+  }
+  const foundInfo = data.data || {};
+  const set2 = (id, v) => { const el = document.getElementById(id); if (el && v) el.value = v; };
+  set2('wy-website', foundInfo.website);
+  set2('wy-country', foundInfo.country);
+  document.getElementById('wy-country')?.dispatchEvent(new Event('change'));
+  set2('wy-region', foundInfo.region);
+  set2('wy-province', foundInfo.province);
+  set2('wy-description', foundInfo.description);
+  toast('✓ Proposta AI compilata — controlla e salva');
+}
+
+// Livello 1 (gratis, zero chiamate AI) del completamento automatico
+// cantine: precompila Paese/Regione/Provincia col valore più frequente
+// tra i vini degli utenti già agganciati a ciascuna cantina — vedi
+// infer_wineries_from_wines() in supabase_schema.sql. Va lanciato
+// prima di cercare online con AI (a pagamento, vedi
+// findWineryInfoOnline() nella scheda di ogni singola cantina): tiene
+// i costi bassi lasciando all'AI solo le cantine che restano davvero
+// senza indizi tra i vini già inseriti.
+async function inferWineriesFromWines() {
+  if (!currentUser?.isAdmin) return;
+  const btn = document.getElementById('admin-infer-wineries-btn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2"></i>Analisi in corso…'; }
+  await sb.auth.refreshSession().catch(() => {});
+  const { data, error } = await sb.rpc('infer_wineries_from_wines');
+  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-wand"></i>Completa dai vini già inseriti (gratis)'; }
+  if (error) { toastErr('Errore: ' + error.message); return; }
+  toast(`✓ ${data?.length || 0} cantina/e completata/e dai vini già inseriti`);
+  showAdminWineriesScreen();
 }
 
 async function removeWineryCatalogWine(wineryWineId) {
@@ -12344,7 +12401,7 @@ Object.assign(window, {
   downloadImportTemplate, handleImportFile,
   removeDetailPosition,
   showWineryDetail, toggleWineryPreview, saveWineryDetails, uploadWineryLogo, goBackFromWinery, showAdminWineriesScreen, deleteWinery, searchAllWineries,
-  aggregateEventsNow, testEventSource,
+  aggregateEventsNow, testEventSource, findWineryInfoOnline, inferWineriesFromWines,
   saveScanLimits, resetScanUsage, searchScanUsersAdmin,
   saveDonationLink, savePremiumPlan, editPremiumPlan, cancelEditPremiumPlan, togglePremiumPlanActive, deletePremiumPlan,
   addWineryCatalogWine, removeWineryCatalogWine, useFaviconAsLogo,
