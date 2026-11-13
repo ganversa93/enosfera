@@ -661,11 +661,15 @@
     .pos-node-row .pos-capacity-input::placeholder { color: var(--muted); font-weight: 400; }
     .pos-node-row .pos-capacity-input:focus { outline: none; border-color: var(--gold-l); }
     .pos-node-row .pos-capacity-input:focus-visible { outline: 2px solid var(--gold-l); outline-offset: 1px; }
-    /* repeat(N, minmax(0,1fr)) invece di 1fr: con tante colonne (es. uno
-       scaffale 8×14) i cerchi si restringono per stare nella larghezza
-       della card invece di spingerla a scorrere anche in orizzontale —
-       vedi .slot-circle sotto, che li segue in larghezza. */
+    /* repeat(N, minmax(0,1fr)) invece di 1fr: fino a 8 colonne i cerchi si
+       restringono per stare nella larghezza della card (vedi .slot-circle
+       sotto, che li segue in larghezza) invece di farla scorrere in
+       orizzontale. Oltre le 8 colonne (es. uno scaffale orizzontale da 20)
+       restringersi li rende illeggibili — .slot-grid-scroll (sotto, scelta
+       in JS da renderSlotPicker()) passa a colonne a larghezza fissa e fa
+       scorrere la griglia invece dei cerchi. */
     .slot-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; margin: 4px 0 6px; }
+    .slot-grid.slot-grid-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 6px; }
     .slot-circle {
       width: 100%; aspect-ratio: 1; max-width: 48px; border-radius: 50%; margin: 0 auto;
       border: 2px dashed var(--border); display: flex; align-items: center; justify-content: center;
@@ -9673,12 +9677,20 @@ function renderSlotPicker() {
   const grid = document.getElementById('slot-picker-grid');
   // Righe×colonne impostate dal wizard: la griglia rispecchia la
   // disposizione fisica reale invece delle 4 colonne fisse di default.
-  // minmax(0,1fr) invece di 1fr: con molte colonne i cerchi si
-  // restringono (vedi .slot-circle) invece di far scorrere la card anche
-  // in orizzontale. La prima colonna "auto" ospita il numero di riga
-  // (solo informativo, vedi sotto), per orientarsi nelle griglie grandi.
+  // Fino a 8 colonne i cerchi si restringono (minmax(0,1fr), vedi
+  // .slot-circle) per stare nella card. Oltre le 8 (es. uno scaffale
+  // orizzontale da 20) restringersi li rende illeggibili — si passa a
+  // colonne a larghezza fissa e si fa scorrere la griglia in orizzontale
+  // (.slot-grid-scroll) invece dei cerchi, riportando lo scorrimento
+  // tolto in precedenza solo per questo caso. La prima colonna "auto"
+  // ospita il numero di riga (solo informativo, vedi sotto), per
+  // orientarsi nelle griglie grandi.
   const gridCols = s.cols || Math.min(s.capacity, 4);
-  grid.style.gridTemplateColumns = `auto repeat(${gridCols}, minmax(0,1fr))`;
+  const scrollable = gridCols > 8;
+  grid.classList.toggle('slot-grid-scroll', scrollable);
+  grid.style.gridTemplateColumns = scrollable
+    ? `auto repeat(${gridCols}, 34px)`
+    : `auto repeat(${gridCols}, minmax(0,1fr))`;
   let slotsHtml = '';
   for (let n = 1; n <= s.capacity; n++) {
     if ((n - 1) % gridCols === 0) {
